@@ -1,0 +1,49 @@
+name: Lean 4 Compilation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install elan
+      run: |
+        curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain leanprover/lean4:stable
+        echo "$HOME/.elan/bin" >> $GITHUB_PATH
+
+    - name: Compile Legal Argument Lean
+      run: |
+        cd legal-argument-lean/references/
+        export LEAN_PATH=.
+        
+        echo "Compiling Core Library..."
+        lean -o Tipos.olean Tipos.lean
+        lean -o Saidas/Aplicar.olean Saidas/Aplicar.lean
+        lean -o Saidas/Distinguir.olean Saidas/Distinguir.lean
+        lean -o Saidas/Superar.olean Saidas/Superar.lean
+        
+        echo "Compiling Regime Modules..."
+        lean -o art_926_cpc.olean art_926_cpc.lean
+        lean -o art_927_cpc.olean art_927_cpc.lean
+        
+        echo "Compiling Standards and Libraries..."
+        lean -o art_489_cpc.olean art_489_cpc.lean
+        lean -o art_1022_cpc.olean art_1022_cpc.lean
+        lean -o art_10_cpc.lean art_10_cpc.lean
+        lean -o art_5_e_6_cpc.lean art_5_e_6_cpc.lean
+        lean -o tema_1306_stj.olean tema_1306_stj.lean
+        
+        echo "Compiling Templates and Examples..."
+        for f in template_*.lean exemplo_*.lean vedacao_*.lean sec1III_*.lean; do
+          if [ -f "$f" ]; then
+            echo "Checking $f..."
+            lean "$f"
+          fi
+        done
