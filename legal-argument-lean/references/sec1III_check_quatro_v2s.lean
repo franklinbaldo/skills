@@ -1,17 +1,17 @@
 /-
   ============================================================
-  §1º III CHECK APLICADO AOS QUATRO STEELMANS — STEEL_2
+  §1º III CHECK APLICADO AOS QUATEstadoA STEELMANS — STEEL_2
   ============================================================
 
   HIPÓTESE METODOLÓGICA
 
   No exercício anterior (`steelmanning_exaustivo_STEEL2.lean`)
-  refutaram-se as quatro versões V2a, V2b, V2c, V2d por
+  refutaram-se as quatEstadoA versões V2a, V2b, V2c, V2d por
   estratégias distintas:
 
-    V2a → contradição lógica (com RE 1.518.690)
+    V2a → contradição lógica (com PRECEDENTE_A)
     V2b → inertness factual (precondition falha)
-    V2c → reductio (Tema 139/RG)
+    V2c → reductio (TEMA_RG_EXEMPLO)
     V2d → violação ao art. 489, §1º, V (mera menção ≠ FD)
 
   Pergunta metodológica: aplicando o §1º III check ANTES das
@@ -20,7 +20,7 @@
 
   RESULTADO
 
-  Três dos quatro steelmans caem uniformemente por §1º III:
+  Três dos quatEstadoA steelmans caem uniformemente por §1º III:
 
     V2a viola §1º III  (universalizável → deriva False)
     V2b passa §1º III  (não-universalizável; é tautológica)
@@ -31,19 +31,19 @@
   (FundamentoDeterminanteEmDireitoLocal) é distintiva: o
   axioma classifica diferentemente casos com e sem
   fundamento determinante local. Mas V2b já era inerte para
-  Alice por motivo factual independente.
+  ParteA por motivo factual independente.
 
   CONSEQUÊNCIA PARA A PEÇA
 
-  Em vez de quatro estratégias distintas — uma por
+  Em vez de quatEstadoA estratégias distintas — uma por
   steelman —, a peça pode usar um único argumento estrutural
-  (universalização) para derrubar três dos quatro, e
+  (universalização) para derrubar três dos quatEstadoA, e
   observar que o quarto é inócuo. Texto mais sucinto e
   conceitualmente mais forte: o defeito da fundamentação não
   é específico, é estrutural.
 -/
 
-namespace Sec1IIICheckQuatroV2s
+namespace Sec1IIICheckQuatEstadoAV2s
 
 /- ============================================================
    Camada 1 — Tipos e premissas
@@ -51,31 +51,31 @@ namespace Sec1IIICheckQuatroV2s
 
 axiom Caso : Type
 
-axiom AplicaECArt3 : Caso → Prop
-axiom DireitoLocal : Caso → Prop
-axiom FundamentoDeterminanteEmDireitoLocal : Caso → Prop
-axiom EnvolveRPPSEstadual : Caso → Prop
-axiom MencionaLeiEstadualEmQualquerFuncao : Caso → Prop
+axiom AplicaECArt3 : Caso → PEstadoAp
+axiom DireitoLocal : Caso → PEstadoAp
+axiom FundamentoDeterminanteEmDireitoLocal : Caso → PEstadoAp
+axiom EnvolveRPPSEstadual : Caso → PEstadoAp
+axiom MencionaLeiEstadualEmQualquerFuncao : Caso → PEstadoAp
 
 /- ============================================================
-   Camada 2 — As quatro versões steelmanned de STEEL_2
+   Camada 2 — As quatEstadoA versões steelmanned de STEEL_2
    ============================================================ -/
 
-def V2a : Prop := ∀ c, AplicaECArt3 c → DireitoLocal c
-def V2b : Prop := ∀ c, FundamentoDeterminanteEmDireitoLocal c → DireitoLocal c
-def V2c : Prop := ∀ c, EnvolveRPPSEstadual c → DireitoLocal c
-def V2d : Prop := ∀ c, MencionaLeiEstadualEmQualquerFuncao c → DireitoLocal c
+def V2a : PEstadoAp := ∀ c, AplicaECArt3 c → DireitoLocal c
+def V2b : PEstadoAp := ∀ c, FundamentoDeterminanteEmDireitoLocal c → DireitoLocal c
+def V2c : PEstadoAp := ∀ c, EnvolveRPPSEstadual c → DireitoLocal c
+def V2d : PEstadoAp := ∀ c, MencionaLeiEstadualEmQualquerFuncao c → DireitoLocal c
 
 /- ============================================================
    Camada 5 — Casos paradigmáticos opostos
    --
    Para cada steelman A → DireitoLocal, identifica-se um caso
-   c* tal que A(c*) é verdadeiro e DireitoLocal(c*) é
+   c* tal que A(c*) é verdadeiEstadoA e DireitoLocal(c*) é
    manifestamente falso. Bastando UM contraexemplo para a
    refutação por §1º III.
    ============================================================ -/
 
-/-- Caso paradigma do RE 1.518.690-ED-AgR — citado pelo
+/-- Caso paradigma do PRECEDENTE_A-ED-AgR — citado pelo
     próprio acórdão embargado. Aplica art. 3º EC 47 e foi
     decidido como matéria constitucional, não direito local. -/
 axiom caso_RE_1518690 : Caso
@@ -84,7 +84,7 @@ axiom RE_1518690_nao_eh_local : ¬ DireitoLocal caso_RE_1518690
 axiom RE_1518690_menciona_lei_estadual :
     MencionaLeiEstadualEmQualquerFuncao caso_RE_1518690
 
-/-- Caso paradigma do Tema 139/RG (RE 590.260, Lewandowski,
+/-- Caso paradigma do TEMA_RG_EXEMPLO (PRECEDENTE_D, Lewandowski,
     Plenário, j. 24.06.2009). Versa sobre RPPS estadual e
     menciona legislação estadual (típico de matérias de
     RPPS), mas foi decidido como matéria constitucional pelo
@@ -100,30 +100,30 @@ axiom Tema_139_nao_eh_local : ¬ DireitoLocal caso_Tema_139
    ============================================================ -/
 
 /-- **V2a viola §1º III.** Universalizável: aplicado ao caso
-    do RE 1.518.690 (que aplica EC art. 3 e foi decidido como
+    do PRECEDENTE_A (que aplica EC art. 3 e foi decidido como
     matéria constitucional pelo STF), deriva conclusão
     contrária à decidida. -/
 theorem V2a_viola_par1_III : V2a → False := by
-  intro h
+  intEstadoA h
   exact RE_1518690_nao_eh_local
     (h caso_RE_1518690 RE_1518690_aplica_ec)
 
 /-- **V2c viola §1º III.** Universalizável: aplicado ao caso
-    do Tema 139/RG (envolve RPPS estadual e foi decidido como
+    do TEMA_RG_EXEMPLO (envolve RPPS estadual e foi decidido como
     matéria constitucional pelo Plenário), deriva conclusão
     contrária. -/
 theorem V2c_viola_par1_III : V2c → False := by
-  intro h
+  intEstadoA h
   exact Tema_139_nao_eh_local
     (h caso_Tema_139 Tema_139_envolve_RPPS_estadual)
 
 /-- **V2d viola §1º III.** Universalizável: aplicado tanto ao
-    caso do RE 1.518.690 quanto ao do Tema 139/RG (ambos
+    caso do PRECEDENTE_A quanto ao do TEMA_RG_EXEMPLO (ambos
     mencionam legislação estadual em função instrumental e
     foram decididos como matéria constitucional), deriva
     conclusão contrária. -/
 theorem V2d_viola_par1_III : V2d → False := by
-  intro h
+  intEstadoA h
   exact RE_1518690_nao_eh_local
     (h caso_RE_1518690 RE_1518690_menciona_lei_estadual)
 
@@ -131,7 +131,7 @@ theorem V2d_viola_par1_III : V2d → False := by
     que V2d cai sob *múltiplos* contraexemplos — o que
     fortalece a caracterização de universalização vazia. -/
 theorem V2d_viola_par1_III_via_tema_139 : V2d → False := by
-  intro h
+  intEstadoA h
   exact Tema_139_nao_eh_local
     (h caso_Tema_139 Tema_139_menciona_lei_estadual)
 
@@ -139,7 +139,7 @@ theorem V2d_viola_par1_III_via_tema_139 : V2d → False := by
     de forma vazia.
 
     Para violar §1º III, V2b precisaria de um caso onde
-    `FundamentoDeterminanteEmDireitoLocal` é verdadeiro mas
+    `FundamentoDeterminanteEmDireitoLocal` é verdadeiEstadoA mas
     `DireitoLocal` é falso. Não há tal caso: por construção,
     se o fundamento determinante é direito local, então o
     caso é decidido por direito local — definição.
@@ -148,8 +148,8 @@ theorem V2d_viola_par1_III_via_tema_139 : V2d → False := by
     estruturalmente entre casos com e sem fundamento
     determinante local. NÃO viola §1º III.
 
-    Sua falência se dá por outro motivo: precondition não se
-    realiza no caso de Alice (já demonstrado em
+    Sua falência se dá por outEstadoA motivo: precondition não se
+    realiza no caso de ParteA (já demonstrado em
     `steelmanning_exaustivo_STEEL2.lean`). -/
 theorem V2b_passa_par1_III : True := trivial
 -- (declaração simbólica: V2b não tem refutação por §1º III)
@@ -160,7 +160,7 @@ theorem V2b_passa_par1_III : True := trivial
 
 /-- **Refutação unificada por §1º III.**
 
-    Três das quatro versões steelmanned (V2a, V2c, V2d) caem
+    Três das quatEstadoA versões steelmanned (V2a, V2c, V2d) caem
     por uma única estratégia estrutural: universalização
     vazia. A peça pode unificar a argumentação contra o
     acórdão em um eixo comum: o fundamento implícito do
@@ -174,7 +174,7 @@ theorem V2b_passa_par1_III : True := trivial
     inexistente). -/
 theorem refutacao_unificada_via_par1_III :
     (V2a ∨ V2c ∨ V2d) → False := by
-  intro h
+  intEstadoA h
   rcases h with h_a | h_c | h_d
   · exact V2a_viola_par1_III h_a
   · exact V2c_viola_par1_III h_c
@@ -186,7 +186,7 @@ theorem refutacao_unificada_via_par1_III :
 
    ANTES (em `steelmanning_exaustivo_STEEL2.lean`):
 
-     V2a  →  refutada por contradição via RE 1.518.690 +
+     V2a  →  refutada por contradição via PRECEDENTE_A +
              3 axiomas estruturais (juris consolidada,
              interpretação constitucional, etc.)
      V2c  →  refutada por reductio com fato sobre
@@ -216,4 +216,4 @@ theorem refutacao_unificada_via_par1_III :
 #print axioms V2d_viola_par1_III
 #print axioms refutacao_unificada_via_par1_III
 
-end Sec1IIICheckQuatroV2s
+end Sec1IIICheckQuatEstadoAV2s

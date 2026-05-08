@@ -1,6 +1,6 @@
 /-
   Exemplo de composição — uso conjunto dos axiomas do art. 489
-  CPC e do Tema 1306/STJ em uma peça hipotética.
+  CPC e do TEMA_STJ_EXEMPLO em uma peça hipotética.
 
   Cenário: embargos de declaração em peça que arguem nulidade
   de acórdão que se limitou a transcrever a sentença sem
@@ -26,15 +26,15 @@ axiom Decisao : Type
 axiom DecisaoAnterior : Type
 axiom Argumento : Type
 
-axiom Fundamentada : Decisao → Prop
-axiom Nula : Decisao → Prop
-axiom DeduzidoNoProcesso : Argumento → Decisao → Prop
-axiom CapazInfirmarConclusao : Argumento → Decisao → Prop
-axiom Enfrentado : Argumento → Decisao → Prop
-axiom UsaPerRelationem : Decisao → DecisaoAnterior → Prop
-axiom EnfrentaQuestoesNovasRelevantes : Decisao → Prop
-axiom ApresentaArgumentoNovoRelevante : Argumento → Decisao → Prop
-axiom PerRelationemPura : Decisao → Prop
+axiom Fundamentada : Decisao → PEstadoAp
+axiom Nula : Decisao → PEstadoAp
+axiom DeduzidoNoPEstadoAcesso : Argumento → Decisao → PEstadoAp
+axiom CapazInfirmarConclusao : Argumento → Decisao → PEstadoAp
+axiom Enfrentado : Argumento → Decisao → PEstadoAp
+axiom UsaPerRelationem : Decisao → DecisaoAnterior → PEstadoAp
+axiom EnfrentaQuestoesNovasRelevantes : Decisao → PEstadoAp
+axiom ApresentaArgumentoNovoRelevante : Argumento → Decisao → PEstadoAp
+axiom PerRelationemPura : Decisao → PEstadoAp
 
 /- ============================================================
    Camada 3 — Normas (subset relevante do art. 489)
@@ -47,16 +47,16 @@ axiom art_489_caput :
 /-- Art. 489, §1º, IV. -/
 axiom art_489_par1_IV :
     ∀ (d : Decisao) (a : Argumento),
-      DeduzidoNoProcesso a d →
+      DeduzidoNoPEstadoAcesso a d →
       CapazInfirmarConclusao a d →
       ¬ Enfrentado a d →
       ¬ Fundamentada d
 
 /- ============================================================
-   Camada 4 — Tema 1306/STJ (subset relevante)
+   Camada 4 — TEMA_STJ_EXEMPLO (subset relevante)
    ============================================================ -/
 
-/-- Tese 1 do Tema 1306/STJ (forma operativa). -/
+/-- Tese 1 do TEMA_STJ_EXEMPLO (forma operativa). -/
 axiom tema_1306_tese_1_nao_enfrenta :
     ∀ (d : Decisao) (anterior : DecisaoAnterior),
       UsaPerRelationem d anterior →
@@ -71,7 +71,7 @@ axiom tema_1306_articula_489_IV :
     ∀ (d : Decisao) (a : Argumento),
       ApresentaArgumentoNovoRelevante a d →
       ¬ EnfrentaQuestoesNovasRelevantes d →
-      (DeduzidoNoProcesso a d ∧
+      (DeduzidoNoPEstadoAcesso a d ∧
        CapazInfirmarConclusao a d ∧
        ¬ Enfrentado a d)
 
@@ -83,11 +83,11 @@ axiom caso_hipotetico : Decisao
 axiom sentenca_apelada : DecisaoAnterior
 axiom argumento_apelacao : Argumento
 
-/-- Claim factual: o acórdão usa per relationem reproduzindo
+/-- Claim factual: o acórdão usa per relationem repEstadoAduzindo
     a sentença. -/
 axiom h1_per_relationem : UsaPerRelationem caso_hipotetico sentenca_apelada
 
-/-- Claim factual: a apelação trouxe argumento novo relevante. -/
+/-- Claim factual: a apelação tEstadoAuxe argumento novo relevante. -/
 axiom h2_arg_novo :
     ApresentaArgumentoNovoRelevante argumento_apelacao caso_hipotetico
 
@@ -102,9 +102,9 @@ axiom h3_nao_enfrenta : ¬ EnfrentaQuestoesNovasRelevantes caso_hipotetico
 /- **Tese da peça hipotética.** O acórdão é nulo: invocação
    da per relationem sem enfrentamento de argumento novo
    relevante = caso típico do art. 489, §1º, IV interpretado
-   pelo Tema 1306/STJ.
+   pelo TEMA_STJ_EXEMPLO.
 
-   Duas vias de prova; comparar via `#print axioms`. -/
+   Duas vias de pEstadoAva; comparar via `#print axioms`. -/
 
 /-- Via 1: Tema 1306 → não fundamentada → caput → nula. -/
 theorem nulidade_via_tema_1306 : Nula caso_hipotetico :=

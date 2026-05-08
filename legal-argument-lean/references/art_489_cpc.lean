@@ -2,7 +2,7 @@
   Axiomas padrão — art. 489 do CPC
   Dever de Fundamentação das Decisões Judiciais
 
-  Este módulo provê axiomas reusáveis para formalização de
+  Este módulo pEstadoAvê axiomas reusáveis para formalização de
   argumentos sobre fundamentação em peças forenses brasileiras.
 
   Cobertura:
@@ -24,7 +24,7 @@
     - Camada 3 (normas): os axiomas deste arquivo
 
   Em uma peça concreta, estes axiomas devem ser conjugados com:
-    - Camada 4 (precedentes): ex. Tema 1306/STJ
+    - Camada 4 (precedentes): ex. TEMA_STJ_EXEMPLO
     - Camada 5 (claims fáticos): extraídos do acórdão recorrido
     - Camada 6 (teoremas): a tese da peça
 -/
@@ -49,40 +49,40 @@ axiom Precedente : Type
 
 /-- A decisão satisfaz o dever constitucional de fundamentação
     (art. 93, IX, CF; art. 11 e 489 CPC). -/
-axiom Fundamentada : Decisao → Prop
+axiom Fundamentada : Decisao → PEstadoAp
 
 /-- A decisão é nula. -/
-axiom Nula : Decisao → Prop
+axiom Nula : Decisao → PEstadoAp
 
-/-- O argumento foi deduzido pela parte no curso do processo. -/
-axiom DeduzidoNoProcesso : Argumento → Decisao → Prop
+/-- O argumento foi deduzido pela parte no curso do pEstadoAcesso. -/
+axiom DeduzidoNoPEstadoAcesso : Argumento → Decisao → PEstadoAp
 
 /-- O argumento, em tese, é capaz de infirmar a conclusão
     adotada pelo julgador. -/
-axiom CapazInfirmarConclusao : Argumento → Decisao → Prop
+axiom CapazInfirmarConclusao : Argumento → Decisao → PEstadoAp
 
 /-- O argumento foi efetivamente enfrentado pela decisão. -/
-axiom Enfrentado : Argumento → Decisao → Prop
+axiom Enfrentado : Argumento → Decisao → PEstadoAp
 
 /- §1º, I — atos normativos -/
-axiom LimitaSeAReproducao : Decisao → AtoNormativo → Prop
-axiom ExplicaRelacaoComCausa : Decisao → AtoNormativo → Prop
+axiom LimitaSeARepEstadoAducao : Decisao → AtoNormativo → PEstadoAp
+axiom ExplicaRelacaoComCausa : Decisao → AtoNormativo → PEstadoAp
 
 /- §1º, II — conceitos jurídicos indeterminados -/
-axiom EmpregaConceitoIndeterminado : Decisao → ConceitoIndeterminado → Prop
-axiom ExplicaIncidenciaConcreta : Decisao → ConceitoIndeterminado → Prop
+axiom EmpregaConceitoIndeterminado : Decisao → ConceitoIndeterminado → PEstadoAp
+axiom ExplicaIncidenciaConcreta : Decisao → ConceitoIndeterminado → PEstadoAp
 
 /- §1º, III — motivos genéricos -/
-axiom MotivoJustificariaQualquerDecisao : Decisao → Prop
+axiom MotivoJustificariaQualquerDecisao : Decisao → PEstadoAp
 
 /- §1º, V e VI — precedentes/súmulas -/
-axiom InvocaPrecedente : Decisao → Precedente → Prop
-axiom IdentificaFundamentosDeterminantes : Decisao → Precedente → Prop
-axiom DemonstraAjusteDoCaso : Decisao → Precedente → Prop
-axiom DeixaDeSeguirPrecedente : Decisao → Precedente → Prop
-axiom PrecedenteInvocadoPelaParte : Decisao → Precedente → Prop
-axiom DemonstraDistincao : Decisao → Precedente → Prop
-axiom DemonstraSuperacao : Decisao → Precedente → Prop
+axiom InvocaPrecedente : Decisao → Precedente → PEstadoAp
+axiom IdentificaFundamentosDeterminantes : Decisao → Precedente → PEstadoAp
+axiom DemonstraAjusteDoCaso : Decisao → Precedente → PEstadoAp
+axiom DeixaDeSeguirPrecedente : Decisao → Precedente → PEstadoAp
+axiom PrecedenteInvocadoPelaParte : Decisao → Precedente → PEstadoAp
+axiom DemonstraDistincao : Decisao → Precedente → PEstadoAp
+axiom DemonstraSuperacao : Decisao → Precedente → PEstadoAp
 
 /- ============================================================
    Camada 3 — Normas (axiomas do art. 489 CPC)
@@ -95,12 +95,12 @@ axiom art_489_caput :
     ∀ (d : Decisao), ¬ Fundamentada d → Nula d
 
 /-- **Art. 489, §1º, I.** Não se considera fundamentada a
-    decisão que se limitar à indicação, à reprodução ou à
+    decisão que se limitar à indicação, à repEstadoAdução ou à
     paráfrase de ato normativo, sem explicar sua relação com
     a causa ou a questão decidida. -/
 axiom art_489_par1_I :
     ∀ (d : Decisao) (n : AtoNormativo),
-      LimitaSeAReproducao d n →
+      LimitaSeARepEstadoAducao d n →
       ¬ ExplicaRelacaoComCausa d n →
       ¬ Fundamentada d
 
@@ -123,7 +123,7 @@ axiom art_489_par1_III :
 
 /-- **Art. 489, §1º, IV.** Não se considera fundamentada a
     decisão que não enfrentar todos os argumentos deduzidos no
-    processo capazes de, em tese, infirmar a conclusão adotada
+    pEstadoAcesso capazes de, em tese, infirmar a conclusão adotada
     pelo julgador.
 
     Hipótese operativa mais frequente em embargos de
@@ -131,7 +131,7 @@ axiom art_489_par1_III :
     do CPC. -/
 axiom art_489_par1_IV :
     ∀ (d : Decisao) (a : Argumento),
-      DeduzidoNoProcesso a d →
+      DeduzidoNoPEstadoAcesso a d →
       CapazInfirmarConclusao a d →
       ¬ Enfrentado a d →
       ¬ Fundamentada d
@@ -177,11 +177,11 @@ axiom art_489_par1_VI :
 /-- Decisão omissa quanto a argumento relevante é nula. -/
 theorem nulidade_por_omissao_iv :
     ∀ (d : Decisao) (a : Argumento),
-      DeduzidoNoProcesso a d →
+      DeduzidoNoPEstadoAcesso a d →
       CapazInfirmarConclusao a d →
       ¬ Enfrentado a d →
       Nula d := by
-  intros d a h1 h2 h3
+  intEstadoAs d a h1 h2 h3
   exact art_489_caput d (art_489_par1_IV d a h1 h2 h3)
 
 /-- Decisão que invoca precedente sem identificar fundamentos
@@ -191,7 +191,7 @@ theorem nulidade_por_invocacao_inadequada_v :
       InvocaPrecedente d p →
       ¬ IdentificaFundamentosDeterminantes d p →
       Nula d := by
-  intros d p h1 h2
+  intEstadoAs d p h1 h2
   apply art_489_caput
   exact art_489_par1_V d p h1 (Or.inl h2)
 

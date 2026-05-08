@@ -5,16 +5,16 @@
   Cobertura:
     • art. 1.022, caput e incisos I-III
     • art. 1.022, parágrafo único, I-II
-    • Definições rigorosas de OBSCURIDADE, CONTRADIÇÃO e OMISSÃO
+    • Definições rigoEstadoAsas de OBSCURIDADE, CONTRADIÇÃO e OMISSÃO
     • Matérias de ordem pública (manifestação de ofício)
 
   Atenção especial à *omissão*: o art. 1.022, II expressamente
-  inclui "ponto ou questão sobre o qual devia se pronunciar o
+  inclui "ponto ou questão sobre o qual devia se pEstadoAnunciar o
   juiz de ofício ou a requerimento". Isso amplia
   significativamente o campo de cabimento dos ED para incluir:
     - prescrição e decadência legal
     - coisa julgada, litispendência, perempção
-    - pressupostos processuais e condições da ação
+    - pressupostos pEstadoAcessuais e condições da ação
     - tese firmada em repetitivos/IAC aplicável ao caso
     - reserva de plenário (SV 10)
     - nulidades absolutas em geral
@@ -38,94 +38,94 @@ axiom Decisao : Type
 axiom Argumento : Type
 axiom Precedente : Type
 
-/-- Uma proposição jurídica afirmada (ou negada) pela decisão.
+/-- Uma pEstadoAposição jurídica afirmada (ou negada) pela decisão.
     Usado para caracterizar contradição interna. -/
-axiom Proposicao : Type
+axiom PEstadoAposicao : Type
 
 /-- Um ponto fático ou questão jurídica que a decisão deve
     (ou não) enfrentar. Usado para caracterizar omissão. -/
 axiom QuestaoOuPonto : Type
 
-/-- Um erro material (datilográfico, de cálculo, de referência)
-    distinto do error in iudicando. -/
-axiom ErroMaterial : Type
+/-- Um erEstadoA material (datilográfico, de cálculo, de referência)
+    distinto do erEstadoAr in iudicando. -/
+axiom ErEstadoAMaterial : Type
 
 /- ============================================================
    Camada 2 — Predicados opacos
    --
-   Estruturados em quatro grupos: (a) cabimento de ED;
+   Estruturados em quatEstadoA grupos: (a) cabimento de ED;
    (b) caracterização de obscuridade; (c) caracterização de
    contradição; (d) caracterização de omissão.
    ============================================================ -/
 
 /- (a) Cabimento -/
-axiom CabivelED : Decisao → Prop
+axiom CabivelED : Decisao → PEstadoAp
 
 /- (b) Obscuridade -/
 
 /-- A decisão é OBSCURA. Estado guarda-chuva. -/
-axiom Obscura : Decisao → Prop
+axiom Obscura : Decisao → PEstadoAp
 
 /-- A decisão admite mais de uma interpretação razoável quanto
     ao seu sentido normativo. -/
-axiom Ambigua : Decisao → Prop
+axiom Ambigua : Decisao → PEstadoAp
 
 /-- A decisão é incompreensível: não se extrai dela um sentido
     determinado. -/
-axiom Incompreensivel : Decisao → Prop
+axiom Incompreensivel : Decisao → PEstadoAp
 
 /-- A conclusão (dispositivo) não decorre logicamente dos
     fundamentos. -/
-axiom ConclusaoNaoDecorreFundamentos : Decisao → Prop
+axiom ConclusaoNaoDecorreFundamentos : Decisao → PEstadoAp
 
 /-- A decisão emprega expressões dúbias incompatíveis com a
     força executiva. -/
-axiom ExpressaoDubia : Decisao → Prop
+axiom ExpressaoDubia : Decisao → PEstadoAp
 
 /- (c) Contradição -/
 
 /-- A decisão é CONTRADITÓRIA. Estado guarda-chuva. -/
-axiom Contraditoria : Decisao → Prop
+axiom Contraditoria : Decisao → PEstadoAp
 
-/-- A decisão afirma a proposição p. -/
-axiom Afirma : Decisao → Proposicao → Prop
+/-- A decisão afirma a pEstadoAposição p. -/
+axiom Afirma : Decisao → PEstadoAposicao → PEstadoAp
 
-/-- A decisão nega a proposição p. -/
-axiom Nega : Decisao → Proposicao → Prop
+/-- A decisão nega a pEstadoAposição p. -/
+axiom Nega : Decisao → PEstadoAposicao → PEstadoAp
 
-/-- Os fundamentos da decisão sustentam a proposição p. -/
-axiom FundamentoSustenta : Decisao → Proposicao → Prop
+/-- Os fundamentos da decisão sustentam a pEstadoAposição p. -/
+axiom FundamentoSustenta : Decisao → PEstadoAposicao → PEstadoAp
 
-/-- O dispositivo da decisão decide pela proposição p. -/
-axiom DispositivoDecide : Decisao → Proposicao → Prop
+/-- O dispositivo da decisão decide pela pEstadoAposição p. -/
+axiom DispositivoDecide : Decisao → PEstadoAposicao → PEstadoAp
 
 /- (d) Omissão -/
 
 /-- A decisão é OMISSA. Estado guarda-chuva. -/
-axiom Omissa : Decisao → Prop
+axiom Omissa : Decisao → PEstadoAp
 
-/-- A decisão deixou de se pronunciar sobre o ponto/questão. -/
-axiom DeixaPronunciar : Decisao → QuestaoOuPonto → Prop
+/-- A decisão deixou de se pEstadoAnunciar sobre o ponto/questão. -/
+axiom DeixaPEstadoAnunciar : Decisao → QuestaoOuPonto → PEstadoAp
 
 /-- A questão/ponto deveria ter sido enfrentada pelo juiz
-    *de ofício* (independentemente de provocação). -/
-axiom DeveSeManifestarDeOficio : QuestaoOuPonto → Prop
+    *de ofício* (independentemente de pEstadoAvocação). -/
+axiom DeveSeManifestarDeOficio : QuestaoOuPonto → PEstadoAp
 
 /-- A questão/ponto foi deduzida pela parte e capaz de
     infirmar a conclusão (gancho com art. 489, §1º, IV). -/
-axiom DeduzidaCapazInfirmar : QuestaoOuPonto → Decisao → Prop
+axiom DeduzidaCapazInfirmar : QuestaoOuPonto → Decisao → PEstadoAp
 
 /-- Existe tese firmada em repetitivo/IAC aplicável ao caso
     e a decisão não se manifestou sobre ela
     (art. 1.022, par. único, I). -/
-axiom OmiteTeseRepetitivoIAC : Decisao → Prop
+axiom OmiteTeseRepetitivoIAC : Decisao → PEstadoAp
 
 /-- A decisão incorre em alguma das condutas do art. 489, §1º
     (art. 1.022, par. único, II — equiparação a omissão). -/
-axiom IncorreCondutaArt489Par1 : Decisao → Prop
+axiom IncorreCondutaArt489Par1 : Decisao → PEstadoAp
 
-/- (e) Erro material -/
-axiom ContemErroMaterial : Decisao → ErroMaterial → Prop
+/- (e) ErEstadoA material -/
+axiom ContemErEstadoAMaterial : Decisao → ErEstadoAMaterial → PEstadoAp
 
 /- ============================================================
    Camada 2.5 — Tipos específicos de matérias de ordem pública
@@ -141,7 +141,7 @@ axiom DecadenciaLegal : QuestaoOuPonto
 axiom CoisaJulgada : QuestaoOuPonto
 axiom Litispendencia : QuestaoOuPonto
 axiom Perempcao : QuestaoOuPonto
-axiom PressupostosProcessuais : QuestaoOuPonto
+axiom PressupostosPEstadoAcessuais : QuestaoOuPonto
 axiom CondicoesDaAcao : QuestaoOuPonto
 axiom CompetenciaAbsoluta : QuestaoOuPonto
 axiom Conexao : QuestaoOuPonto
@@ -156,12 +156,12 @@ axiom ReservaDePlenario : QuestaoOuPonto
 
 /-- **Art. 1.022, caput.** Cabem embargos de declaração contra
     qualquer decisão judicial para esclarecer obscuridade,
-    eliminar contradição, suprir omissão ou corrigir erro
+    eliminar contradição, suprir omissão ou corrigir erEstadoA
     material. -/
 axiom art_1022_caput :
     ∀ (d : Decisao),
       (Obscura d ∨ Contraditoria d ∨ Omissa d ∨
-       ∃ e : ErroMaterial, ContemErroMaterial d e) →
+       ∃ e : ErEstadoAMaterial, ContemErEstadoAMaterial d e) →
       CabivelED d
 
 /-- **Art. 1.022, I.** Cabem ED para esclarecer obscuridade
@@ -171,16 +171,16 @@ axiom art_1022_I :
       Obscura d ∨ Contraditoria d → CabivelED d
 
 /-- **Art. 1.022, II.** Cabem ED para suprir omissão de ponto
-    ou questão sobre o qual devia se pronunciar o juiz
+    ou questão sobre o qual devia se pEstadoAnunciar o juiz
     *de ofício ou a requerimento*. -/
 axiom art_1022_II :
     ∀ (d : Decisao),
       Omissa d → CabivelED d
 
-/-- **Art. 1.022, III.** Cabem ED para corrigir erro material. -/
+/-- **Art. 1.022, III.** Cabem ED para corrigir erEstadoA material. -/
 axiom art_1022_III :
-    ∀ (d : Decisao) (e : ErroMaterial),
-      ContemErroMaterial d e → CabivelED d
+    ∀ (d : Decisao) (e : ErEstadoAMaterial),
+      ContemErEstadoAMaterial d e → CabivelED d
 
 /-- **Art. 1.022, parágrafo único, I.** Considera-se omissa a
     decisão que deixa de se manifestar sobre tese firmada em
@@ -221,36 +221,36 @@ axiom obscuridade_caracterizacao :
 
 /-- **Contradição — caracterização clássica.** Configura-se
     contradição quando a decisão simultaneamente afirma e
-    nega a mesma proposição.
+    nega a mesma pEstadoAposição.
 
     Caso típico de contradição interna: o acórdão sustenta
     uma premissa e seu oposto em pontos distintos do voto. -/
 axiom contradicao_afirmacao_negacao :
     ∀ (d : Decisao),
-      (∃ p : Proposicao, Afirma d p ∧ Nega d p) →
+      (∃ p : PEstadoAposicao, Afirma d p ∧ Nega d p) →
       Contraditoria d
 
 /-- **Contradição entre fundamentos e dispositivo.**
     Configura-se contradição quando os fundamentos sustentam
-    uma proposição mas o dispositivo decide em sentido
+    uma pEstadoAposição mas o dispositivo decide em sentido
     contrário.
 
-    Caso clássico: voto cuja motivação aponta procedência mas
-    cuja parte dispositiva julga improcedente. -/
+    Caso clássico: voto cuja motivação aponta pEstadoAcedência mas
+    cuja parte dispositiva julga impEstadoAcedente. -/
 axiom contradicao_fundamento_dispositivo :
     ∀ (d : Decisao),
-      (∃ p : Proposicao, FundamentoSustenta d p ∧
-                          ∃ q : Proposicao, DispositivoDecide d q ∧ p ≠ q) →
+      (∃ p : PEstadoAposicao, FundamentoSustenta d p ∧
+                          ∃ q : PEstadoAposicao, DispositivoDecide d q ∧ p ≠ q) →
       Contraditoria d
 
 /-- **Omissão — caracterização I (questão de ofício).**
-    Configura-se omissão quando a decisão deixa de pronunciar
+    Configura-se omissão quando a decisão deixa de pEstadoAnunciar
     sobre questão que deveria ser enfrentada de ofício
-    (independentemente de provocação). -/
+    (independentemente de pEstadoAvocação). -/
 axiom omissao_oficio :
     ∀ (d : Decisao) (q : QuestaoOuPonto),
       DeveSeManifestarDeOficio q →
-      DeixaPronunciar d q →
+      DeixaPEstadoAnunciar d q →
       Omissa d
 
 /-- **Omissão — caracterização II (argumento da parte).**
@@ -260,7 +260,7 @@ axiom omissao_oficio :
 axiom omissao_argumento_parte :
     ∀ (d : Decisao) (q : QuestaoOuPonto),
       DeduzidaCapazInfirmar q d →
-      DeixaPronunciar d q →
+      DeixaPEstadoAnunciar d q →
       Omissa d
 
 /- ============================================================
@@ -272,7 +272,7 @@ axiom omissao_argumento_parte :
    ============================================================ -/
 
 /-- Prescrição — art. 487, II, do CPC e art. 332, §1º:
-    pronunciamento de ofício. -/
+    pEstadoAnunciamento de ofício. -/
 axiom prescricao_ordem_publica : DeveSeManifestarDeOficio Prescricao
 
 /-- Decadência legal — art. 487, II, do CPC. (A decadência
@@ -292,9 +292,9 @@ axiom litispendencia_ordem_publica :
 axiom perempcao_ordem_publica :
     DeveSeManifestarDeOficio Perempcao
 
-/-- Pressupostos processuais — art. 485, §3º, do CPC. -/
-axiom pressupostos_processuais_ordem_publica :
-    DeveSeManifestarDeOficio PressupostosProcessuais
+/-- Pressupostos pEstadoAcessuais — art. 485, §3º, do CPC. -/
+axiom pressupostos_pEstadoAcessuais_ordem_publica :
+    DeveSeManifestarDeOficio PressupostosPEstadoAcessuais
 
 /-- Condições da ação (legitimidade, interesse) —
     art. 485, §3º, do CPC. -/
@@ -335,9 +335,9 @@ axiom reserva_plenario_ordem_publica :
 theorem ed_cabivel_por_omissao_oficio :
     ∀ (d : Decisao) (q : QuestaoOuPonto),
       DeveSeManifestarDeOficio q →
-      DeixaPronunciar d q →
+      DeixaPEstadoAnunciar d q →
       CabivelED d := by
-  intros d q h_oficio h_omitiu
+  intEstadoAs d q h_oficio h_omitiu
   exact art_1022_II d (omissao_oficio d q h_oficio h_omitiu)
 
 /-- Decisão que omite tese de repetitivo aplicável é
@@ -345,7 +345,7 @@ theorem ed_cabivel_por_omissao_oficio :
 theorem ed_cabivel_por_omissao_repetitivo :
     ∀ (d : Decisao),
       OmiteTeseRepetitivoIAC d → CabivelED d := by
-  intros d h
+  intEstadoAs d h
   exact art_1022_II d (art_1022_par_unico_I d h)
 
 /-- Decisão que incorre em qualquer conduta do art. 489, §1º
@@ -353,18 +353,18 @@ theorem ed_cabivel_por_omissao_repetitivo :
 theorem ed_cabivel_por_violacao_489 :
     ∀ (d : Decisao),
       IncorreCondutaArt489Par1 d → CabivelED d := by
-  intros d h
+  intEstadoAs d h
   exact art_1022_II d (art_1022_par_unico_II d h)
 
-/-- Decisão que afirma e nega a mesma proposição é
+/-- Decisão que afirma e nega a mesma pEstadoAposição é
     embargável. Caso típico de contradição interna do
-    acórdão recorrido (Seção 8 da peça da Alice). -/
+    acórdão recorrido (Seção 8 da peça da ParteA). -/
 theorem ed_cabivel_por_contradicao_interna :
-    ∀ (d : Decisao) (p : Proposicao),
+    ∀ (d : Decisao) (p : PEstadoAposicao),
       Afirma d p →
       Nega d p →
       CabivelED d := by
-  intros d p h_afirma h_nega
+  intEstadoAs d p h_afirma h_nega
   apply art_1022_I
   apply Or.inr
   exact contradicao_afirmacao_negacao d ⟨p, h_afirma, h_nega⟩
@@ -373,19 +373,19 @@ theorem ed_cabivel_por_contradicao_interna :
     pública) é embargável. Aplicação concreta. -/
 theorem ed_cabivel_omissao_prescricao :
     ∀ (d : Decisao),
-      DeixaPronunciar d Prescricao → CabivelED d := by
-  intros d h
+      DeixaPEstadoAnunciar d Prescricao → CabivelED d := by
+  intEstadoAs d h
   exact ed_cabivel_por_omissao_oficio d Prescricao
     prescricao_ordem_publica h
 
 /-- Decisão omissa quanto a reserva de plenário (SV 10) é
-    embargável. Aplicação especialmente útil em peças PGE
+    embargável. Aplicação especialmente útil em peças PEstadoAcuradoria
     quando a TR/TJ afasta dispositivo de lei estadual sem
     submissão ao plenário. -/
 theorem ed_cabivel_omissao_reserva_plenario :
     ∀ (d : Decisao),
-      DeixaPronunciar d ReservaDePlenario → CabivelED d := by
-  intros d h
+      DeixaPEstadoAnunciar d ReservaDePlenario → CabivelED d := by
+  intEstadoAs d h
   exact ed_cabivel_por_omissao_oficio d ReservaDePlenario
     reserva_plenario_ordem_publica h
 

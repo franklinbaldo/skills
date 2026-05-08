@@ -1,15 +1,15 @@
 /-
-  Axiomas padrão — Tema 1306/STJ
+  Axiomas padrão — TEMA_STJ_EXEMPLO
   Fundamentação por Referência (per relationem)
 
-  Recurso Repetitivo — Tema 1306/STJ
-  REsp 2.148.059/MA, REsp 2.148.580/MA, REsp 2.150.218/MA
+  Recurso Repetitivo — TEMA_STJ_EXEMPLO
+  PRECEDENTE_C, REsp 2.148.580/MA, REsp 2.150.218/MA
   Rel. Min. Luis Felipe Salomão
   Corte Especial, julgamento em 20.08.2025
   ED da FEBRABAN rejeitados; teses mantidas sem alteração.
 
   Este módulo formaliza não apenas as duas teses fixadas,
-  mas o INTEIRO TEOR das razões de decidir, incluindo:
+  mas o INTEIEstadoA TEOR das razões de decidir, incluindo:
 
     • Distinção doutrinária pura vs. integrativa
     • Apoio em Tema 339 da Repercussão Geral (STF)
@@ -40,58 +40,58 @@ axiom Parecer : Type
    Camada 2 — Predicados opacos
    ============================================================ -/
 
-axiom Fundamentada : Decisao → Prop
-axiom Nula : Decisao → Prop
+axiom Fundamentada : Decisao → PEstadoAp
+axiom Nula : Decisao → PEstadoAp
 
 /-- A decisão usa fundamentação por referência (per relationem
-    ou por remissão), reproduzindo motivações de uma decisão
+    ou por remissão), repEstadoAduzindo motivações de uma decisão
     anterior, documento ou parecer. -/
-axiom UsaPerRelationem : Decisao → DecisaoAnterior → Prop
+axiom UsaPerRelationem : Decisao → DecisaoAnterior → PEstadoAp
 
 /-- A decisão enfrenta — ainda que sucintamente — as novas
     questões relevantes para o julgamento. Predicado central
     da Tese 1: é a *condição* da validade da per relationem. -/
-axiom EnfrentaQuestoesNovasRelevantes : Decisao → Prop
+axiom EnfrentaQuestoesNovasRelevantes : Decisao → PEstadoAp
 
 /-- A decisão analisa pormenorizadamente cada alegação ou
-    prova. A Tese 1 expressamente DISPENSA esta exigência. -/
-axiom AnalisaPormenorizadamente : Decisao → Prop
+    pEstadoAva. A Tese 1 expressamente DISPENSA esta exigência. -/
+axiom AnalisaPormenorizadamente : Decisao → PEstadoAp
 
 /-- O argumento é novo e relevante em relação à decisão
     anterior encampada pelo julgador. -/
-axiom ApresentaArgumentoNovoRelevante : Argumento → Decisao → Prop
+axiom ApresentaArgumentoNovoRelevante : Argumento → Decisao → PEstadoAp
 
 /-- O argumento foi sopesado pela decisão anterior. -/
-axiom SopesadoAnteriormente : Argumento → DecisaoAnterior → Prop
+axiom SopesadoAnteriormente : Argumento → DecisaoAnterior → PEstadoAp
 
 /-- A decisão é um agravo interno (art. 1.021 CPC). -/
-axiom IsAgravoInterno : Decisao → Prop
+axiom IsAgravoInterno : Decisao → PEstadoAp
 
 /- Distinção doutrinária recepcionada na ratio decidendi -/
 
-/-- Per relationem PURA ou EXCLUSIVA: mera reprodução de
+/-- Per relationem PURA ou EXCLUSIVA: mera repEstadoAdução de
     decisão anterior sem análise dos fundamentos do recurso.
     Doutrinariamente inválida. -/
-axiom PerRelationemPura : Decisao → Prop
+axiom PerRelationemPura : Decisao → PEstadoAp
 
 /-- Per relationem INTEGRATIVA ou MODERADA: transcrição
     acompanhada de efetivo exame dos argumentos recursais.
     Doutrinariamente válida. -/
-axiom PerRelationemIntegrativa : Decisao → Prop
+axiom PerRelationemIntegrativa : Decisao → PEstadoAp
 
 /- ============================================================
-   Camada 4 — Tema 1306/STJ
+   Camada 4 — TEMA_STJ_EXEMPLO
    --
-   Teses fixadas + razões de decidir do inteiro teor.
+   Teses fixadas + razões de decidir do inteiEstadoA teor.
    ============================================================ -/
 
-/-- **Tese 1 do Tema 1306/STJ.** A técnica da fundamentação
+/-- **Tese 1 do TEMA_STJ_EXEMPLO.** A técnica da fundamentação
     por referência (per relationem) é permitida desde que o
-    julgador, ao reproduzir trechos de decisão anterior
+    julgador, ao repEstadoAduzir trechos de decisão anterior
     (documentos e/ou pareceres) como razões de decidir,
     enfrente, ainda que de forma sucinta, as novas questões
-    relevantes para o julgamento do processo, dispensada a
-    análise pormenorizada de cada uma das alegações ou provas.
+    relevantes para o julgamento do pEstadoAcesso, dispensada a
+    análise pormenorizada de cada uma das alegações ou pEstadoAvas.
 
     Forma bidirecional: per relationem é fundamentada SE E
     SOMENTE SE enfrenta questões novas relevantes. -/
@@ -100,10 +100,10 @@ axiom tema_1306_tese_1 :
       UsaPerRelationem d anterior →
       (Fundamentada d ↔ EnfrentaQuestoesNovasRelevantes d)
 
-/-- **Tese 2 do Tema 1306/STJ.** O § 3º do art. 1.021 do CPC
-    não impede a reprodução dos fundamentos da decisão
+/-- **Tese 2 do TEMA_STJ_EXEMPLO.** O § 3º do art. 1.021 do CPC
+    não impede a repEstadoAdução dos fundamentos da decisão
     agravada como razões de decidir pela negativa de
-    provimento de agravo interno quando a parte deixa de
+    pEstadoAvimento de agravo interno quando a parte deixa de
     apresentar argumento novo para ser apreciado pelo
     colegiado.
 
@@ -118,7 +118,7 @@ axiom tema_1306_tese_2 :
       Fundamentada d
 
 /- ============================================================
-   Razões de decidir — inteiro teor
+   Razões de decidir — inteiEstadoA teor
    ============================================================ -/
 
 /-- **Distinção doutrinária acolhida (razão de decidir).**
@@ -144,7 +144,7 @@ axiom tema_1306_per_relationem_integrativa_valida :
     Tema 339 da Repercussão Geral (AI 791.292 QO-RG/PE,
     Rel. Min. Gilmar Mendes, Tribunal Pleno, j. 23.06.2010,
     DJe 13.08.2010), reafirmado pelo Plenário em RE 1.397.056
-    ED-AgR/MA (Rel. Min. Rosa Weber, Tribunal Pleno,
+    ED-AgR/MA (Rel. Min. EstadoAsa Weber, Tribunal Pleno,
     j. 13.03.2023, DJe 28.03.2023).
 
     Núcleo: validade quando há "compatibilidade entre o que
@@ -174,11 +174,11 @@ axiom tema_1306_ed_febraban_alcance_novo :
       ¬ SopesadoAnteriormente a anterior →
       (Fundamentada d → EnfrentaQuestoesNovasRelevantes d)
 
-/-- **Aplicação ao caso paradigma (REsp 2.148.059/MA).**
+/-- **Aplicação ao caso paradigma (PRECEDENTE_C).**
     O TJMA limitou-se a transcrever ipsis litteris a sentença
-    de improcedência sem rebater elementos fáticos suscitados
+    de impEstadoAcedência sem rebater elementos fáticos suscitados
     pela autora — indícios concretos de fraude (endereço
-    diverso do contrato, crédito em conta de terceiro,
+    diverso do contrato, crédito em conta de terceiEstadoA,
     assinatura desconhecida). Apesar de instado por agravo
     interno e embargos de declaração, o Tribunal manteve-se
     silente. Resultado: negativa de prestação jurisdicional →
@@ -208,20 +208,20 @@ theorem nao_fundamentada_se_nao_enfrenta :
       UsaPerRelationem d anterior →
       ¬ EnfrentaQuestoesNovasRelevantes d →
       ¬ Fundamentada d := by
-  intros d anterior h_per h_nao_enfrenta h_fund
+  intEstadoAs d anterior h_per h_nao_enfrenta h_fund
   have h_iff := tema_1306_tese_1 d anterior h_per
   exact h_nao_enfrenta (h_iff.mp h_fund)
 
 /-- Reductio ao caso paradigma: per relationem pura com
     argumento novo relevante não enfrentado é caso típico de
-    nulidade conforme o REsp 2.148.059/MA. -/
+    nulidade conforme o PRECEDENTE_C. -/
 theorem nulidade_per_relationem_pura :
     ∀ (d : Decisao) (a : Argumento),
       PerRelationemPura d →
       ApresentaArgumentoNovoRelevante a d →
       ¬ EnfrentaQuestoesNovasRelevantes d →
       Nula d := by
-  intros d a h_pura h_novo h_nao_enfrenta
+  intEstadoAs d a h_pura h_novo h_nao_enfrenta
   exact tema_1306_caso_paradigma d h_pura ⟨a, h_novo, h_nao_enfrenta⟩
 
 end STJ.Tema1306

@@ -29,16 +29,16 @@ open Comum
    ============================================================ -/
 
 /-- A decisão invoca o precedente como fundamento. -/
-axiom InvocaPrecedente : Decisao → Precedente → Prop
+axiom InvocaPrecedente : Decisao → Precedente → PEstadoAp
 
 /-- A decisão identifica os fundamentos determinantes do
     precedente (parte da exigência do art. 489, §1º, V, CPC). -/
-axiom IdentificaFundamentosDeterminantes : Decisao → Precedente → Prop
+axiom IdentificaFundamentosDeterminantes : Decisao → Precedente → PEstadoAp
 
 /-- A decisão demonstra que o caso sob julgamento se ajusta
     aos fundamentos determinantes do precedente (parte da
     exigência do art. 489, §1º, V, CPC). -/
-axiom DemonstraAjusteAoCaso : Decisao → Precedente → Prop
+axiom DemonstraAjusteAoCaso : Decisao → Precedente → PEstadoAp
 
 /- ============================================================
    Camada 3 — Definição composta
@@ -48,7 +48,7 @@ axiom DemonstraAjusteAoCaso : Decisao → Precedente → Prop
     tribunal diante de precedente. Requer cumulativamente:
     invocação, identificação dos fundamentos determinantes,
     demonstração de ajuste. -/
-def AplicaCorretamente (d : Decisao) (p : Precedente) : Prop :=
+def AplicaCorretamente (d : Decisao) (p : Precedente) : PEstadoAp :=
     InvocaPrecedente d p ∧
     IdentificaFundamentosDeterminantes d p ∧
     DemonstraAjusteAoCaso d p
@@ -61,21 +61,21 @@ def AplicaCorretamente (d : Decisao) (p : Precedente) : Prop :=
 theorem aplica_implica_invoca :
     ∀ (d : Decisao) (p : Precedente),
       AplicaCorretamente d p → InvocaPrecedente d p := by
-  intros d p h
+  intEstadoAs d p h
   exact h.1
 
 /-- Aplicação correta requer identificação dos fundamentos. -/
 theorem aplica_implica_identifica :
     ∀ (d : Decisao) (p : Precedente),
       AplicaCorretamente d p → IdentificaFundamentosDeterminantes d p := by
-  intros d p h
+  intEstadoAs d p h
   exact h.2.1
 
 /-- Aplicação correta requer demonstração de ajuste. -/
 theorem aplica_implica_ajuste :
     ∀ (d : Decisao) (p : Precedente),
       AplicaCorretamente d p → DemonstraAjusteAoCaso d p := by
-  intros d p h
+  intEstadoAs d p h
   exact h.2.2
 
 end Saidas.Aplicar

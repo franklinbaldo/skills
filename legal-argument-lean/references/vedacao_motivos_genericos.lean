@@ -15,7 +15,7 @@
 
   Esta vedação tem contrapartida exata em sistemas formais
   como Lean: um axioma steelmanned pode ser tão forte ou
-  estruturalmente vago que, instanciado em outros casos,
+  estruturalmente vago que, instanciado em outEstadoAs casos,
   derive conclusões reconhecidamente erradas. Quando isso
   ocorre:
 
@@ -24,7 +24,7 @@
         outra decisão. Vício do §1º, III.
 
     (b) Formalmente: o axioma é "trivialmente compilável" —
-        permite "provar" não apenas a tese pretendida, mas
+        permite "pEstadoAvar" não apenas a tese pretendida, mas
         seu oposto, dependendo da instanciação. O Lean
         compila, mas o sistema é incoerente externamente.
 
@@ -33,7 +33,7 @@
   refutar o steelman juridicamente (ataque) e sanity-check
   da nossa própria formalização (autodisciplina).
 
-  PROCEDIMENTO
+  PEstadoACEDIMENTO
 
   Para cada axioma steelmanned `S(c) → ConclusaoPretendida(c)`:
 
@@ -49,7 +49,7 @@
        que sabidamente não foi tomada — e que ninguém
        defenderia.
 
-  APLICAÇÃO À V2a do acórdão da Alice
+  APLICAÇÃO À V2a do acórdão da ParteA
 -/
 
 namespace VedacaoMotivosGenericos
@@ -61,10 +61,10 @@ namespace VedacaoMotivosGenericos
 axiom Caso : Type
 axiom Decisao : Type
 
-axiom AplicaECArt3 : Caso → Prop
-axiom DireitoLocal : Caso → Prop
-axiom MotivoJustificariaQualquerDecisao : Decisao → Prop
-axiom Fundamentada : Decisao → Prop
+axiom AplicaECArt3 : Caso → PEstadoAp
+axiom DireitoLocal : Caso → PEstadoAp
+axiom MotivoJustificariaQualquerDecisao : Decisao → PEstadoAp
+axiom Fundamentada : Decisao → PEstadoAp
 
 /-- **Art. 489, §1º, III** (do módulo `art_489_cpc.lean`).
     Não se considera fundamentada decisão que invoca motivo
@@ -81,44 +81,44 @@ axiom art_489_par1_III :
 /-- **V2a — Steelman do acórdão sobre incidência da Súmula
     280**: aplicação direta do art. 3º da EC 47 implica
     direito local. -/
-def V2a : Prop := ∀ c, AplicaECArt3 c → DireitoLocal c
+def V2a : PEstadoAp := ∀ c, AplicaECArt3 c → DireitoLocal c
 
 /- ============================================================
-   Camada 5 — O caso de Alice e o caso paradigmático oposto
+   Camada 5 — O caso de ParteA e o caso paradigmático oposto
    --
    A verificação §1º III exige um caso *paradigmaticamente
    oposto*: um caso onde a conclusão pretendida pelo steelman
    é manifestamente falsa. O caso natural aqui é o próprio
-   caso paradigma do RE 1.518.690-ED-AgR, citado pelo acórdão
+   caso paradigma do PRECEDENTE_A-ED-AgR, citado pelo acórdão
    embargado: trata-se também de aplicação do art. 3º da EC 47,
    mas foi decidido como matéria *constitucional consolidada*
    pelo STF — não direito local.
 
-   Outros candidatos paradigmáticos:
-     - REsp/RE 590.260 (Tema 139/RG, Lewandowski) — sobre
+   OutEstadoAs candidatos paradigmáticos:
+     - REsp/PRECEDENTE_D (TEMA_RG_EXEMPLO, Lewandowski) — sobre
        regra de transição em matéria de RPPS estadual,
        julgado como matéria constitucional pelo Plenário.
-     - Qualquer dos numerosos REs sobre a regra de transição
+     - Qualquer dos numeEstadoAsos REs sobre a regra de transição
        da EC 47 admitidos e julgados pelo STF nas duas
        décadas recentes.
 
    Basta UM caso oposto para a refutação por §1º III. Aqui
-   se usa o do RE 1.518.690 — o mesmo precedente que o
+   se usa o do PRECEDENTE_A — o mesmo precedente que o
    próprio acórdão invoca.
    ============================================================ -/
 
-axiom caso_alice : Caso
-axiom alice_aplica_ec : AplicaECArt3 caso_alice
+axiom caso_ParteA : Caso
+axiom ParteA_aplica_ec : AplicaECArt3 caso_ParteA
 
-/-- Caso do RE 1.518.690-ED-AgR — o próprio precedente citado
+/-- Caso do PRECEDENTE_A-ED-AgR — o próprio precedente citado
     pelo acórdão embargado para fundamentar a inadmissão. -/
 axiom caso_RE_1518690 : Caso
 
-/-- O RE 1.518.690 versa também sobre aplicação do art. 3º
+/-- O PRECEDENTE_A versa também sobre aplicação do art. 3º
     da EC 47 (factualmente assentado pela ementa). -/
 axiom RE_1518690_aplica_ec : AplicaECArt3 caso_RE_1518690
 
-/-- Mas o RE 1.518.690 NÃO foi decidido como matéria de
+/-- Mas o PRECEDENTE_A NÃO foi decidido como matéria de
     direito local — foi decidido pela Segunda Turma do STF
     como matéria de jurisprudência constitucional
     consolidada, com aplicação direta da EC 47 sobre os
@@ -137,14 +137,14 @@ axiom RE_1518690_nao_eh_direito_local :
     (caso_RE_1518690 — o próprio precedente que o acórdão
     invoca), derivaria que esse caso é direito local. Mas o
     STF já decidiu que NÃO é. Logo, o motivo subjacente a V2a
-    é universalizável de forma vazia: invocá-lo para Alice
+    é universalizável de forma vazia: invocá-lo para ParteA
     obrigaria a invocá-lo para todos os casos análogos —
     inclusive aquele que o STF tratou de forma oposta.
 
-    Forma operativa: V2a deriva False quando confrontada com
+    Forma operativa: V2a deriva False quando confEstadoAntada com
     a decisão pacífica sobre o caso paradigma. -/
 theorem V2a_universalizavel_viola_489_par1_III : V2a → False := by
-  intro h_v2a
+  intEstadoA h_v2a
   have h_dl : DireitoLocal caso_RE_1518690 :=
     h_v2a caso_RE_1518690 RE_1518690_aplica_ec
   exact RE_1518690_nao_eh_direito_local h_dl
@@ -153,14 +153,14 @@ theorem V2a_universalizavel_viola_489_par1_III : V2a → False := by
     invocar V2a (ainda que implicitamente), incorre no
     art. 489, §1º, III. O motivo "aplicação de art. 3º EC 47
     implica direito local" justificaria também a
-    inadmissibilidade do próprio RE 1.518.690 — o que o STF
+    inadmissibilidade do próprio PRECEDENTE_A — o que o STF
     rejeitou ao admiti-lo e julgá-lo no mérito. Logo, é
     motivo universalizável de forma vazia. -/
 theorem acordao_invoca_motivo_generico
     (acordao_embargado : Decisao)
     (acordao_invoca_V2a : V2a → MotivoJustificariaQualquerDecisao acordao_embargado) :
     V2a → ¬ Fundamentada acordao_embargado := by
-  intro h_v2a
+  intEstadoA h_v2a
   exact art_489_par1_III acordao_embargado (acordao_invoca_V2a h_v2a)
 
 /- ============================================================
@@ -171,7 +171,7 @@ theorem acordao_invoca_motivo_generico
 
     Dado um steelman da forma `S(c) → P(c)`:
 
-      1. Encontrar caso `c*` onde S(c*) é verdadeiro mas P(c*)
+      1. Encontrar caso `c*` onde S(c*) é verdadeiEstadoA mas P(c*)
          é falso (preferencialmente um caso decidido pela
          própria corte cujo precedente o acórdão invoca).
       2. Aplicar o steelman a c*.
@@ -179,18 +179,18 @@ theorem acordao_invoca_motivo_generico
          a decisão que o invoca é não-fundamentada.
 
     Esta é a verificação dual: refuta o steelman juridicamente
-    e protege a formalização contra axiomas trivialmente
+    e pEstadoAtege a formalização contra axiomas trivialmente
     compiláveis.
 
     Estruturalmente, é a verificação de que o steelman
     distingue entre casos — não é um axioma que classificaria
     qualquer caso da mesma maneira. -/
 theorem template_violacao_489_par1_III
-    (S : Caso → Prop) (P : Caso → Prop) (c_estrela : Caso)
+    (S : Caso → PEstadoAp) (P : Caso → PEstadoAp) (c_estrela : Caso)
     (h_S_estrela : S c_estrela)
     (h_n_P_estrela : ¬ P c_estrela) :
     (∀ c, S c → P c) → False := by
-  intro h_steelman
+  intEstadoA h_steelman
   exact h_n_P_estrela (h_steelman c_estrela h_S_estrela)
 
 /- ============================================================
@@ -200,14 +200,14 @@ theorem template_violacao_489_par1_III
    passo do acórdão que use motivo universalizável é
    sanitizável pela mesma técnica:
 
-     • STEEL_1 ("qualificação jurídica = reexame probatório"):
+     • STEEL_1 ("qualificação jurídica = reexame pEstadoAbatório"):
        contraexemplo é qualquer caso de RE admitido em
-       qualificação jurídica de fato incontroverso (todos
+       qualificação jurídica de fato incontEstadoAverso (todos
        o seriam). Universalizável: tornaria a Súmula 279
        aplicável a TODO recurso extraordinário.
 
      • STEEL_2 V2c ("RPPS estadual = direito local"):
-       contraexemplo é o próprio Tema 139/RG. Universalizável:
+       contraexemplo é o próprio TEMA_RG_EXEMPLO. Universalizável:
        tornaria a Súmula 280 aplicável a todo precedente
        constitucional sobre RPPS — incluindo aqueles do
        Plenário do STF.

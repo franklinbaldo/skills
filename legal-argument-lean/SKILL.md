@@ -3,7 +3,7 @@ name: legal-argument-lean
 description: |
   Formalize a legal argument (typically a Brazilian peça forense — embargos
   de declaração, recurso, contestação, parecer) in Lean 4 as an exercise in
-  argumentative auditing. Use whenever Franklin asks to "transformar/reduzir/
+  argumentative auditing. Use whenever the USER asks to "transformar/reduzir/
   expressar um argumento jurídico em Lean", to "axiomatizar uma peça",
   "escrever isso como prova matemática", or to "ver o esqueleto lógico" de
   uma argumentação. Especially well-suited to embargos de declaração and
@@ -24,7 +24,7 @@ the rhetorical structure of the original peça.
 
 ## When to use this skill
 
-Use whenever Franklin asks to:
+Use whenever the USER asks to:
 
 - formalize/translate/reduzir uma peça jurídica em Lean
 - "axiomatizar" or "ver o esqueleto lógico" de uma argumentação
@@ -155,11 +155,11 @@ claims; if the peça does not assert it, the formalization should not
 either.
 
 ```lean
-axiom caso_alice : Caso
+axiom caso_concreto : Caso
 
-/-- Voto da 1ª TR-RO: contribuições ao RGPS de 1987 a 2012, posse em
-    cargo efetivo em maio/2012. Fatos incontroversos. -/
-axiom alice_fatos_incontroversos : FatosIncontroversos caso_alice
+/-- Voto da instância recorrida: descrição resumida dos fatos relevantes.
+    Fatos incontroversos. -/
+axiom fatos_incontroversos : FatosIncontroversos caso_concreto
 ```
 
 ### Camada 6 — Teoremas
@@ -169,11 +169,11 @@ conclusion, write multiple proofs (different vias). The audit step
 will reveal which is most economical.
 
 ```lean
-theorem sumula_279_inaplicavel : ¬ AplicaSumula279 caso_alice := by
+theorem sumula_279_inaplicavel : ¬ AplicaSumula279 caso_concreto := by
   rw [sumula_279_definicao]
-  exact RE_210_917 caso_alice
-    alice_fatos_incontroversos
-    alice_apenas_qualificacao
+  exact RE_210_917 caso_concreto
+    fatos_incontroversos
+    apenas_qualificacao
 ```
 
 ## Workflow
@@ -203,7 +203,7 @@ theorem sumula_279_inaplicavel : ¬ AplicaSumula279 caso_alice := by
    step — never skip it. Compare axiom sets where multiple proofs of
    the same theorem exist.
 
-6. **Report to Franklin** the audit results, with strategic
+6. **Report to the USER** the audit results, with strategic
    interpretation: which proof is most economical, which precedent is
    load-bearing, which factual claims are critical.
 
@@ -233,14 +233,13 @@ conflicts, which is rare).
   Docstrings (`/-- ... -/`) get rendered nicely by Lean's hover; use
   them for citations.
 - **Never fabricate precedents or claims.** Use only what the peça
-  itself invokes. If something is missing, flag it to Franklin rather
+  itself invokes. If something is missing, flag it to the USER rather
   than inventing.
 - **Never simplify the argument.** The point is to preserve every step
   the peça takes; reducing fidelity defeats the audit.
 - **Always end with `#print axioms`** for each theorem.
 - **Deliver in an artifact** (Lean code in a markdown ```lean block, or
-  a `.lean` file). Match Franklin's userPreferences: documents in
-  artifacts only after planning approval.
+  a `.lean` file). Match the USER's preferences for artifacts.
 
 ## What maps well, what maps badly
 
@@ -280,15 +279,15 @@ After running `#print axioms`, examine:
   rewriting or only `→` modus ponens. Not legally meaningful but worth
   noting.
 
-When reporting to Franklin, lead with the strategic insight (e.g.,
+When reporting to the USER, lead with the strategic insight (e.g.,
 "Prova 3 é a mais robusta porque consome um único claim factual"), not
 with the dump of axiom names.
 
 ## Example
 
-A complete worked example — Seção 4 of the ARE 1.589.466/RO embargos
+A complete worked example — a section of a typical embargos
 (Súmula 279 inapplicability) — is at
-`references/example_secao_4.lean`. It compiles cleanly under Lean 4 and
+`references/template_secao.lean`. It compiles cleanly under Lean 4 and
 demonstrates all six layers plus the audit.
 
 ## Reference axiom libraries
@@ -642,7 +641,7 @@ Procedure for every steelman of form `S(c) → P(c)`:
    not) take.
 
 A worked example is at `references/vedacao_motivos_genericos.lean`,
-applying the check to V2a from the Alice case. The §1º III refutation
+applying the check to a generic case. The §1º III refutation
 is structurally more economical than the case-specific contradiction:
 it depends only on three axioms about the counterexample case, none
 about the case at bar. This is the formal-systems analog of "uma boa
@@ -763,27 +762,27 @@ named it. The reader should never know how much work it took.
 
 ## Example files (in order of complexity)
 
-- `references/example_secao_4.lean` — single-section formalization,
+- `references/template_secao.lean` — single-section formalization,
   introductory
 - `references/exemplo_composicao.lean` — composition of two libraries
-- `references/acordao_embargado_alice.lean` — adversarial mode,
+- `references/template_adversarial.lean` — adversarial mode,
   single-steelman per gap, ending with `theorem
   acordao_internamente_inconsistente : False`
-- `references/steelmanning_exaustivo_STEEL2.lean` — exhaustive
-  steelmanning of one gap (STEEL_2 of the same acórdão), with four
-  variant-versions and four distinct refutation strategies
+- `references/template_steelmanning.lean` — exhaustive
+  steelmanning of one gap, with four variant-versions and four distinct
+  refutation strategies
 - `references/vedacao_motivos_genericos.lean` — the trivialness
-  check (§1º, III) applied to V2a, with reusable template for any
-  steelman
+  check (§1º, III) applied to a generic case, with reusable template
+  for any steelman
 
-## Convention notes specific to Franklin
+## Convention notes specific to the USER
 
-- Match Franklin's existing legal-document conventions: `## H2` and
+- Match the USER's existing legal-document conventions: `## H2` and
   below; no horizontal rules; no `# H1` (handled by frontmatter or
   context).
-- Skill output goes in artifacts only **after** Franklin approves the
+- Skill output goes in artifacts only **after** the USER approves the
   plan/skeleton. The default workflow is: present the layer inventory
   → await approval → write the Lean file.
 - Do not deliver Word versions unless asked. Lean files are
   text-native; if a Word version is requested, convert via pandoc per
-  Franklin's standing instructions.
+  the USER's standing instructions.

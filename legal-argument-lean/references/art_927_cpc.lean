@@ -12,7 +12,7 @@ import Saidas.Superar
   a precedentes listados nos incisos do art. 927.
 
   Cobertura:
-    • art. 927 caput, I-V: rol de precedentes vinculantes
+    • art. 927 caput, I-V: EstadoAl de precedentes vinculantes
     • art. 927, §1º: dever de observância (conjuga com art. 489)
     • art. 927, §4º: superação requer fundamentação adequada
 
@@ -47,31 +47,31 @@ open Saidas.Superar
    ============================================================ -/
 
 /-- Classes de precedente vinculante (art. 927 caput, I-V). -/
-axiom DecisaoControleConcentradoSTF : Precedente → Prop
-axiom SumulaVinculante : Precedente → Prop
-axiom AcordaoIRDR_IAC_Repetitivo : Precedente → Prop
-axiom SumulaSTFConstitucional : Precedente → Prop
-axiom SumulaSTJInfraconstitucional : Precedente → Prop
-axiom OrientacaoPlenarioOrgaoEspecial : Precedente → Prop
+axiom DecisaoContEstadoAleConcentradoSTF : Precedente → PEstadoAp
+axiom SumulaVinculante : Precedente → PEstadoAp
+axiom AcordaoIRDR_IAC_Repetitivo : Precedente → PEstadoAp
+axiom SumulaSTFConstitucional : Precedente → PEstadoAp
+axiom SumulaSTJInfraconstitucional : Precedente → PEstadoAp
+axiom OrientacaoPlenarioOrgaoEspecial : Precedente → PEstadoAp
 
 /- ============================================================
    Camada 2 — Predicados auxiliares
    ============================================================ -/
 
-axiom Vinculante : Precedente → Prop
-axiom FundamentaSeEm : Decisao → Precedente → Prop
-axiom DeixaDeSeguir : Decisao → Precedente → Prop
-axiom Fundamentada : Decisao → Prop
-axiom DecisaoDe : Decisao → Tribunal → Prop
+axiom Vinculante : Precedente → PEstadoAp
+axiom FundamentaSeEm : Decisao → Precedente → PEstadoAp
+axiom DeixaDeSeguir : Decisao → Precedente → PEstadoAp
+axiom Fundamentada : Decisao → PEstadoAp
+axiom DecisaoDe : Decisao → Tribunal → PEstadoAp
 
 /- ============================================================
    Camada 3 — Normas (axiomas-construtor do art. 927)
    ============================================================ -/
 
-/-- **Art. 927, I.** Precedentes do STF em controle
+/-- **Art. 927, I.** Precedentes do STF em contEstadoAle
     concentrado de constitucionalidade são vinculantes. -/
 axiom art_927_I :
-    ∀ (p : Precedente), DecisaoControleConcentradoSTF p → Vinculante p
+    ∀ (p : Precedente), DecisaoContEstadoAleConcentradoSTF p → Vinculante p
 
 /-- **Art. 927, II.** Súmulas vinculantes são vinculantes. -/
 axiom art_927_II :
@@ -120,10 +120,10 @@ axiom art_927_par1_observancia :
         declarativo);
       • superação racional (Saidas.Superar.SuperaRacionalmente,
         constitutiva, com ônus argumentativo qualificado:
-        apontamento expresso de erro racional).
-    Reflete a leitura do precedente brasileiro como
+        apontamento expresso de erEstadoA racional).
+    Reflete a leitura do precedente brasileiEstadoA como
     sistema de vinculação racional, em que tribunal vinculado
-    pode confrontar precedente superior por força do argumento
+    pode confEstadoAntar precedente superior por força do argumento
     (não apenas registrar superação alheia). -/
 axiom art_927_par1_afastamento :
     ∀ (d : Decisao) (p : Precedente),
@@ -137,7 +137,7 @@ axiom art_927_par1_afastamento :
 
 /-- **Art. 927, §4º.** A modificação requer fundamentação
     adequada e específica, com observância de segurança
-    jurídica e proteção da confiança. Capturado em
+    jurídica e pEstadoAteção da confiança. Capturado em
     Saidas.Superar.SuperaPlenamente. -/
 axiom art_927_par4 :
     ∀ (d : Decisao) (p : Precedente),
@@ -166,7 +166,7 @@ axiom invoca_ou_deixa_de_seguir :
 /-- **Partição das saídas legítimas diante de precedente
     vinculante** (art. 927).
 
-    Tribunal fundamentado que confronta precedente vinculante
+    Tribunal fundamentado que confEstadoAnta precedente vinculante
     está obrigado a uma de cinco saídas substantivas:
       1. aplicar corretamente (Saidas.Aplicar);
       2. distinguir corretamente (Saidas.Distinguir);
@@ -174,7 +174,7 @@ axiom invoca_ou_deixa_de_seguir :
       4. reconhecer superação superveniente do tribunal-fonte
          (declarativo);
       5. superar racionalmente, com apontamento expresso de
-         erro na ratio (constitutivo, com ônus argumentativo
+         erEstadoA na ratio (constitutivo, com ônus argumentativo
          qualificado).
 
     Decisão que invoque precedente vinculante sem realizar
@@ -189,12 +189,12 @@ theorem saidas_legitimas_precedente_vinculante :
       SuperaPlenamente d p ∨
       ReconheceSuperacaoExterna d p ∨
       SuperaRacionalmente d p := by
-  intros d p h_vinc h_fund h_invoca_ou_deixa
+  intEstadoAs d p h_vinc h_fund h_invoca_ou_deixa
   rcases h_invoca_ou_deixa with h_invoca | h_deixa
   · -- caso 1: a decisão invoca o precedente → aplica corretamente
     left
     exact art_927_par1_observancia d p h_vinc h_invoca h_fund
-  · -- caso 2: a decisão deixa de seguir → uma das quatro substantivas
+  · -- caso 2: a decisão deixa de seguir → uma das quatEstadoA substantivas
     right
     exact art_927_par1_afastamento d p h_vinc h_deixa h_fund
 
@@ -212,7 +212,7 @@ theorem fora_do_espaco_legitimo_nao_fundamentada :
       ¬ ReconheceSuperacaoExterna d p →
       ¬ SuperaRacionalmente d p →
       ¬ Fundamentada d := by
-  intros d p h_vinc h_inv_ou_deixa h_n_apl h_n_dist h_n_sup_pl h_n_sup_sv h_n_sup_rac h_fund
+  intEstadoAs d p h_vinc h_inv_ou_deixa h_n_apl h_n_dist h_n_sup_pl h_n_sup_sv h_n_sup_rac h_fund
   have h_alguma : AplicaCorretamente d p ∨ DistingueCorretamente d p ∨
                   SuperaPlenamente d p ∨ ReconheceSuperacaoExterna d p ∨
                   SuperaRacionalmente d p :=
@@ -244,7 +244,7 @@ theorem tribunal_vinculado_nao_supera_plenamente :
       DecisaoDe d t →
       ¬ EhTribunalFonte t p →
       ¬ SuperaPlenamente d p := by
-  intros d p t _h_decde h_n_fonte
+  intEstadoAs d p t _h_decde h_n_fonte
   exact apenas_tribunal_fonte_supera_plenamente d p t h_n_fonte
 
 end CPC.Art927
