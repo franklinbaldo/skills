@@ -36,10 +36,10 @@ jobs:
         echo "Compiling Standards and Libraries..."
         lean -o art_489_cpc.olean art_489_cpc.lean
         lean -o art_1022_cpc.olean art_1022_cpc.lean
-        lean -o art_10_cpc.lean art_10_cpc.lean
-        lean -o art_5_e_6_cpc.lean art_5_e_6_cpc.lean
+        lean -o art_10_cpc.olean art_10_cpc.lean
+        lean -o art_5_e_6_cpc.olean art_5_e_6_cpc.lean
         lean -o tema_1306_stj.olean tema_1306_stj.lean
-        
+
         echo "Compiling Templates and Examples..."
         for f in template_*.lean exemplo_*.lean vedacao_*.lean sec1III_*.lean; do
           if [ -f "$f" ]; then
@@ -47,3 +47,7 @@ jobs:
             lean "$f"
           fi
         done
+
+        echo "Compiling Pipeline Example..."
+        cd ../pipeline/exemplo_marilene/
+        LEAN_PATH=../../references lean 03_lean_fase3.lean
