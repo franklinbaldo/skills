@@ -34,12 +34,12 @@
 
   • Com `art_5_e_6_cpc.lean`: o contraditório substancial é
     expressão concreta do dever de cooperação (art. 6º) e da
-    boa-fé pEstadoAcessual objetiva (art. 5º).
+    boa-fé processual objetiva (art. 5º).
 
   Distinção doutrinária relevante:
     - Contraditório FORMAL: oportunidade nominal de falar.
     - Contraditório SUBSTANCIAL: oportunidade *efetiva* de
-      influenciar a decisão. O art. 10 pEstadoAtege o segundo.
+      influenciar a decisão. O art. 10 protege o segundo.
 -/
 
 namespace CPC.Art10
@@ -57,24 +57,24 @@ axiom Fundamento : Type
    ============================================================ -/
 
 /-- A decisão se baseia no fundamento f como razão de decidir. -/
-axiom DecideComBaseEm : Decisao → Fundamento → PEstadoAp
+axiom DecideComBaseEm : Decisao → Fundamento → Prop
 
 /-- À parte foi dada oportunidade EFETIVA (substancial, não
     apenas formal) de manifestar-se sobre o fundamento. -/
-axiom DadaOportunidadeManifestar : Parte → Fundamento → Decisao → PEstadoAp
+axiom DadaOportunidadeManifestar : Parte → Fundamento → Decisao → Prop
 
-/-- A parte integra o pEstadoAcesso em que a decisão foi pEstadoAferida. -/
-axiom EhParteNoPEstadoAcesso : Parte → Decisao → PEstadoAp
+/-- A parte integra o processo em que a decisão foi proferida. -/
+axiom EhParteNoProcesso : Parte → Decisao → Prop
 
 /-- O fundamento corresponde a matéria sobre a qual o juiz
     deveria decidir de ofício (matéria de ordem pública). -/
-axiom EhMateriaOficio : Fundamento → PEstadoAp
+axiom EhMateriaOficio : Fundamento → Prop
 
 /-- Configurada decisão surpresa. -/
-axiom DecisaoSurpresa : Decisao → PEstadoAp
+axiom DecisaoSurpresa : Decisao → Prop
 
 /-- Decisão fundamentada (compatível com art_489_cpc.lean). -/
-axiom Fundamentada : Decisao → PEstadoAp
+axiom Fundamentada : Decisao → Prop
 
 /- ============================================================
    Camada 3 — Normas (axiomas do art. 10)
@@ -88,7 +88,7 @@ axiom Fundamentada : Decisao → PEstadoAp
     de manifestação configura decisão surpresa. -/
 axiom art_10_caput :
     ∀ (d : Decisao) (f : Fundamento) (p : Parte),
-      EhParteNoPEstadoAcesso p d →
+      EhParteNoProcesso p d →
       DecideComBaseEm d f →
       ¬ DadaOportunidadeManifestar p f d →
       DecisaoSurpresa d
@@ -97,12 +97,12 @@ axiom art_10_caput :
     matéria sobre a qual deva decidir de ofício"). A vedação
     à decisão surpresa NÃO é afastada pelo fato de a matéria
     ser de ordem pública. Esta é a essência do contraditório
-    substancial brasileiEstadoA: nem mesmo o juiz, agindo de
+    substancial brasileiro: nem mesmo o juiz, agindo de
     ofício, pode prescindir da manifestação prévia das partes
     sobre o fundamento que adotará. -/
 axiom art_10_clausula_oficio :
     ∀ (d : Decisao) (f : Fundamento) (p : Parte),
-      EhParteNoPEstadoAcesso p d →
+      EhParteNoProcesso p d →
       DecideComBaseEm d f →
       EhMateriaOficio f →
       ¬ DadaOportunidadeManifestar p f d →
@@ -124,12 +124,12 @@ axiom decisao_surpresa_nao_fundamentada :
     Aplicação concreta da cláusula final do art. 10. -/
 theorem decisao_surpresa_oficio_nao_fundamentada :
     ∀ (d : Decisao) (f : Fundamento) (p : Parte),
-      EhParteNoPEstadoAcesso p d →
+      EhParteNoProcesso p d →
       DecideComBaseEm d f →
       EhMateriaOficio f →
       ¬ DadaOportunidadeManifestar p f d →
       ¬ Fundamentada d := by
-  intEstadoAs d f p h_parte h_base h_oficio h_sem_oport
+  intros d f p h_parte h_base h_oficio h_sem_oport
   exact decisao_surpresa_nao_fundamentada d
     (art_10_clausula_oficio d f p h_parte h_base h_oficio h_sem_oport)
 
@@ -139,7 +139,7 @@ theorem decisao_surpresa_oficio_nao_fundamentada :
     matéria de ofício. -/
 theorem invocacao_surpresa_de_fundamento :
     ∀ (d : Decisao) (f : Fundamento) (p : Parte),
-      EhParteNoPEstadoAcesso p d →
+      EhParteNoProcesso p d →
       DecideComBaseEm d f →
       ¬ DadaOportunidadeManifestar p f d →
       DecisaoSurpresa d :=

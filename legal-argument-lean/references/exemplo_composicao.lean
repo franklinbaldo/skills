@@ -26,15 +26,15 @@ axiom Decisao : Type
 axiom DecisaoAnterior : Type
 axiom Argumento : Type
 
-axiom Fundamentada : Decisao → PEstadoAp
-axiom Nula : Decisao → PEstadoAp
-axiom DeduzidoNoPEstadoAcesso : Argumento → Decisao → PEstadoAp
-axiom CapazInfirmarConclusao : Argumento → Decisao → PEstadoAp
-axiom Enfrentado : Argumento → Decisao → PEstadoAp
-axiom UsaPerRelationem : Decisao → DecisaoAnterior → PEstadoAp
-axiom EnfrentaQuestoesNovasRelevantes : Decisao → PEstadoAp
-axiom ApresentaArgumentoNovoRelevante : Argumento → Decisao → PEstadoAp
-axiom PerRelationemPura : Decisao → PEstadoAp
+axiom Fundamentada : Decisao → Prop
+axiom Nula : Decisao → Prop
+axiom DeduzidoNoProcesso : Argumento → Decisao → Prop
+axiom CapazInfirmarConclusao : Argumento → Decisao → Prop
+axiom Enfrentado : Argumento → Decisao → Prop
+axiom UsaPerRelationem : Decisao → DecisaoAnterior → Prop
+axiom EnfrentaQuestoesNovasRelevantes : Decisao → Prop
+axiom ApresentaArgumentoNovoRelevante : Argumento → Decisao → Prop
+axiom PerRelationemPura : Decisao → Prop
 
 /- ============================================================
    Camada 3 — Normas (subset relevante do art. 489)
@@ -47,7 +47,7 @@ axiom art_489_caput :
 /-- Art. 489, §1º, IV. -/
 axiom art_489_par1_IV :
     ∀ (d : Decisao) (a : Argumento),
-      DeduzidoNoPEstadoAcesso a d →
+      DeduzidoNoProcesso a d →
       CapazInfirmarConclusao a d →
       ¬ Enfrentado a d →
       ¬ Fundamentada d
@@ -71,7 +71,7 @@ axiom tema_1306_articula_489_IV :
     ∀ (d : Decisao) (a : Argumento),
       ApresentaArgumentoNovoRelevante a d →
       ¬ EnfrentaQuestoesNovasRelevantes d →
-      (DeduzidoNoPEstadoAcesso a d ∧
+      (DeduzidoNoProcesso a d ∧
        CapazInfirmarConclusao a d ∧
        ¬ Enfrentado a d)
 
@@ -83,11 +83,11 @@ axiom caso_hipotetico : Decisao
 axiom sentenca_apelada : DecisaoAnterior
 axiom argumento_apelacao : Argumento
 
-/-- Claim factual: o acórdão usa per relationem repEstadoAduzindo
+/-- Claim factual: o acórdão usa per relationem reproduzindo
     a sentença. -/
 axiom h1_per_relationem : UsaPerRelationem caso_hipotetico sentenca_apelada
 
-/-- Claim factual: a apelação tEstadoAuxe argumento novo relevante. -/
+/-- Claim factual: a apelação trouxe argumento novo relevante. -/
 axiom h2_arg_novo :
     ApresentaArgumentoNovoRelevante argumento_apelacao caso_hipotetico
 
@@ -104,7 +104,7 @@ axiom h3_nao_enfrenta : ¬ EnfrentaQuestoesNovasRelevantes caso_hipotetico
    relevante = caso típico do art. 489, §1º, IV interpretado
    pelo TEMA_STJ_EXEMPLO.
 
-   Duas vias de pEstadoAva; comparar via `#print axioms`. -/
+   Duas vias de prova; comparar via `#print axioms`. -/
 
 /-- Via 1: Tema 1306 → não fundamentada → caput → nula. -/
 theorem nulidade_via_tema_1306 : Nula caso_hipotetico :=
