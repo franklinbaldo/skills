@@ -81,8 +81,28 @@ jobs:
         done
         cat axiom_audit.txt
 
+    - name: Generate axiom dependency graph (Mermaid)
+      run: |
+        python3 scripts/axiom_graph.py \
+          --input legal-argument-lean/references/axiom_audit.txt \
+          --out docs/axiom_graph.md
+        echo "--- axiom_graph.md preview ---"
+        head -60 docs/axiom_graph.md
+
+    - name: Generate Markdown docs from Lean docstrings
+      run: |
+        python3 scripts/lean_docgen_md.py \
+          --src legal-argument-lean/references \
+          --out docs/references
+
     - name: Upload axiom audit
       uses: actions/upload-artifact@v4
       with:
         name: axiom-audit
         path: legal-argument-lean/references/axiom_audit.txt
+
+    - name: Upload generated docs
+      uses: actions/upload-artifact@v4
+      with:
+        name: lean-docs
+        path: docs/
