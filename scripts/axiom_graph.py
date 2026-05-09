@@ -1,61 +1,65 @@
 #!/usr/bin/env python3
 """
 axiom_graph.py — Parse `#print axioms` output from Lean 4 and emit
-a Mermaid dependency graph showing which axioms underpin each theorem.
+Mermaid dependency diagrams (graph TD, sankey-beta, ishikawa-beta).
 
 Usage:
     python3 scripts/axiom_graph.py --input axiom_audit.txt --out docs/axiom_graph.md
 
 Input format (from `lean file.lean` with `#print axioms foo`):
-    'foo' depends on axioms:
-      [axiom1, axiom2, ...]
-    -- or --
-    foo uses axioms: [axiom1, axiom2, ...]
-    -- or --
+    'foo' depends on axioms: [axiom1, axiom2, ...]
     'foo' does not depend on any axioms
 
-The script groups axioms into:
-  - STEEL_*         → steelman premises (red, the argument's implicit claims)
-  - propext / Classical.* / Quot.sound  → Lean built-ins (grey, skip by default)
-  - everything else → legal axioms (blue)
+Axiom classification:
+  - STEEL_*                     → steelman premises (implicit claims of the acórdão)
+  - propext / Classical.* / ... → Lean built-ins (skipped by default)
+  - everything else             → legal axioms (norms, precedents, factual claims)
+
+Legal axiom sub-classification (for Ishikawa bones):
+  - ParteA_* / caso_* / recurso_* / fatos_* → factual claims
+  - sumula_* / art_* / juris_* / interpretacao_* / RE_* / Rcl_* / ARE_* / PRECEDENTE_*
+    → norms & precedents
+  - everything else → other
 """
 import re
 import sys
 import argparse
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
-# Built-in Lean axioms that are uninteresting for legal audit
 LEAN_BUILTINS = frozenset({
     'propext', 'Classical.choice', 'Quot.sound', 'funext',
     'Classical.em', 'Classical.propDecidable',
 })
 
-# Parse one block: theorem name + its axiom list
+FACTUAL_PREFIXES = ('ParteA_', 'caso_', 'recurso_', 'fatos_', 'h_', 'axiom_caso')
+NORM_PREFIXES = ('sumula_', 'art_', 'juris_', 'interpretacao_', 'tema_',
+                 'RE_', 'Rcl_', 'ARE_', 'PRECEDENTE_', 'STJ_', 'STF_')
+
 THEOREM_RE = re.compile(
     r"'?(\w[\w.]*)'?\s+(?:depends on axioms:|uses axioms:)\s*\[([^\]]*)\]",
     re.DOTALL,
 )
-NO_AXIOMS_RE = re.compile(
-    r"'?(\w[\w.]*)'?\s+does not depend on any axioms"
-)
+NO_AXIOMS_RE = re.compile(r"'?(\w[\w.]*)'?\s+does not depend on any axioms")
 
+
+# ---------------------------------------------------------------------------
+# Parsing
+# ---------------------------------------------------------------------------
 
 def parse_audit(text: str) -> dict[str, list[str]]:
-    """Return {theorem: [axiom, ...]} from audit text."""
     result: dict[str, list[str]] = {}
-
     for m in THEOREM_RE.finditer(text):
-        theorem = m.group(1)
-        raw_axioms = m.group(2)
-        axioms = [a.strip() for a in raw_axioms.split(',') if a.strip()]
-        result[theorem] = axioms
-
+        axioms = [a.strip() for a in m.group(2).split(',') if a.strip()]
+        result[m.group(1)] = axioms
     for m in NO_AXIOMS_RE.finditer(text):
         result.setdefault(m.group(1), [])
-
     return result
 
+
+# ---------------------------------------------------------------------------
+# Classification
+# ---------------------------------------------------------------------------
 
 def classify(name: str) -> str:
     if name in LEAN_BUILTINS:
@@ -65,57 +69,166 @@ def classify(name: str) -> str:
     return 'legal'
 
 
+def subclassify(name: str) -> str:
+    """Finer grain for Ishikawa bones."""
+    if any(name.startswith(p) for p in FACTUAL_PREFIXES):
+        return 'factual'
+    if any(name.startswith(p) for p in NORM_PREFIXES):
+        return 'norm'
+    return 'other'
+
+
 def sanitize(name: str) -> str:
-    """Mermaid node IDs cannot have dots or special chars."""
     return re.sub(r'[^a-zA-Z0-9_]', '_', name)
 
 
-def to_mermaid(deps: dict[str, list[str]], skip_builtins: bool = True) -> str:
-    lines = ['```mermaid', 'graph TD']
+# ---------------------------------------------------------------------------
+# Diagram 1 — graph TD (dependency graph)
+# ---------------------------------------------------------------------------
 
-    # Node style classes
-    lines += [
-        '  classDef steel fill:#ffcccc,stroke:#cc0000,color:#000',
-        '  classDef legal fill:#cce5ff,stroke:#0066cc,color:#000',
-        '  classDef theorem fill:#d4edda,stroke:#28a745,color:#000',
-        '  classDef builtin fill:#eee,stroke:#999,color:#666',
-    ]
+def to_graph_td(deps: dict[str, list[str]], skip_builtins: bool = True) -> str:
+    lines = ['```mermaid', 'graph TD',
+             '  classDef steel fill:#ffcccc,stroke:#cc0000,color:#000',
+             '  classDef legal fill:#cce5ff,stroke:#0066cc,color:#000',
+             '  classDef theorem fill:#d4edda,stroke:#28a745,color:#000',
+             '  classDef builtin fill:#eee,stroke:#999,color:#666']
 
     all_theorems = set(deps.keys())
-    seen_nodes: set[str] = set()
+    seen: set[str] = set()
 
     def node(name: str) -> str:
         sid = sanitize(name)
-        if sid not in seen_nodes:
-            seen_nodes.add(sid)
-            label = name.replace('"', "'")
-            cls = classify(name)
-            if name in all_theorems:
-                cls = 'theorem'
-            lines.append(f'  {sid}["{label}"]:::{cls}')
+        if sid not in seen:
+            seen.add(sid)
+            cls = 'theorem' if name in all_theorems else classify(name)
+            lines.append(f'  {sid}["{name}"]:::{cls}')
         return sid
 
     for theorem, axioms in sorted(deps.items()):
-        t_id = node(theorem)
+        t = node(theorem)
         for ax in axioms:
             if skip_builtins and classify(ax) == 'builtin':
                 continue
-            a_id = node(ax)
-            lines.append(f'  {t_id} --> {a_id}')
+            lines.append(f'  {t} --> {node(ax)}')
 
     lines.append('```')
     return '\n'.join(lines)
 
 
-def to_markdown(deps: dict[str, list[str]], skip_builtins: bool = True) -> str:
+# ---------------------------------------------------------------------------
+# Diagram 2 — sankey-beta (load-bearing axioms)
+# ---------------------------------------------------------------------------
+
+def to_sankey(deps: dict[str, list[str]], skip_builtins: bool = True) -> str:
+    """
+    Sankey: theorem → axiom, value=1 per dependency.
+    Axioms used by multiple theorems appear with wider flows — visually
+    identifying load-bearing premises (forensic priority targets).
+    """
+    lines = ['```mermaid', 'sankey-beta']
+    for theorem, axioms in sorted(deps.items()):
+        for ax in axioms:
+            if skip_builtins and classify(ax) == 'builtin':
+                continue
+            # Sankey format: source,target,value  (commas must be escaped in labels)
+            t_label = theorem.replace(',', ';')
+            a_label = ax.replace(',', ';')
+            lines.append(f'{t_label},{a_label},1')
+    lines.append('```')
+    return '\n'.join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Diagram 3 — ishikawa-beta (cause-and-effect of the acórdão)
+# ---------------------------------------------------------------------------
+
+def to_ishikawa(deps: dict[str, list[str]],
+                effect: str = 'Conclusão do acórdão',
+                skip_builtins: bool = True) -> str:
+    """
+    Fishbone / Ishikawa: effect = acórdão conclusion; causes = axiom categories.
+
+    Bones (top-level causes):
+      - Premissas implícitas (STEEL)   ← the vulnerabilities
+      - Normas e precedentes           ← load-bearing legal authority
+      - Claims fáticos                 ← factual anchors
+      - Outros axiomas legais
+
+    Sub-bones = the individual axioms, grouped under each theorem that uses them.
+    """
+    # Collect axioms by category, preserving which theorem uses each
+    steel: dict[str, list[str]] = defaultdict(list)    # axiom → theorems
+    norms: dict[str, list[str]] = defaultdict(list)
+    factual: dict[str, list[str]] = defaultdict(list)
+    other: dict[str, list[str]] = defaultdict(list)
+
+    for theorem, axioms in deps.items():
+        for ax in axioms:
+            if skip_builtins and classify(ax) == 'builtin':
+                continue
+            cls = classify(ax)
+            if cls == 'steel':
+                steel[ax].append(theorem)
+            elif cls == 'legal':
+                sub = subclassify(ax)
+                if sub == 'norm':
+                    norms[ax].append(theorem)
+                elif sub == 'factual':
+                    factual[ax].append(theorem)
+                else:
+                    other[ax].append(theorem)
+
+    lines = ['```mermaid', 'ishikawa-beta', f'  {effect}']
+
+    def bone(title: str, items: dict[str, list[str]]) -> None:
+        if not items:
+            return
+        lines.append(f'  {title}')
+        for ax, theorems in sorted(items.items()):
+            # Sub-bone: axiom name; indent deeper if used by multiple theorems
+            lines.append(f'    {ax}')
+            if len(theorems) > 1:
+                for t in sorted(theorems):
+                    lines.append(f'      usado em: {t}')
+
+    bone('Premissas implícitas (STEEL)', steel)
+    bone('Normas e precedentes', norms)
+    bone('Claims fáticos', factual)
+    bone('Outros axiomas legais', other)
+
+    lines.append('```')
+    return '\n'.join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Combined Markdown output
+# ---------------------------------------------------------------------------
+
+def to_markdown(deps: dict[str, list[str]],
+                skip_builtins: bool = True,
+                effect: str = 'Conclusão do acórdão') -> str:
     parts = [
-        '# Axiom Dependency Graph',
+        '# Axiom Dependency Analysis',
         '',
-        'Each theorem node (green) points to the axioms it depends on.',
-        'Red nodes are **STEEL** premises — implicit claims the acórdão requires.',
-        'Blue nodes are **legal axioms** — norms, precedents, factual claims.',
+        '## Dependency graph',
         '',
-        to_mermaid(deps, skip_builtins),
+        'Green = theorems (peça claims) · Blue = legal axioms · Red = STEEL premises',
+        '',
+        to_graph_td(deps, skip_builtins),
+        '',
+        '## Sankey — load-bearing axioms',
+        '',
+        'Flow width ∝ number of theorems that depend on each axiom.',
+        'Wide flows = load-bearing premises. Narrow flows = ornamental support.',
+        '',
+        to_sankey(deps, skip_builtins),
+        '',
+        '## Ishikawa — cause-and-effect of the acórdão',
+        '',
+        'The effect is the acórdão\'s conclusion. Each bone is a category of',
+        'premises that cause it. STEEL bones are the argument\'s vulnerabilities.',
+        '',
+        to_ishikawa(deps, effect, skip_builtins),
         '',
         '## Per-theorem breakdown',
         '',
@@ -124,7 +237,6 @@ def to_markdown(deps: dict[str, list[str]], skip_builtins: bool = True) -> str:
     for theorem, axioms in sorted(deps.items()):
         legal = [a for a in axioms if classify(a) == 'legal']
         steel = [a for a in axioms if classify(a) == 'steel']
-        builtin = [a for a in axioms if classify(a) == 'builtin']
 
         parts.append(f'### `{theorem}`')
         if steel:
@@ -133,8 +245,6 @@ def to_markdown(deps: dict[str, list[str]], skip_builtins: bool = True) -> str:
         if legal:
             parts.append(f'**Legal axioms ({len(legal)}):** '
                          + ', '.join(f'`{a}`' for a in legal))
-        if builtin and not skip_builtins:
-            parts.append(f'*Lean built-ins:* ' + ', '.join(f'`{a}`' for a in builtin))
         if not axioms:
             parts.append('*No axiom dependencies.*')
         parts.append('')
@@ -142,30 +252,31 @@ def to_markdown(deps: dict[str, list[str]], skip_builtins: bool = True) -> str:
     return '\n'.join(parts)
 
 
-def main():
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--input', required=True,
-                        help='axiom_audit.txt from CI (or stdin with -)')
-    parser.add_argument('--out', default='docs/axiom_graph.md',
-                        help='Output Markdown file')
-    parser.add_argument('--include-builtins', action='store_true',
-                        help='Include propext / Classical.* in graph')
+                        help='axiom_audit.txt (or - for stdin)')
+    parser.add_argument('--out', default='docs/axiom_graph.md')
+    parser.add_argument('--effect', default='Conclusão do acórdão',
+                        help='Label for the Ishikawa effect (head of the fishbone)')
+    parser.add_argument('--include-builtins', action='store_true')
     args = parser.parse_args()
 
-    if args.input == '-':
-        text = sys.stdin.read()
-    else:
-        text = Path(args.input).read_text(encoding='utf-8')
-
+    text = sys.stdin.read() if args.input == '-' else Path(args.input).read_text()
     deps = parse_audit(text)
     if not deps:
-        print('WARNING: no #print axioms output found in input.', file=sys.stderr)
+        print('WARNING: no #print axioms output found.', file=sys.stderr)
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    md = to_markdown(deps, skip_builtins=not args.include_builtins)
-    out.write_text(md, encoding='utf-8')
-    print(f'Written: {out} ({len(deps)} theorems)')
+    out.write_text(to_markdown(deps,
+                               skip_builtins=not args.include_builtins,
+                               effect=args.effect))
+    print(f'Written: {out} ({len(deps)} theorems, 3 diagram formats)')
 
 
 if __name__ == '__main__':
