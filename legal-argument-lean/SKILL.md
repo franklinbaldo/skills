@@ -540,6 +540,25 @@ LEAN_PATH=. lean acordao_marilene.lean   # peça concreta
       contraditório substancial do art. 10 visto pelo lado dos
       sujeitos do processo.
 
+- **`references/tema_1306_stj.lean`** — `namespace STJ.Tema1306`.
+  Covers the **inteiro teor** of Tema 1306/STJ (REsp 2.148.059/MA et
+  al., Rel. Min. Luis Felipe Salomão, Corte Especial, j. 20.08.2025),
+  not just the two teses fixadas. Landmark case on fundamentação per
+  relationem — when transcription of prior decision counts as proper
+  reasoning and when it doesn't. Includes:
+    - Tese 1 (forma bidirecional) and Tese 2
+    - Distinção doutrinária pura vs. integrativa (the operative distinction
+      for any peça challenging "decisão que apenas transcreve")
+    - Apoio expresso em Tema 339/RG STF
+    - Esclarecimento dos ED da FEBRABAN sobre o alcance de "novo"
+    - Aplicação ao caso paradigma (transcrição ipsis litteris da
+      sentença sem rebater elementos fáticos = nulidade)
+    - Lemas derivados úteis em peças
+
+- **`references/exemplo_composicao.lean`** — Demonstrates how to
+  compose two libraries (art. 489 + Tema 1306) in a single peça. The
+  same pattern applies to combining any subset of the libraries.
+
 ### When to use the libraries
 
 - **Always** for ED/recursos arguing nulidade por ausência de
@@ -547,6 +566,9 @@ LEAN_PATH=. lean acordao_marilene.lean   # peça concreta
 - **Always** for arguments about precedent vinculante. `art_927_cpc`
   provides `fora_do_espaco_legitimo_nao_fundamentada` — the operational
   theorem for peças challenging selective or incomplete application.
+- **Always** for arguments about fundamentação per relationem. Tema 1306
+  plugs into art. 489, §1º, IV with the distinção pura/integrativa
+  giving operational sharpness to any challenge of copy-paste reasoning.
 - For peças invoking other precedents, declare those as new axioms in
   Camada 4 of the peça file (do not modify the libraries themselves —
   treat them as immutable).
