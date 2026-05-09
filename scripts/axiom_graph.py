@@ -116,24 +116,52 @@ def to_graph_td(deps: dict[str, list[str]], skip_builtins: bool = True) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Diagram 2 — sankey-beta (load-bearing axioms)
+# Diagram 2 — sankey-beta (argument death funnel)
 # ---------------------------------------------------------------------------
 
-def to_sankey(deps: dict[str, list[str]], skip_builtins: bool = True) -> str:
+def to_sankey(deps: dict[str, list[str]],
+              pretensao: str = 'Pretensão do embargante',
+              conclusion: str = 'Conclusão do acórdão',
+              skip_builtins: bool = True) -> str:
     """
-    Sankey: theorem → axiom, value=1 per dependency.
-    Axioms used by multiple theorems appear with wider flows — visually
-    identifying load-bearing premises (forensic priority targets).
+    Sankey showing WHERE each argument path dies in the reasoning chain.
+
+    Flow direction (left → right):
+        Pretensão → [via theorem/path] → STEEL axiom (death point) → Conclusão
+
+    Interpretation:
+    - Each theorem represents one attack path the acórdão takes.
+    - STEEL axioms are the unjustified leaps — the death points of the
+      embargante's argument. If a STEEL axiom is successfully challenged
+      in the peça, the flow from that path never reaches the conclusion.
+    - Theorems with NO STEEL axioms flow directly to the conclusion
+      (argument has no vulnerability — hard to attack).
+    - Theorems with MULTIPLE STEEL axioms require the embargante to break
+      ALL of them to escape the conclusion via that path.
+
+    Width at a STEEL node = number of paths that depend on it.
+    A wide STEEL node is the most critical vulnerability to attack.
     """
     lines = ['```mermaid', 'sankey-beta']
+    p = pretensao.replace(',', ';')
+    c = conclusion.replace(',', ';')
+
     for theorem, axioms in sorted(deps.items()):
-        for ax in axioms:
-            if skip_builtins and classify(ax) == 'builtin':
-                continue
-            # Sankey format: source,target,value  (commas must be escaped in labels)
-            t_label = theorem.replace(',', ';')
-            a_label = ax.replace(',', ';')
-            lines.append(f'{t_label},{a_label},1')
+        steel_axioms = [ax for ax in axioms if classify(ax) == 'steel']
+        t = theorem.replace(',', ';')
+
+        if not steel_axioms:
+            # No vulnerability: argument flows directly to conclusion
+            lines.append(f'{p},{t},1')
+            lines.append(f'{t},{c},1')
+        else:
+            # Argument passes through each STEEL bottleneck before reaching conclusion
+            lines.append(f'{p},{t},1')
+            for ax in steel_axioms:
+                a = ax.replace(',', ';')
+                lines.append(f'{t},{a},1')
+                lines.append(f'{a},{c},1')
+
     lines.append('```')
     return '\n'.join(lines)
 
@@ -206,7 +234,10 @@ def to_ishikawa(deps: dict[str, list[str]],
 
 def to_markdown(deps: dict[str, list[str]],
                 skip_builtins: bool = True,
-                effect: str = 'Conclusão do acórdão') -> str:
+                effect: str = 'Conclusão do acórdão',
+                pretensao: str = 'Pretensão do embargante',
+                conclusion: str | None = None) -> str:
+    _conclusion = conclusion or effect
     parts = [
         '# Axiom Dependency Analysis',
         '',
@@ -216,12 +247,16 @@ def to_markdown(deps: dict[str, list[str]],
         '',
         to_graph_td(deps, skip_builtins),
         '',
-        '## Sankey — load-bearing axioms',
+        '## Sankey — where the argument dies',
         '',
-        'Flow width ∝ number of theorems that depend on each axiom.',
-        'Wide flows = load-bearing premises. Narrow flows = ornamental support.',
+        f'**Pretensão:** {pretensao}  **Conclusão:** {_conclusion}',
         '',
-        to_sankey(deps, skip_builtins),
+        'Each path flows from the pretensão through a theorem (attack vector),',
+        'then through its STEEL axioms (death points), and reaches the conclusion.',
+        'A wide STEEL node means multiple paths depend on it — priority attack target.',
+        'A path with no STEEL node flows directly to the conclusion (no vulnerability).',
+        '',
+        to_sankey(deps, pretensao, _conclusion, skip_builtins),
         '',
         '## Ishikawa — cause-and-effect of the acórdão',
         '',
@@ -263,6 +298,10 @@ def main() -> None:
     parser.add_argument('--out', default='docs/axiom_graph.md')
     parser.add_argument('--effect', default='Conclusão do acórdão',
                         help='Label for the Ishikawa effect (head of the fishbone)')
+    parser.add_argument('--pretensao', default='Pretensão do embargante',
+                        help='Label for the Sankey source node (embargante\'s claim)')
+    parser.add_argument('--conclusion', default=None,
+                        help='Label for the Sankey sink node (defaults to --effect)')
     parser.add_argument('--include-builtins', action='store_true')
     args = parser.parse_args()
 
@@ -275,7 +314,9 @@ def main() -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(to_markdown(deps,
                                skip_builtins=not args.include_builtins,
-                               effect=args.effect))
+                               effect=args.effect,
+                               pretensao=args.pretensao,
+                               conclusion=args.conclusion))
     print(f'Written: {out} ({len(deps)} theorems, 3 diagram formats)')
 
 
