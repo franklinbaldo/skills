@@ -15,35 +15,74 @@ jobs:
 
     - name: Install elan
       run: |
-        curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain leanprover/lean4:stable
+        curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain leanprover/lean4:v4.14.0
         echo "$HOME/.elan/bin" >> $GITHUB_PATH
+
+    - name: Check for stray sorrys in library files
+      run: |
+        COUNT=$(grep -rn "\bsorry\b" legal-argument-lean/references/ \
+          --include="*.lean" | grep -v "template_" | wc -l)
+        if [ "$COUNT" -gt 0 ]; then
+          echo "ERROR: $COUNT sorry(s) found in non-template library files:"
+          grep -rn "\bsorry\b" legal-argument-lean/references/ --include="*.lean" | grep -v "template_"
+          exit 1
+        fi
 
     - name: Compile Legal Argument Lean
       run: |
         cd legal-argument-lean/references/
         export LEAN_PATH=.
-        
+
         echo "Compiling Core Library..."
         lean -o Tipos.olean Tipos.lean
         lean -o Saidas/Aplicar.olean Saidas/Aplicar.lean
         lean -o Saidas/Distinguir.olean Saidas/Distinguir.lean
         lean -o Saidas/Superar.olean Saidas/Superar.lean
-        
+
         echo "Compiling Regime Modules..."
         lean -o art_926_cpc.olean art_926_cpc.lean
         lean -o art_927_cpc.olean art_927_cpc.lean
-        
+
         echo "Compiling Standards and Libraries..."
         lean -o art_489_cpc.olean art_489_cpc.lean
         lean -o art_1022_cpc.olean art_1022_cpc.lean
-        lean -o art_10_cpc.lean art_10_cpc.lean
-        lean -o art_5_e_6_cpc.lean art_5_e_6_cpc.lean
+        lean -o art_10_cpc.olean art_10_cpc.lean
+        lean -o art_5_e_6_cpc.olean art_5_e_6_cpc.lean
         lean -o tema_1306_stj.olean tema_1306_stj.lean
-        
+
         echo "Compiling Templates and Examples..."
+        FAILED=()
         for f in template_*.lean exemplo_*.lean vedacao_*.lean sec1III_*.lean; do
           if [ -f "$f" ]; then
             echo "Checking $f..."
-            lean "$f"
+            if lean "$f" 2>&1; then
+              echo "  OK: $f"
+            else
+              echo "  FAIL: $f"
+              FAILED+=("$f")
+            fi
           fi
         done
+        if [ ${#FAILED[@]} -gt 0 ]; then
+          echo "FAILED files: ${FAILED[*]}"
+          exit 1
+        fi
+
+    - name: Audit axiom dependencies
+      run: |
+        cd legal-argument-lean/references/
+        export LEAN_PATH=.
+        echo "=== AXIOM AUDIT $(date -u) ===" > axiom_audit.txt
+        for f in template_*.lean; do
+          if [ -f "$f" ]; then
+            echo "--- $f ---" >> axiom_audit.txt
+            lean "$f" 2>&1 >> axiom_audit.txt || true
+          fi
+        done
+        cat axiom_audit.txt
+
+    - name: Upload axiom audit
+      uses: actions/upload-artifact@v4
+      with:
+        name: axiom-audit
+        path: legal-argument-lean/references/axiom_audit.txt

@@ -1,7 +1,7 @@
 /-
   ============================================================
   FORMALIZAÇÃO DO ACÓRDÃO EMBARGADO
-  AgInt no PEstadoACESSO_EXEMPLO — Plenário, sessão virtual,
+  AgInt no ProCESSO_EXEMPLO — Plenário, sessão virtual,
   publicado em 29.04.2026
   ============================================================
 
@@ -23,7 +23,7 @@
      Se possível, o acórdão é internamente contraditório.
 
   RESULTADO PRELIMINAR (preview): o acórdão *compila* depois
-  de quatEstadoA steelmans. Os quatEstadoA axiomas adicionais necessários
+  de quatro steelmans. Os quatro axiomas adicionais necessários
   são, todos, contradichos por jurisprudência do próprio STF
   citada no acórdão. E mais: dois deles juntos derivam
   literalmente `False`. O acórdão é consistente apenas se
@@ -48,47 +48,47 @@ axiom DispositivoConstitucional : Type
    ============================================================ -/
 
 /- Admissibilidade -/
-axiom RecursoExtraordinario : Recurso → PEstadoAp
-axiom Inadmissivel : Recurso → PEstadoAp
-axiom RecursoDoCaso : Recurso → Caso → PEstadoAp
+axiom RecursoExtraordinario : Recurso → Prop
+axiom Inadmissivel : Recurso → Prop
+axiom RecursoDoCaso : Recurso → Caso → Prop
 
 /- Pressupostos das súmulas 279 e 280 -/
-axiom DependeReexamePEstadoAbatorio : Caso → PEstadoAp
-axiom FatosIncontEstadoAversos : Caso → PEstadoAp
-axiom ApenasQualificacaoJuridica : Caso → PEstadoAp
-axiom DireitoLocal : Caso → PEstadoAp
-axiom InterpretacaoDiretaConstitucional : Caso → PEstadoAp
+axiom DependeReexameProbatorio : Caso → Prop
+axiom FatosIncontroversos : Caso → Prop
+axiom ApenasQualificacaoJuridica : Caso → Prop
+axiom DireitoLocal : Caso → Prop
+axiom InterpretacaoDiretaConstitucional : Caso → Prop
 
 /- Aplicação de normas e precedentes ao caso -/
-axiom AplicaECArt3 : Caso → PEstadoAp
-axiom AplicaPrecedente : Caso → Precedente → PEstadoAp
-axiom AplicaTemaRG : Caso → Precedente → PEstadoAp
+axiom AplicaECArt3 : Caso → Prop
+axiom AplicaPrecedente : Caso → Precedente → Prop
+axiom AplicaTemaRG : Caso → Precedente → Prop
 
 /- Sobre a matéria do caso vs. matéria de precedentes -/
-axiom MesmaMateria : Caso → Caso → PEstadoAp
+axiom MesmaMateria : Caso → Caso → Prop
 axiom CasoDoPrecedente : Precedente → Caso
 
 /- Predicado-chave do contradição interna -/
-axiom JurisprudenciaConstitucionalConsolidada : Caso → PEstadoAp
+axiom JurisprudenciaConstitucionalConsolidada : Caso → Prop
 
 /- Predicados específicos da matéria -/
-axiom MateriaAposentadoriaEspecial : Caso → PEstadoAp
-axiom MateriaRegraTransicaoEC47 : Caso → PEstadoAp
+axiom MateriaAposentadoriaEspecial : Caso → Prop
+axiom MateriaRegraTransicaoEC47 : Caso → Prop
 
 /- ============================================================
-   Camada 3 — Normas pEstadoAcessuais (sólidas, do CPC e CF)
+   Camada 3 — Normas processuais (sólidas, do CPC e CF)
    --
-   Estas são premissas pacíficas; não há contEstadoAvérsia sobre
+   Estas são premissas pacíficas; não há controvérsia sobre
    elas, e correspondem aos módulos da skill já validados.
    ============================================================ -/
 
-/-- **Súmula 279/STF.** Para simples reexame de pEstadoAva não cabe
+/-- **Súmula 279/STF.** Para simples reexame de prova não cabe
     recurso extraordinário. -/
 axiom sumula_279 :
     ∀ (r : Recurso) (c : Caso),
       RecursoExtraordinario r →
       RecursoDoCaso r c →
-      DependeReexamePEstadoAbatorio c →
+      DependeReexameProbatorio c →
       Inadmissivel r
 
 /-- **Súmula 280/STF.** Por ofensa a direito local não cabe
@@ -102,7 +102,7 @@ axiom sumula_280 :
 
 /-- **CPC, art. 927, III** (do módulo art_927_cpc.lean):
     acórdão em julgamento de RG é vinculante. Conjugado com a
-    natureza constitucional do paradigma, pEstadoAduz juris
+    natureza constitucional do paradigma, produz juris
     consolidada do STF, que é interpretação direta da CF —
     não direito local. -/
 axiom juris_consolidada_implica_constitucional :
@@ -111,7 +111,7 @@ axiom juris_consolidada_implica_constitucional :
       InterpretacaoDiretaConstitucional c
 
 /-- **Inferência pacífica.** Interpretação direta de
-    dispositivo constitucional NÃO é direito local. CoEstadoAlário
+    dispositivo constitucional NÃO é direito local. Corolário
     estrutural da Súmula 280 lida em conjunto com o art. 102
     da CF. -/
 axiom interpretacao_constitucional_nao_eh_local :
@@ -151,7 +151,7 @@ axiom Rcl_79_138_materia :
     "A jurisprudência da Suprema Corte possui o entendimento
     consolidado de que as regras de transição do art. 3º da
     EC 47/05 são aplicáveis aos servidores públicos, inclusive
-    os pEstadoAfessores, que ingressaram no serviço público antes
+    os professores, que ingressaram no serviço público antes
     da publicação das Emendas Constitucionais nºs 20/98 e
     41/03 e se aposentaram após a EC nº 41/03."
 
@@ -164,7 +164,7 @@ axiom PRECEDENTE_EXEMPLO :
 
 /- ============================================================
    Camada 5 — Fatos do caso de ParteA (claims do acórdão
-              recorrido, incontEstadoAversos)
+              recorrido, incontroversos)
    ============================================================ -/
 
 axiom caso_ParteA : Caso
@@ -173,8 +173,8 @@ axiom recurso_ParteA : Recurso
 axiom ParteA_eh_re : RecursoExtraordinario recurso_ParteA
 axiom ParteA_recurso_do_caso : RecursoDoCaso recurso_ParteA caso_ParteA
 
-/-- Voto da TURMA_RECURSAL_EXEMPLO assenta os fatos como incontEstadoAversos. -/
-axiom ParteA_fatos_incontEstadoAversos : FatosIncontEstadoAversos caso_ParteA
+/-- Voto da TURMA_RECURSAL_EXEMPLO assenta os fatos como incontroversos. -/
+axiom ParteA_fatos_incontroversos : FatosIncontroversos caso_ParteA
 
 /-- Voto da TURMA_RECURSAL_EXEMPLO submete questão estritamente de
     qualificação jurídica. -/
@@ -189,7 +189,7 @@ axiom ParteA_aplica_ec_art_3 : AplicaECArt3 caso_ParteA
 axiom ParteA_materia : MateriaRegraTransicaoEC47 caso_ParteA
 
 /-- Aposentadoria especial e regra de transição da EC 47 são
-    matérias distintas (coEstadoAlário óbvio que o acórdão precisa
+    matérias distintas (corolário óbvio que o acórdão precisa
     negar para usar os precedentes que cita). -/
 axiom materias_distintas :
     ∀ (c c' : Caso),
@@ -216,23 +216,23 @@ axiom materias_distintas :
 -/
 
 /-- **STEEL_1.** Acórdão precisa que Súmula 279 incida.
-    Mas: caso é de fatos incontEstadoAversos + qualificação
+    Mas: caso é de fatos incontroversos + qualificação
     jurídica. Sorry: por que isso configuraria reexame
-    pEstadoAbatório?
+    probatório?
 
     Steelman mais caridoso: "todo caso que envolve
     qualificação jurídica de fatos depende, ainda que
     indiretamente, de revisar a base fática". É a posição
     mais forte que o acórdão pode sustentar.
 
-    AVISO: este steelman contradiz fEstadoAntalmente o PRECEDENTE_GERAL
-    (Pertence), o PRECEDENTE_F-RG (BarEstadoAso), e o PRECEDENTE_G-AgR
+    AVISO: este steelman contradiz frontalmente o PRECEDENTE_GERAL
+    (Pertence), o PRECEDENTE_F-RG (Barroso), e o PRECEDENTE_G-AgR
     (Lewandowski) — todos do próprio STF, todos pacíficos no
     sentido OPOSTO. -/
 axiom STEEL_1_qualificacao_implica_reexame :
     ∀ (c : Caso),
       ApenasQualificacaoJuridica c →
-      DependeReexamePEstadoAbatorio c
+      DependeReexameProbatorio c
 
 /-- **STEEL_2.** Acórdão precisa que Súmula 280 incida.
     Mas: caso aplica diretamente art. 3º da EC 47.
@@ -244,7 +244,7 @@ axiom STEEL_1_qualificacao_implica_reexame :
     análise, e portanto a aplicação da EC 47 ao caso depende
     em última instância de direito estadual".
 
-    AVISO: este steelman é fEstadoAntalmente incompatível com a
+    AVISO: este steelman é frontalmente incompatível com a
     estrutura dual do art. 102, I, "a", da CF e com o Tema
     139/RG-STF (PRECEDENTE_D, Lewandowski, Plenário, j.
     24.06.2009), que é precedente vinculante (art. 927, III,
@@ -334,8 +334,8 @@ theorem acordao_conclusao : Inadmissivel recurso_ParteA :=
     incompatíveis. A inconsistência é literal: deriva-se
     `False` de seus axiomas conjuntamente.
 
-    Este teorema é a forma rigoEstadoAsa do que a Seção 8 da peça
-    afirma em pEstadoAsa: o acórdão embargado padece de contradição
+    Este teorema é a forma rigorosa do que a Seção 8 da peça
+    afirma em prosa: o acórdão embargado padece de contradição
     interna intransponível, embargável por força do art.
     1.022, I, do CPC. -/
 theorem acordao_internamente_inconsistente : False := by

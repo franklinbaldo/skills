@@ -3,7 +3,7 @@
   §1º III CHECK APLICADO A STEEL_1 E STEEL_3
   ============================================================
 
-  No exercício anterior aplicou-se o §1º III check às quatEstadoA
+  No exercício anterior aplicou-se o §1º III check às quatro
   versões de STEEL_2 (Súmula 280). Resultado: três caem
   uniformemente por universalização vazia; a quarta é
   tautológica.
@@ -14,7 +14,7 @@
   *paradigmaticamente* fundamentação universalizável.
 
   STEEL_1 — Súmula 279
-    "qualificação jurídica de fato incontEstadoAverso = reexame"
+    "qualificação jurídica de fato incontroverso = reexame"
     Versões V1a, V1b, V1c, V1d.
 
   STEEL_3 — intercambialidade de precedentes
@@ -41,26 +41,26 @@ namespace Sec1IIICheckSTEEL1eSTEEL3
 axiom Caso : Type
 axiom Precedente : Type
 
-axiom DependeReexamePEstadoAbatorio : Caso → PEstadoAp
-axiom AplicaPrecedente : Caso → Precedente → PEstadoAp
+axiom DependeReexameProbatorio : Caso → Prop
+axiom AplicaPrecedente : Caso → Precedente → Prop
 
-axiom ApenasQualificacaoJuridica : Caso → PEstadoAp
-axiom FatosIncontEstadoAversos : Caso → PEstadoAp
-axiom MateriaPrevidenciariaRPPS : Caso → PEstadoAp
-axiom AspectosFaticosResiduais : Caso → PEstadoAp
-axiom MesmaMateria : Caso → Caso → PEstadoAp
-axiom CompartilhamPadraoEstrutural : Caso → Caso → PEstadoAp
+axiom ApenasQualificacaoJuridica : Caso → Prop
+axiom FatosIncontroversos : Caso → Prop
+axiom MateriaPrevidenciariaRPPS : Caso → Prop
+axiom AspectosFaticosResiduais : Caso → Prop
+axiom MesmaMateria : Caso → Caso → Prop
+axiom CompartilhamPadraoEstrutural : Caso → Caso → Prop
 axiom CasoDoPrecedente : Precedente → Caso
 
 /- Sobre admissibilidade -/
-axiom Admissivel : Caso → PEstadoAp
-axiom InadmissivelPorSumula279 : Caso → PEstadoAp
+axiom Admissivel : Caso → Prop
+axiom InadmissivelPorSumula279 : Caso → Prop
 
-/- Conexão Súmula 279: caso de reexame pEstadoAbatório é
+/- Conexão Súmula 279: caso de reexame probatório é
    inadmissível por Súmula 279. Caso inadmissível por
    Súmula 279 não é admissível. -/
 axiom sumula_279_implica_inadmissivel :
-    ∀ (c : Caso), DependeReexamePEstadoAbatorio c →
+    ∀ (c : Caso), DependeReexameProbatorio c →
                   InadmissivelPorSumula279 c
 axiom inadmissivel_por_279_nao_admitido :
     ∀ (c : Caso), InadmissivelPorSumula279 c → ¬ Admissivel c
@@ -73,28 +73,28 @@ axiom inadmissivel_por_279_nao_admitido :
 -/
 
 /-- **V1a — versão crua.** Caso de qualificação jurídica
-    depende de reexame pEstadoAbatório. -/
-def V1a : PEstadoAp := ∀ c, ApenasQualificacaoJuridica c → DependeReexamePEstadoAbatorio c
+    depende de reexame probatório. -/
+def V1a : Prop := ∀ c, ApenasQualificacaoJuridica c → DependeReexameProbatorio c
 
-/-- **V1b — versão restringida com fatos incontEstadoAversos.**
-    Caso de fatos incontEstadoAversos + qualificação jurídica
+/-- **V1b — versão restringida com fatos incontroversos.**
+    Caso de fatos incontroversos + qualificação jurídica
     depende de reexame.
 
     Nota: paradoxalmente *menos* defensável que V1a, pois
-    casos com fatos incontEstadoAversos são exatamente os que o
+    casos com fatos incontroversos são exatamente os que o
     STF admite em qualificação jurídica (PRECEDENTE_GERAL). -/
-def V1b : PEstadoAp :=
-    ∀ c, FatosIncontEstadoAversos c → ApenasQualificacaoJuridica c →
-         DependeReexamePEstadoAbatorio c
+def V1b : Prop :=
+    ∀ c, FatosIncontroversos c → ApenasQualificacaoJuridica c →
+         DependeReexameProbatorio c
 
 /-- **V1c — versão restringida a RPPS.** Súmula 279 incide em
     casos de RPPS quando há qualificação jurídica.
 
     Versão deferente: tenta restringir a regra a um subdomínio
     para evitar trivialização. Mas falha de mesma forma. -/
-def V1c : PEstadoAp :=
+def V1c : Prop :=
     ∀ c, MateriaPrevidenciariaRPPS c → ApenasQualificacaoJuridica c →
-         DependeReexamePEstadoAbatorio c
+         DependeReexameProbatorio c
 
 /-- **V1d — versão tautológica/defensável.** Súmula 279 incide
     quando há aspectos fáticos residuais (não enfrentados pela
@@ -105,21 +105,21 @@ def V1c : PEstadoAp :=
     `AspectosFaticosResiduais` não se realiza no caso de
     ParteA (acórdão recorrido assenta tudo). Logo: tautológica
     e inerte. -/
-def V1d : PEstadoAp :=
-    ∀ c, AspectosFaticosResiduais c → DependeReexamePEstadoAbatorio c
+def V1d : Prop :=
+    ∀ c, AspectosFaticosResiduais c → DependeReexameProbatorio c
 
 /- Camada 5 — Casos paradigmáticos opostos -/
 
 /-- Caso paradigma do PRECEDENTE_GERAL, Pertence, Tribunal Pleno —
     o leading case da própria distinção entre qualificação
-    jurídica e reexame pEstadoAbatório. Tem fatos incontEstadoAversos,
+    jurídica e reexame probatório. Tem fatos incontroversos,
     apenas qualificação jurídica, é matéria previdenciária,
     e foi ADMITIDO pelo STF (cassada a inadmissão). -/
 axiom caso_RE_210_917 : Caso
 axiom RE_210_917_qualificacao :
     ApenasQualificacaoJuridica caso_RE_210_917
-axiom RE_210_917_incontEstadoAverso :
-    FatosIncontEstadoAversos caso_RE_210_917
+axiom RE_210_917_incontroverso :
+    FatosIncontroversos caso_RE_210_917
 axiom RE_210_917_rpps :
     MateriaPrevidenciariaRPPS caso_RE_210_917
 axiom RE_210_917_admitido : Admissivel caso_RE_210_917
@@ -131,8 +131,8 @@ axiom RE_210_917_admitido : Admissivel caso_RE_210_917
     qualificação/reexame), V1a derivaria inadmissibilidade —
     contradizendo a admissão pelo Plenário. -/
 theorem V1a_viola_par1_III : V1a → False := by
-  intEstadoA h
-  have h_reexame : DependeReexamePEstadoAbatorio caso_RE_210_917 :=
+  intro h
+  have h_reexame : DependeReexameProbatorio caso_RE_210_917 :=
     h caso_RE_210_917 RE_210_917_qualificacao
   have h_inadm : InadmissivelPorSumula279 caso_RE_210_917 :=
     sumula_279_implica_inadmissivel caso_RE_210_917 h_reexame
@@ -140,23 +140,23 @@ theorem V1a_viola_par1_III : V1a → False := by
     h_inadm RE_210_917_admitido
 
 /-- **V1b viola §1º III.** Mesmo argumento, adicionando o
-    requisito de fatos incontEstadoAversos — que se realiza
+    requisito de fatos incontroversos — que se realiza
     paradigmaticamente no PRECEDENTE_GERAL. -/
 theorem V1b_viola_par1_III : V1b → False := by
-  intEstadoA h
-  have h_reexame : DependeReexamePEstadoAbatorio caso_RE_210_917 :=
-    h caso_RE_210_917 RE_210_917_incontEstadoAverso RE_210_917_qualificacao
+  intro h
+  have h_reexame : DependeReexameProbatorio caso_RE_210_917 :=
+    h caso_RE_210_917 RE_210_917_incontroverso RE_210_917_qualificacao
   exact inadmissivel_por_279_nao_admitido caso_RE_210_917
     (sumula_279_implica_inadmissivel caso_RE_210_917 h_reexame)
     RE_210_917_admitido
 
 /-- **V1c viola §1º III.** Versão deferente restringe à
-    matéria de RPPS, mas o PRECEDENTE_GERAL (e numeEstadoAsos outEstadoAs)
+    matéria de RPPS, mas o PRECEDENTE_GERAL (e numerosos outros)
     é precisamente caso de RPPS com qualificação jurídica
     admitido pelo STF. -/
 theorem V1c_viola_par1_III : V1c → False := by
-  intEstadoA h
-  have h_reexame : DependeReexamePEstadoAbatorio caso_RE_210_917 :=
+  intro h
+  have h_reexame : DependeReexameProbatorio caso_RE_210_917 :=
     h caso_RE_210_917 RE_210_917_rpps RE_210_917_qualificacao
   exact inadmissivel_por_279_nao_admitido caso_RE_210_917
     (sumula_279_implica_inadmissivel caso_RE_210_917 h_reexame)
@@ -183,7 +183,7 @@ theorem V1d_passa_par1_III : True := trivial
 
 /-- **V3a — versão crua.** Precedente sobre matéria distinta
     se aplica ao caso. -/
-def V3a : PEstadoAp :=
+def V3a : Prop :=
     ∀ (c c' : Caso) (p : Precedente),
       ¬ MesmaMateria c c' →
       CasoDoPrecedente p = c' →
@@ -197,7 +197,7 @@ def V3a : PEstadoAp :=
     citados pelo acórdão (sobre aposentadoria especial)
     *não compartilham matéria* com o caso (sobre regra de
     transição da EC 47), de modo que V3b é inerte. -/
-def V3b : PEstadoAp :=
+def V3b : Prop :=
     ∀ (c c' : Caso) (p : Precedente),
       MesmaMateria c c' →
       CasoDoPrecedente p = c' →
@@ -210,7 +210,7 @@ def V3b : PEstadoAp :=
     intercambialidade total. A questão é: é
     `CompartilhamPadraoEstrutural` predicado distintivo, ou
     é vago suficiente para se tornar universalizável? -/
-def V3c : PEstadoAp :=
+def V3c : Prop :=
     ∀ (c c' : Caso) (p : Precedente),
       CompartilhamPadraoEstrutural c c' →
       CasoDoPrecedente p = c' →
@@ -249,7 +249,7 @@ axiom estranho_compartilha_padrao :
     aderência exigida pelo art. 489, §1º, V. Universalização
     vazia em forma pura. -/
 theorem V3a_universalizacao_total : V3a → False := by
-  intEstadoA h
+  intro h
   exact estranho_nao_aplica
     (h caso_RE_210_917 (CasoDoPrecedente precedente_estranho) precedente_estranho
        estranho_materia_distinta rfl)
@@ -272,7 +272,7 @@ theorem V3b_passa_par1_III : True := trivial
     do precedente estranho — contradizendo o art. 489, §1º,
     V, que exige aderência aos fundamentos determinantes. -/
 theorem V3c_viola_par1_III : V3c → False := by
-  intEstadoA h
+  intro h
   exact estranho_nao_aplica
     (h caso_RE_210_917 (CasoDoPrecedente precedente_estranho) precedente_estranho
        estranho_compartilha_padrao rfl)
@@ -305,7 +305,7 @@ theorem V3c_viola_par1_III : V3c → False := by
     CPC. -/
 theorem acordao_universalmente_universalizavel :
     (V1a ∨ V1b ∨ V1c ∨ V3a ∨ V3c) → False := by
-  intEstadoA h
+  intro h
   rcases h with h1a | h1b | h1c | h3a | h3c
   · exact V1a_viola_par1_III h1a
   · exact V1b_viola_par1_III h1b
