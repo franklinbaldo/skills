@@ -52,7 +52,7 @@ graph LR
 ### Pacotes derrotados
 
 **A1** é derrotado por cinco ataques independentes cobrindo todos os ângulos
-ângulos identificados no grafo Argdown (Fase 1): Warrant (P1), Claim direta por reductio (P2),
+identificados no grafo Argdown (Fase 1): Warrant (P1), Claim direta por reductio (P2),
 passagem Data→Claim por ausência de saída legítima no art. 927 (P3), e dois
 Rebuttals não examinados (P4 e P5). A multiplicidade de derrotas reforça a
 robustez do resultado: mesmo que um ataque seja desconsiderado pelo tribunal

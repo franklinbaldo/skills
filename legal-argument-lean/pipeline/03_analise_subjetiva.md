@@ -15,7 +15,7 @@ abaixo. O ciclo Fase 2 ↔ Fase 3 encerra quando todos os axiomas centrais de
 todos os teoremas relevantes passam nos três critérios — ou quando se conclui
 que um ataque não é sustentável e deve ser descartado.
 
-## Critérios de parada (três condições por axioma central)
+## Critérios de parada (quatro condições por axioma central)
 
 Para cada axioma que sustenta um teorema relevante, verificar:
 

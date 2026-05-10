@@ -245,6 +245,6 @@ theorem tribunal_vinculado_nao_supera_plenamente :
       ¬ EhTribunalFonte t p →
       ¬ SuperaPlenamente d p := by
   intros d p t _h_decde h_n_fonte
-  exact apenas_tribunal_fonte_supera_plenamente d p t h_n_fonte
+  exact apenas_tribunal_fonte_supera_plenamente h_n_fonte
 
 end CPC.Art927

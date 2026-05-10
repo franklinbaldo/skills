@@ -215,10 +215,11 @@ For simple cases with a single obvious vício and a clear argumentative target.
 ### Pipeline workflow
 
 For complex cases with multiple competing arguments or multiple
-omissões. Six phases:
+omissões. Six processing phases (Fase 0 is the raw-material input stage,
+Fases 1–5 are the analytical phases):
 
 ```
-Fase 0: Material original (acórdão + apelação)
+Fase 0: Material original (acórdão + apelação)   ← input stage
         ↓
 Fase 1: Argdown — decomposição argumentativa unificada
         (anatomia dos argumentos + topologia de ataques)
@@ -330,7 +331,7 @@ theorem foo (h : AplicaCorretamente d p) : InvocaPrecedente d p := by
   simp [AplicaCorretamente] at h; exact h.1
 ```
 
-All three Saidas compound definitions (`AplicaCorretamente`,
+All five Saidas compound definitions (`AplicaCorretamente`,
 `DistingueCorretamente`, `SuperaPlenamente`, `ReconheceSuperacaoExterna`,
 `SuperaRacionalmente`) are tagged `@[simp]` in the reference library.
 

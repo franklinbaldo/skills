@@ -49,6 +49,7 @@ jobs:
         lean -o art_10_cpc.olean art_10_cpc.lean
         lean -o art_5_e_6_cpc.olean art_5_e_6_cpc.lean
         lean -o tema_1306_stj.olean tema_1306_stj.lean
+        lean -o ClaimMeta.olean ClaimMeta.lean
 
         echo "Compiling Templates and Examples..."
         FAILED=()
@@ -80,6 +81,9 @@ jobs:
           fi
         done
         cat axiom_audit.txt
+
+    - name: Create docs directory
+      run: mkdir -p docs/references
 
     - name: Generate axiom dependency graph (Mermaid)
       run: |
