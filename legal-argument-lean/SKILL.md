@@ -512,6 +512,19 @@ LEAN_PATH=. lean acordao_marilene.lean   # peça concreta
       parágrafo único, II (qualquer conduta do art. 489, §1º) ↔
       caput do art. 1.022
 
+- **`references/ClaimMeta.lean`** — `namespace ClaimMeta`. Metadados
+  opcionais para axiomas da Camada 5. Dois tipos:
+    - `Proveniencia`: `endogena | fonte_declarada String | fonte_inferida
+      | confirmada_pelo_procurador | pendente` — de onde veio o fato.
+    - `StatusClaim`: `necessaria | contingente | pendente` — se o claim
+      era load-bearing no documento de origem.
+  Predicados opcionais `TemProveniencia` e `TemStatus` para anotação
+  formal sem afetar derivabilidade. Sem imports; standalone.
+
+  Importar quando o caso envolver inferência regressiva (acórdão →
+  documentos anteriores) ou quando for necessário registrar grau de
+  confiança dos axiomas antes de protocolar.
+
 - **`references/Tipos.lean`** — `namespace Comum`. Tipos básicos
   compartilhados (Decisao, Precedente, Caso, Tribunal, Servidor,
   Cargo). Importado por todos os módulos modulares. Mantido enxuto
@@ -922,6 +935,27 @@ named it. The reader should never know how much work it took.
 - `references/vedacao_motivos_genericos.lean` — the trivialness
   check (§1º, III) applied to a generic case, with reusable template
   for any steelman
+
+## Out of scope (future work)
+
+The skill models the **argumentative and decisional layer**: given a decision,
+is it well-reasoned? Does it use precedents correctly? The following are
+explicitly outside the current scope:
+
+- **Canonical process structure**: `PeticaoInicial`, `Contestacao`,
+  `Despacho`, `Sentenca` as typed entities with validity conditions.
+- **Procedural phases**: postulatória, saneamento, instrução, decisória —
+  the sequence of a lawsuit as a state machine.
+- **Admissibility conditions for appeals**: pressupostos processuais
+  (legitimidade, interesse, possibilidade jurídica), tempestividade,
+  preparo.
+- **Petição inicial as a source of claims**: modeling which claims in
+  the initial petition are `necessaria` vs. `contingente` for the
+  cause of action (the `ClaimMeta` types support this but the library
+  does not currently include petição/contestação modules).
+
+Extensions in these directions are additive — they do not require
+changing existing modules.
 
 ## Convention notes specific to the USER
 

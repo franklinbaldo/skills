@@ -76,6 +76,50 @@ title: [Caso] — Decomposição Argumentativa
   - [A1: claim central]
 ```
 
+## Anotações de proveniência e status (opcional)
+
+Claims de dados (`[D-*]`, `[F-*]`, `[W-*]`) podem ser anotadas com
+proveniência e status usando a sintaxe de dados do Argdown (`{ }`).
+Essas anotações são lidas pela LLM-formalizadora ao produzir axiomas da
+Camada 5 no Lean e pela Fase 3 (análise subjetiva) para avaliar ônus
+argumentativo.
+
+**Chaves:**
+
+| Chave | Valores | Significado |
+|---|---|---|
+| `prov` | `endogena` | Tribunal chegou à conclusão por raciocínio próprio |
+| | `fonte_declarada` | Documento cita explicitamente a origem |
+| | `fonte_inferida` | Pressuposto provavelmente de documento anterior não citado |
+| | `confirmada` | Fonte inferida confirmada pelo procurador |
+| | `pendente` | Não determinado — estado honesto, não trava o pipeline |
+| `fonte` | string livre | Identificação da fonte quando `prov=fonte_declarada` ou `fonte_inferida` |
+| `status` | `necessaria` | Sem esta claim o efeito do ato não ocorreria |
+| | `contingente` | Presente no documento mas não load-bearing — "dito de passagem" |
+| | `pendente` | Não determinável com o material disponível |
+
+**Exemplo anotado:**
+
+```argdown
+[F-P1: cargo originário de M.B.] {prov: "fonte_declarada", fonte: "Decreto 7.999/1997", status: "necessaria"}:
+O cargo originário de M.B. é Especialista em Supervisão Escolar.
+
+[D-P4: regimes constitucionais distintos] {prov: "fonte_inferida", fonte: "apelação — a confirmar", status: "pendente"}:
+A ADI 3.772 decidiu no contexto do art. 37, XVI, CF; a LC 680/2012
+opera no art. 40, §5º, CF.
+```
+
+**Claims com `pendente`** geram pergunta ao formalizante: "o acórdão
+pressupõe [X] — você tem o documento de origem para confirmar?" O
+pipeline continua; o status é registrado e avaliado na Fase 3.
+
+**Claims `contingente`** de documentos anteriores que se propagam ao
+acórdão são argumento processual: o acórdão está ancorado em fundamento
+que não era necessário na decisão recorrida.
+
+As anotações correspondem diretamente aos tipos `ClaimMeta.Proveniencia`
+e `ClaimMeta.StatusClaim` em `references/ClaimMeta.lean`.
+
 ## Heurísticas
 
 1. **Warrant completo?** Se o precedente tem ressalva, ela está em `[W-A*]`?
@@ -92,6 +136,11 @@ title: [Caso] — Decomposição Argumentativa
 4. **Independência de P*?** P* que atacam A1 por ângulos distintos são
    argumentos independentes, mesmo que apontem para a mesma claim.
 
+5. **Anotar proveniência nas claims de dados.** Especialmente: claims com
+   `prov: "fonte_inferida"` são candidatos a verificação antes de protocolar;
+   claims com `status: "contingente"` na fonte original são argumento
+   processual se propagadas ao acórdão.
+
 ## Output esperado
 
 Um arquivo `.argdown` (ou bloco `argdown` em Markdown) com:
@@ -99,6 +148,7 @@ Um arquivo `.argdown` (ou bloco `argdown` em Markdown) com:
 - Todas as claims do acórdão (A*), instrumentais incluídas
 - Todas as claims da peça (P*), uma por vício identificado
 - Todos os argumentos `<arg-A*>` e `<arg-P*>`, com Warrants completos
+- Claims de dados anotadas com `prov` e `status` quando determinável
 
 O arquivo serve de insumo direto para a Fase 2 (Lean). Cada linha de ataque
 na topologia Argdown corresponde a um teorema candidato na Fase 2.

@@ -32,6 +32,13 @@ Para cada axioma que sustenta um teorema relevante, verificar:
    favoráveis ("universalização generosa") são candidatas a reformulação
    na Fase 2.
 
+4. **Proveniência e status verificados**: se um axioma central tem
+   `prov: pendente` ou `status: pendente` na anotação Argdown da Fase 1, o
+   ônus argumentativo é adicional. Registrar explicitamente na análise e
+   recomendar verificação antes de protocolar a peça. Axioma pendente não
+   trava o pipeline — mas derrota marcada com base em axioma pendente é
+   derrota condicional, não definitiva.
+
 Se algum critério falha, retornar à Fase 2 com instrução específica de
 refinamento. Não ajustar o axioma dentro desta fase — a reformulação ocorre
 no arquivo Lean.

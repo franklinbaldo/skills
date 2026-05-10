@@ -28,14 +28,15 @@ cargos de professor de carreira.
 
 <arg-A1: aplicação da ratio ADI 3.772>
 
-(1) [D-A1]: LC 680/2012 reenquadrou o cargo estadual para Professora Classe
-     C; cargo municipal é de Pedagoga Supervisora (natureza docente);
-     servidora cumpre compatibilidade de horários.
-(2) [W-A1: ratio ADI 3.772]: A ADI 3.772/STF autorizou a acumulação de cargo
-     de professor com cargo técnico-científico desde que ambos sejam de
-     professor de carreira — **excluídos os especialistas em educação**
-     (ementa, rel. Min. Carlos Britto, Tribunal Pleno; LDB art. 67;
-     art. 37, XVI, "c", CF).
+(1) [D-A1] {prov: "endogena", status: "necessaria"}: LC 680/2012 reenquadrou
+     o cargo estadual para Professora Classe C; cargo municipal é de Pedagoga
+     Supervisora (natureza docente); servidora cumpre compatibilidade de
+     horários.
+(2) [W-A1: ratio ADI 3.772] {prov: "fonte_declarada", fonte: "ADI 3.772/STF, rel. Min. Carlos Britto", status: "necessaria"}:
+     A ADI 3.772/STF autorizou a acumulação de cargo de professor com cargo
+     técnico-científico desde que ambos sejam de professor de carreira —
+     **excluídos os especialistas em educação** (ementa, Tribunal Pleno;
+     LDB art. 67; art. 37, XVI, "c", CF).
 ----
 (3) [A1: acumulação lícita por ratio ADI 3.772]
 
@@ -58,10 +59,11 @@ os especialistas em educação"), que torna a ratio inaplicável ao caso de M.B.
 <arg-P1: Warrant truncado — ataque ao Warrant de A1>
 
 (1) [W-A1: ratio ADI 3.772]
-(2) [F-P1]: O cargo originário de M.B. é Especialista em Supervisão Escolar
-     (Decreto 7.999/1997, posse 23.03.1998) — categoria expressamente excluída
-     pela ressalva da ementa, que foi transcrita integralmente no próprio voto
-     mas não aplicada ao caso.
+(2) [F-P1] {prov: "fonte_declarada", fonte: "Decreto 7.999/1997 + ficha funcional nos autos", status: "necessaria"}:
+     O cargo originário de M.B. é Especialista em Supervisão Escolar (Decreto
+     7.999/1997, posse 23.03.1998) — categoria expressamente excluída pela
+     ressalva da ementa, que foi transcrita integralmente no próprio voto mas
+     não aplicada ao caso.
 ----
 (3) [P1: omissão da ressalva expressa da ADI 3.772]
   - [A1: acumulação lícita por ratio ADI 3.772]
@@ -106,8 +108,9 @@ CF) e o regime previdenciário do professor (art. 40, §5º, CF).
 
 <arg-P4: Rebuttal não examinado — regime constitucional>
 
-(1) [D-P4]: A ADI 3.772 foi decidida no contexto do art. 37, XVI, CF (regime
-     de acumulação). O reenquadramento da LC 680/2012 opera no regime do
+(1) [D-P4] {prov: "fonte_inferida", fonte: "apelação IPERON — confirmar se suscitado expressamente", status: "necessaria"}:
+     A ADI 3.772 foi decidida no contexto do art. 37, XVI, CF (regime de
+     acumulação). O reenquadramento da LC 680/2012 opera no regime do
      art. 40, §5º, CF (regime previdenciário). Os regimes têm pressupostos e
      consequências constitucionalmente distintos.
 (2) [R-P4]: Omissão sobre ponto constitucional relevante capaz de infirmar a
@@ -122,8 +125,9 @@ IPERON como fundamento autônomo contrário à acumulação.
 
 <arg-P5: Rebuttal não examinado — Parecer TCE-RO>
 
-(1) [D-P5]: O IPERON invocou o Parecer PPL-TC 00027/19 do TCE-RO como
-     fundamento contrário autônomo. O voto não menciona o parecer.
+(1) [D-P5] {prov: "fonte_declarada", fonte: "apelação IPERON + parecer PPL-TC 00027/19 TCE-RO", status: "necessaria"}:
+     O IPERON invocou o Parecer PPL-TC 00027/19 do TCE-RO como fundamento
+     contrário autônomo. O voto não menciona o parecer.
 (2) [R-P5]: Ponto deduzido pela parte e capaz de infirmar a conclusão deve
      ser enfrentado; omissão configura vício de embargos
      (art. 1.022, I, CPC c/c art. 489, §1º, IV).
