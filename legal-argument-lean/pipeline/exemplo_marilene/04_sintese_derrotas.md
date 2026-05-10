@@ -1,17 +1,17 @@
-# Fase 5 — Dung Resolutivo | Caso M.B. (anonimizado)
+# Fase 4 — Síntese de Derrotas | Caso M.B. (anonimizado)
 
 > Apelação 7003XXX-XX.2024.8.22.0010 — IPERON × M.B.
 > TJRO, 2ª Câmara Especial, 29/04/2026
 
 **Lembrete de fase**: toda derrota marcada requer referência cruzada ao
-teorema Lean (Fase 3) e à ficha qualitativa da Fase 4. Marcação sem um dos
+teorema Lean (Fase 2) e à ficha qualitativa da Fase 3. Marcação sem um dos
 dois é inválida.
 
 ---
 
 ## Tabela de derrotas
 
-| Atacante | Atacado | Tipo | Teorema Lean | Ref. Fase 4 | Resultado |
+| Atacante | Atacado | Tipo | Teorema Lean | Ref. Fase 3 | Resultado |
 |---|---|---|---|---|---|
 | P1 | A1 (Warrant) | Warrant truncado | `ataque_1_ressalva_da_ADI` | §Teorema 1 | **A1 DERROTADO** |
 | P2 | A1 (Claim) | Contradição interna | `ataque_2_contradicao_interna` | §Teorema 2 | **A1 DERROTADO** (confirma, ângulo distinto) |
@@ -52,7 +52,7 @@ graph LR
 ### Pacotes derrotados
 
 **A1** é derrotado por cinco ataques independentes cobrindo todos os ângulos
-relevantes do Dung estrutural: Warrant (P1), Claim direta por reductio (P2),
+ângulos identificados no grafo Argdown (Fase 1): Warrant (P1), Claim direta por reductio (P2),
 passagem Data→Claim por ausência de saída legítima no art. 927 (P3), e dois
 Rebuttals não examinados (P4 e P5). A multiplicidade de derrotas reforça a
 robustez do resultado: mesmo que um ataque seja desconsiderado pelo tribunal
@@ -86,7 +86,7 @@ de não-fundamentação pelo art. 489 c/c art. 927.
 
 ---
 
-## Recomendações para a Fase 6 (tradução forense)
+## Recomendações para a Fase 5 (tradução forense)
 
 1. **Liderar por P3** (aplicação seletiva, art. 927): é o ataque mais
    abrangente, usa vocabulário processual canônico ("uso impróprio de

@@ -1,13 +1,13 @@
-# Fase 3 — Briefing Lean (LLM-formalizadora)
+# Fase 2 — Briefing Lean (LLM-formalizadora)
 
 ## Regra dura
 
 **Nunca ajustar axiomas para forçar compilação.**
 
-Se um teorema não compila, o problema não está no Lean — está na análise das
-fases anteriores. Voltar à Fase 1 ou 2 e revisar. Axiomas ajustados para
-fazer o proof checker aceitar a conclusão contaminam a Fase 4 (análise
-subjetiva) e invalidam o pipeline inteiro.
+Se um teorema não compila, o problema não está no Lean — está na análise da
+Fase 1 (Argdown). Voltar à Fase 1 e revisar. Axiomas ajustados para fazer o
+proof checker aceitar a conclusão contaminam a Fase 3 (análise subjetiva) e
+invalidam o pipeline inteiro.
 
 ## Composição do briefing
 
@@ -15,14 +15,14 @@ O briefing para a LLM-formalizadora (que pode ser uma sessão separada de
 contexto) contém:
 
 1. **Material original**: acórdão + peça (ou trecho relevante)
-2. **Análise Toulmin** (output da Fase 1): todos os pacotes A* e P*
-3. **Grafo de ataques** (output da Fase 2): tabela + diagrama
+2. **Decomposição Argdown** (output da Fase 1): claims A*, claims P*, warrants,
+   topologia de ataques
 
-A LLM-formalizadora recebe esse pacote e produz o arquivo Lean.
+A LLM-formalizadora lê o grafo Argdown e produz o arquivo Lean.
 
 ## O que produzir
 
-Um teorema candidato por linha de ataque da Fase 2. Para cada teorema:
+Um teorema candidato por linha de ataque do grafo Argdown. Para cada teorema:
 
 - **Nome**: `ataque_N_[descricao_curta]`
 - **Tipo**: a proposição jurídica que se quer estabelecer (ex.: `¬ Fundamentada d`)
@@ -51,7 +51,7 @@ O arquivo Lean deve usar literalmente estes cabeçalhos de comentário:
 -- Extraídos do acórdão e dos autos; cada axiom com citação da fonte
 
 /- Camada 6 — Teoremas -/
--- Um por ataque identificado na Fase 2
+-- Um por ataque identificado na Fase 1
 ```
 
 Imports obrigatórios (ordem topológica):
@@ -81,15 +81,15 @@ Encerrar **sempre** com `#print axioms` para cada teorema:
 -- ...
 ```
 
-O output do `#print axioms` é o insumo principal da Fase 4. Não pular.
+O output do `#print axioms` é o insumo principal da Fase 3. Não pular.
 
 ## Compilação
 
 ```bash
 # Da raiz do repositório:
 cd legal-argument-lean/pipeline/[nome_caso]
-LEAN_PATH=../../references lean 03_lean_fase3.lean
+LEAN_PATH=../../references lean 02_lean_fase2.lean
 ```
 
 O arquivo deve compilar limpo (sem `sorry`, sem erros). Se não compilar,
-reportar o erro e voltar às fases anteriores antes de continuar.
+reportar o erro e voltar à Fase 1 antes de continuar.

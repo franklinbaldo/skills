@@ -16,10 +16,10 @@ import art_927_cpc
 
   Compilar com:
     cd legal-argument-lean/pipeline/exemplo_marilene
-    LEAN_PATH=../../references lean 03_lean_fase3.lean
+    LEAN_PATH=../../references lean 02_lean_fase2.lean
 
   Os cinco #print axioms ao final produzem a auditoria para a
-  Fase 4 (análise subjetiva).
+  Fase 3 (análise subjetiva).
 -/
 
 namespace ExemploMB
@@ -248,7 +248,7 @@ theorem ataque_5_omissao_TCE :
   acordao_omite_parecer_tce
 
 /- ============================================================
-   Auditoria de axiomas — insumo para a Fase 4
+   Auditoria de axiomas — insumo para a Fase 3
    ============================================================ -/
 
 #print axioms ataque_1_ressalva_da_ADI

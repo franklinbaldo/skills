@@ -1,9 +1,9 @@
-# Fase 4 — Análise Jurídica Subjetiva | Caso M.B. (anonimizado)
+# Fase 3 — Análise Jurídica Subjetiva | Caso M.B. (anonimizado)
 
 > Apelação 7003XXX-XX.2024.8.22.0010 — IPERON × M.B.
 > TJRO, 2ª Câmara Especial, 29/04/2026
 
-**Registro**: parecer institucional. Cada teorema da Fase 3 é avaliado quanto
+**Registro**: parecer institucional. Cada teorema da Fase 2 é avaliado quanto
 à ancoragem de seus axiomas centrais, ao contra-argumento equivalente, e à
 razoabilidade da formulação. Compilação Lean é condição necessária mas não
 suficiente para marcar derrota.
@@ -242,7 +242,7 @@ de vícios apontados.
 
 ## Parecer final
 
-**Prosseguir para a Fase 5 com todos os cinco ataques.** Nenhum ataque falha
-nos três critérios de parada a ponto de exigir retorno à Fase 3. Prioridade
-para a Fase 6 (tradução forense): liderar por P3, seguido de P1/P2 em
+**Prosseguir para a Fase 4 com todos os cinco ataques.** Nenhum ataque falha
+nos três critérios de parada a ponto de exigir retorno à Fase 2. Prioridade
+para a Fase 5 (tradução forense): liderar por P3, seguido de P1/P2 em
 conjunto, e P4/P5 como vícios autônomos subsidiários.

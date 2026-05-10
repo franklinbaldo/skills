@@ -4,10 +4,10 @@ description: |
   Formalizes Brazilian legal arguments (peças forenses, especially Embargos
   de Declaração) in Lean 4. Models procedural vícios anchored in CPC
   dispositivos, with reusable axiom libraries for art. 489, 927, 1022 et al.
-  Includes a seven-phase pipeline for complex cases (Toulmin → structural
-  Dung → Lean → subjective legal analysis → resolutive Dung → forensic
-  translation), with strict separation between identification of attacks and
-  resolution of defeats to keep formalization honest. The payoff is not the
+  Includes a six-phase pipeline for complex cases (Argdown → Lean →
+  subjective legal analysis → defeat synthesis → forensic translation),
+  with strict separation between identification of attacks and resolution of
+  defeats to keep formalization honest. The payoff is not the
   proof itself but the `#print axioms` audit, which exposes hierarquia entre
   fundamentos jurídicos que a prosa coordena ("e", "ademais") esconde.
 ---
@@ -171,6 +171,19 @@ theorem sumula_279_inaplicavel : ¬ AplicaSumula279 caso_concreto := by
     apenas_qualificacao
 ```
 
+## Argdown for argument mapping
+
+The pipeline uses [Argdown](https://argdown.org) as its single notation for
+argument decomposition. Argdown is the operational successor to Toulmin (1958)
+and Dung (1995) — those traditions are cited as intellectual lineage, not as
+pipeline instruments. Argdown captures both argument anatomy (claims, premises,
+warrants) and attack topology (support and defeat relations) in one Markdown-like
+file with an official parser, VS Code plugin, and exporters to Mermaid/Graphviz.
+
+For LLMs, Argdown is natural input: structured, unambiguous, indexed
+documentation. The `<arg-P*> - [A*]` syntax makes attack topology explicit
+without requiring a separate Dung formalism.
+
 ## Two workflows
 
 ### Direct workflow
@@ -202,27 +215,25 @@ For simple cases with a single obvious vício and a clear argumentative target.
 ### Pipeline workflow
 
 For complex cases with multiple competing arguments or multiple
-omissões. Seven phases:
+omissões. Six phases:
 
 ```
 Fase 0: Material original (acórdão + apelação)
         ↓
-Fase 1: Toulmin — decompor em pacotes A* e P*
-        [pipeline/01_toulmin.md]
+Fase 1: Argdown — decomposição argumentativa unificada
+        (anatomia dos argumentos + topologia de ataques)
+        [pipeline/01_argdown.md]
         ↓
-Fase 2: Dung estrutural — mapear ataques (NÃO marcar derrotas)
-        [pipeline/02_dung_estrutural.md]
+Fase 2: Lean (LLM-formalizadora) — um teorema por ataque
+        [pipeline/02_briefing_lean.md]
         ↓
-Fase 3: Lean (LLM-formalizadora) — um teorema por ataque
-        [pipeline/03_briefing_lean.md]
+Fase 3: Análise subjetiva ⇄ Fase 2 (ciclo iterativo)
+        [pipeline/03_analise_subjetiva.md]
         ↓
-Fase 4: Análise subjetiva ⇄ Fase 3 (ciclo iterativo)
-        [pipeline/04_analise_subjetiva.md]
+Fase 4: Síntese de derrotas — marcar derrotas com ref. cruzada
+        [pipeline/04_sintese_derrotas.md]
         ↓
-Fase 5: Dung resolutivo — marcar derrotas com ref. cruzada
-        [pipeline/05_dung_resolutivo.md]
-        ↓
-Fase 6: Tradução forense (a peça)
+Fase 5: Tradução forense (a peça)
 ```
 
 Um exemplo completo do pipeline aplicado retroativamente a um caso
@@ -236,11 +247,11 @@ qualidade material dos axiomas (ancoragem, contra-argumento
 enfrentado, formulação razoável). Se algum critério falha, retorno
 à Fase 3 para refinamento — nunca ajuste direto nos axiomas.
 
-**Princípio 2 — Separação Dung estrutural ↔ resolutivo.** Dung
-estrutural (Fase 2) mapeia ataques sem decidir vencedores. Dung
-resolutivo (Fase 5) marca derrotas com base em Lean + análise
-subjetiva. Misturar os dois transforma a formalização em ritual
-de confirmação.
+**Princípio 2 — Separação Argdown ↔ Síntese de derrotas.** Argdown
+(Fase 1) mapeia ataques sem decidir vencedores. A Síntese de derrotas
+(Fase 4) marca derrotas com base em Lean (Fase 2) + análise subjetiva
+(Fase 3). Misturar os dois transforma a formalização em ritual de
+confirmação.
 
 **Princípio 3 — Prosa jurídica na análise.** A análise da Fase 4
 é escrita em registro de parecer institucional, com qualificadores
@@ -248,12 +259,12 @@ cautelosos ("tem sólida ancoragem em...", "cabe ressalvar contudo
 que..."). Não em jargão de workspace.
 
 **Princípio 4 — Regra dura sobre falha de compilação.** Se um
-teorema não compila na Fase 3, voltar à Fase 1 ou 2 e revisar.
+teorema não compila na Fase 2, voltar à Fase 1 e revisar.
 Nunca ajustar axiomas para forçar compilação — isso contamina a
-Fase 4 e invalida o pipeline inteiro.
+Fase 3 e invalida o pipeline inteiro.
 
 **Princípio 5 — Duas LLMs, contextos separados.** A LLM-formalizadora
-(Fase 3) busca compilar teoremas relevantes; a LLM-analista (Fase 4)
+(Fase 2) busca compilar teoremas relevantes; a LLM-analista (Fase 3)
 avalia honestamente. Idealmente em contextos distintos para evitar
 que a análise opere como justificativa do que a mesma LLM formalizou.
 
@@ -418,7 +429,7 @@ with the dump of axiom names.
   check (§1º, III) applied to a generic case
 - `pipeline/exemplo_marilene/` — **retroactive pipeline example**
   on a complete real case (anonymized): five attacks against an
-  acórdão invoking ADI 3.772, from Toulmin through resolutive Dung
+  acórdão invoking ADI 3.772, from Argdown through defeat synthesis
 
 ## Reference axiom libraries
 
@@ -653,7 +664,7 @@ across files via `import` + `LEAN_PATH`. Use `import Tipos`,
 `import Saidas.Aplicar`, etc. at the top of the peça file and compile
 with `LEAN_PATH=path/to/references lean file.lean`. Compatible naming
 is preserved: `Decisao`, `Precedente`, `Fundamentada` mean the same
-across all modules. See `pipeline/exemplo_marilene/03_lean_fase3.lean`
+across all modules. See `pipeline/exemplo_marilene/02_lean_fase2.lean`
 for the canonical composition pattern.
 
 ## Adversarial mode — formalizing the *embargado*, not the *embargante*

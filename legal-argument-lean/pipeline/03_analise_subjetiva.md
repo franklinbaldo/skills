@@ -1,17 +1,17 @@
-# Fase 4 — Análise Jurídica Subjetiva
+# Fase 3 — Análise Jurídica Subjetiva
 
 ## Princípio fundamental
 
 **Compilação Lean é condição necessária, não suficiente, para marcar derrota.**
 
 Um teorema pode compilar porque os axiomas que o sustentam foram formulados de
-modo vago ou excessivamente favorável. A Fase 4 examina a qualidade material
+modo vago ou excessivamente favorável. A Fase 3 examina a qualidade material
 dos axiomas, não apenas a validade formal do proof.
 
 ## O ciclo iterativo
 
-Esta fase pode retornar à Fase 3 se algum axioma central falhar nos critérios
-abaixo. O ciclo Fase 3 ↔ Fase 4 encerra quando todos os axiomas centrais de
+Esta fase pode retornar à Fase 2 se algum axioma central falhar nos critérios
+abaixo. O ciclo Fase 2 ↔ Fase 3 encerra quando todos os axiomas centrais de
 todos os teoremas relevantes passam nos três critérios — ou quando se conclui
 que um ataque não é sustentável e deve ser descartado.
 
@@ -30,9 +30,9 @@ Para cada axioma que sustenta um teorema relevante, verificar:
 3. **Formulação razoável**: O axioma, tal como formulado, seria aceito por
    um operador do direito informado e imparcial? Formulações excessivamente
    favoráveis ("universalização generosa") são candidatas a reformulação
-   na Fase 3.
+   na Fase 2.
 
-Se algum critério falha, retornar à Fase 3 com instrução específica de
+Se algum critério falha, retornar à Fase 2 com instrução específica de
 refinamento. Não ajustar o axioma dentro desta fase — a reformulação ocorre
 no arquivo Lean.
 
@@ -78,7 +78,7 @@ Para cada teorema relevante:
 *Riscos e contra-ataques*: [o que a parte adversa poderia opor; se o
 counter-axiom existe e tem força comparável]
 
-*Parecer parcial*: prosseguir com este ataque / retornar à Fase 3 para
+*Parecer parcial*: prosseguir com este ataque / retornar à Fase 2 para
 [instrução específica]
 
 ---
@@ -86,14 +86,14 @@ counter-axiom existe e tem força comparável]
 *Apreciação conjunta*: [como os ataques que prosseguem se complementam;
 lacunas de cobertura]
 
-*Parecer final*: prosseguir para a Fase 5 / retornar à Fase 3 para os
+*Parecer final*: prosseguir para a Fase 4 / retornar à Fase 2 para os
 ataques [N] com instrução [X]
 
 ---
 
 ## Heurística para a LLM-analista
 
-Se a análise é feita pela mesma LLM que formalizou (Fase 3), o risco de
+Se a análise é feita pela mesma LLM que formalizou (Fase 2), o risco de
 viés de confirmação é maior: a LLM tende a avaliar positivamente os axiomas
 que ela mesma formulou.
 
@@ -106,7 +106,7 @@ Se compilar, o teorema não marca derrota — o espaço argumentativo é disputa
 Documento Markdown com:
 - Análise por teorema (estrutura acima)
 - Apreciação conjunta
-- Parecer final explícito: lista de ataques que prosseguem para a Fase 5
+- Parecer final explícito: lista de ataques que prosseguem para a Fase 4
   e lista de ataques a descartar ou refinar
 
-O documento serve de insumo para a Fase 5 (Dung resolutivo).
+O documento serve de insumo para a Fase 4 (Síntese de derrotas).
