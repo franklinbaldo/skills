@@ -17,7 +17,7 @@ import «art_927_cpc»
     Tipos → Saidas.{Aplicar, Distinguir, Superar} → CPC.Art927
 
   A PRECEDENTE_B/DF é precedente vinculante do STF (art. 927, I,
-  CPC — contEstadoAle concentrado). O TribunalA é tribunal vinculado,
+  CPC — controle concentrado). O TribunalA é tribunal vinculado,
   não tribunal-fonte. Aplicam-se as saídas de art_927_cpc.lean.
 -/
 
@@ -33,15 +33,15 @@ open CPC.Art927
    Camada 5 — Predicados específicos do caso
    ============================================================ -/
 
-axiom IntegraMagisterio : Cargo → PEstadoAp
-axiom PEstadoAfessorDeCarreira : Servidor → Cargo → PEstadoAp
-axiom EspecialistaEmEducacao : Cargo → PEstadoAp
-axiom RegimeAcumulacao : Caso → PEstadoAp
-axiom RegimeAposentadoriaEspecial : Caso → PEstadoAp
-axiom CargoOriginariamente : Servidor → Cargo → PEstadoAp
+axiom IntegraMagisterio : Cargo → Prop
+axiom ProfessorDeCarreira : Servidor → Cargo → Prop
+axiom EspecialistaEmEducacao : Cargo → Prop
+axiom RegimeAcumulacao : Caso → Prop
+axiom RegimeAposentadoriaEspecial : Caso → Prop
+axiom CargoOriginariamente : Servidor → Cargo → Prop
 axiom CasoDoPrecedente : Precedente → Caso
-axiom MesmaMateria : Caso → Caso → PEstadoAp
-axiom EntidadeExemploManifestouContra : Servidor → PEstadoAp
+axiom MesmaMateria : Caso → Caso → Prop
+axiom EntidadeExemploManifestouContra : Servidor → Prop
 
 /- ============================================================
    Pressupostos sistêmicos — operam como [Field K]
@@ -61,17 +61,17 @@ axiom regimes_constitucionais_distintos :
 axiom ADI_3772_ratio :
     ∀ (s : Servidor) (c : Cargo),
       EspecialistaEmEducacao c →
-      ¬ PEstadoAfessorDeCarreira s c
+      ¬ ProfessorDeCarreira s c
 
 axiom precedente_ADI_3772 : Precedente
 axiom caso_ADI_3772 : Caso
 axiom ADI_3772_eh_aposentadoria : RegimeAposentadoriaEspecial caso_ADI_3772
-axiom ADI_3772_eh_contEstadoAle_concentrado :
-    DecisaoContEstadoAleConcentradoSTF precedente_ADI_3772
+axiom ADI_3772_eh_controle_concentrado :
+    DecisaoControleConcentradoSTF precedente_ADI_3772
 
 /-- A PRECEDENTE_B é vinculante por força do art. 927, I, CPC. -/
 theorem ADI_3772_vinculante : Vinculante precedente_ADI_3772 :=
-  art_927_I precedente_ADI_3772 ADI_3772_eh_contEstadoAle_concentrado
+  art_927_I precedente_ADI_3772 ADI_3772_eh_controle_concentrado
 
 /- ============================================================
    Fatos do caso de ParteB (com citação)
@@ -90,7 +90,7 @@ axiom ParteB_origem :
     CargoOriginariamente ParteB cargo_supervisao_escolar
 
 /-- Fato 2: Especialista em Supervisão Escolar é especialista
-    em educação (TCE-EstadoA PPL-TC 00027/19; LDB art. 61, II;
+    em educação (TCE-ro PPL-TC 00027/19; LDB art. 61, II;
     LC 680/2012 art. 6º, VII em sentido funcional). -/
 axiom supervisao_eh_especialista :
     EspecialistaEmEducacao cargo_supervisao_escolar
@@ -100,7 +100,7 @@ axiom caso_ParteB_eh_acumulacao :
     RegimeAcumulacao caso_ParteB
 
 /-- Fato 4: EntidadeExemplo manifestou-se contrariamente desde 2017
-    (Parecer 06/PEstadoAcuradoria/EntidadeExemplo/2017). -/
+    (Parecer 06/Procuradoria/EntidadeExemplo/2017). -/
 axiom EntidadeExemplo_contra_ParteB :
     EntidadeExemploManifestouContra ParteB
 
@@ -131,18 +131,18 @@ axiom acordao_eh_do_TribunalA : DecisaoDe acordao_TribunalA TribunalA
    STEELMANS DIGNOS
    ============================================================ -/
 
-def ST_1 : PEstadoAp :=
+def ST_1 : Prop :=
     ∀ (c : Cargo), ¬ EspecialistaEmEducacao c
 
-def ST_3 : PEstadoAp :=
+def ST_3 : Prop :=
     ¬ EntidadeExemploManifestouContra ParteB
 
 theorem ST_1_viola_par1_III : ST_1 → False := by
-  intEstadoA h_st1
+  intro h_st1
   exact (h_st1 cargo_supervisao_escolar) supervisao_eh_especialista
 
 theorem ST_3_inerte_no_caso : ST_3 → False := by
-  intEstadoA h_st3
+  intro h_st3
   exact h_st3 EntidadeExemplo_contra_ParteB
 
 /- ============================================================
@@ -152,9 +152,9 @@ theorem ST_3_inerte_no_caso : ST_3 → False := by
 
 theorem acordao_internamente_inconsistente
     (premissa_transcrita : ∀ (s : Servidor) (c : Cargo),
-      EspecialistaEmEducacao c → ¬ PEstadoAfessorDeCarreira s c)
+      EspecialistaEmEducacao c → ¬ ProfessorDeCarreira s c)
     (conclusao_sustentada :
-      PEstadoAfessorDeCarreira ParteB cargo_supervisao_escolar) :
+      ProfessorDeCarreira ParteB cargo_supervisao_escolar) :
     False :=
   premissa_transcrita ParteB cargo_supervisao_escolar
     supervisao_eh_especialista conclusao_sustentada
@@ -166,15 +166,15 @@ theorem acordao_internamente_inconsistente
    do STF, art. 927 I CPC), estava obrigado a uma das saídas
    legítimas sob art. 927.
 
-   A vinculação a precedente no direito brasileiEstadoA tem caráter
-   RACIONAL, não meramente hierárquico: o TribunalA pode confEstadoAntar
+   A vinculação a precedente no direito brasileiro tem caráter
+   RACIONAL, não meramente hierárquico: o TribunalA pode confrontar
    precedente do STF, mas com ônus argumentativo qualificado.
 
    Saídas disponíveis ao TribunalA (não-fonte):
      1. Aplicar corretamente
      2. Distinguir corretamente
      3. Reconhecer superação superveniente do próprio STF
-     4. Superar racionalmente (apontamento expresso de erEstadoA)
+     4. Superar racionalmente (apontamento expresso de erro)
 
    NÃO disponível: superação plena (privativa do tribunal-fonte).
 
@@ -216,7 +216,7 @@ theorem acordao_TribunalA_fora_do_espaco_legitimo
        não reconhece superação superveniente, e não pode
        superar plenamente). -/
 theorem ED_cabivel : (ST_1 ∨ ST_3) → False := by
-  intEstadoA h
+  intro h
   rcases h with h1 | h3
   · exact ST_1_viola_par1_III h1
   · exact ST_3_inerte_no_caso h3

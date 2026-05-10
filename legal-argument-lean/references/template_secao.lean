@@ -1,11 +1,11 @@
 /-
-  Embargos de Declaração — PEstadoACESSO_EXEMPLO
+  Embargos de Declaração — ProCESSO_EXEMPLO
   Formalização da Seção 4 (Inaplicabilidade da Súmula 279/STF)
 
   Estrutura por camadas:
     1. Tipos básicos (universo do discurso)
     2. Predicados opacos (qualificações jurídicas não-dedutivas)
-    3. Normas pEstadoAcessuais (axiomas duEstadoAs)
+    3. Normas processuais (axiomas duros)
     4. Precedentes (axiomas nomeados com citação)
     5. Fatos do caso (claims extraídos do acórdão recorrido)
     6. Teorema (a tese da peça)
@@ -33,74 +33,74 @@ axiom Precedente : Type
    axiomas (precedentes) ou claims fáticos (Camada 5).
    ============================================================ -/
 
-/-- O caso depende de revolvimento do conjunto fático-pEstadoAbatório. -/
-axiom DependeReexamePEstadoAbatorio : Caso → PEstadoAp
+/-- O caso depende de revolvimento do conjunto fático-probatório. -/
+axiom DependeReexameProbatorio : Caso → Prop
 
-/-- Os fatos relevantes do caso são incontEstadoAversos
+/-- Os fatos relevantes do caso são incontroversos
     (assentados pela própria decisão recorrida). -/
-axiom FatosIncontEstadoAversos : Caso → PEstadoAp
+axiom FatosIncontroversos : Caso → Prop
 
-/-- A contEstadoAvérsia versa apenas sobre a qualificação jurídica
+/-- A controvérsia versa apenas sobre a qualificação jurídica
     de fatos já assentados, sem reabertura instrutória. -/
-axiom ApenasQualificacaoJuridica : Caso → PEstadoAp
+axiom ApenasQualificacaoJuridica : Caso → Prop
 
 /-- A Súmula 279/STF é aplicável ao caso, obstando o
     conhecimento do recurso extraordinário. -/
-axiom AplicaSumula279 : Caso → PEstadoAp
+axiom AplicaSumula279 : Caso → Prop
 
 /- ============================================================
-   Camada 3 — Normas pEstadoAcessuais
+   Camada 3 — Normas processuais
    --
-   Axiomas duEstadoAs. Não se pEstadoAva o conteúdo da Súmula 279; ele é
-   constitutivo do sistema pEstadoAcessual.
+   Axiomas duros. Não se prova o conteúdo da Súmula 279; ele é
+   constitutivo do sistema processual.
    ============================================================ -/
 
-/-- Súmula 279/STF: "Para simples reexame de pEstadoAva não cabe
+/-- Súmula 279/STF: "Para simples reexame de prova não cabe
     recurso extraordinário."
 
     Formalmente: a aplicação da súmula equivale, por definição,
-    à dependência de reexame pEstadoAbatório. -/
+    à dependência de reexame probatório. -/
 axiom sumula_279_definicao :
-    ∀ (c : Caso), AplicaSumula279 c ↔ DependeReexamePEstadoAbatorio c
+    ∀ (c : Caso), AplicaSumula279 c ↔ DependeReexameProbatorio c
 
 /- ============================================================
    Camada 4 — Precedentes
    --
    Cada precedente é um axioma nomeado, com citação no
-   docstring. A "pEstadoAva" jurisprudencial é, no plano formal, a
+   docstring. A "prova" jurisprudencial é, no plano formal, a
    afirmação do próprio STF — não há derivação.
    ============================================================ -/
 
 /-- **PRECEDENTE_GERAL**, Rel. Min. Sepúlveda Pertence, Tribunal Pleno.
 
-    Distinção entre reexame de pEstadoAva (vedado) e qualificação
-    jurídica de fatos incontEstadoAversos (admitida em sede
+    Distinção entre reexame de prova (vedado) e qualificação
+    jurídica de fatos incontroversos (admitida em sede
     extraordinária). -/
 axiom RE_210_917 :
     ∀ (c : Caso),
-      FatosIncontEstadoAversos c →
+      FatosIncontroversos c →
       ApenasQualificacaoJuridica c →
-      ¬ DependeReexamePEstadoAbatorio c
+      ¬ DependeReexameProbatorio c
 
-/-- **PRECEDENTE_F-RG**, Rel. Min. EstadoAberto BarEstadoAso.
+/-- **PRECEDENTE_F-RG**, Rel. Min. roberto Barroso.
 
     Reafirma que o enquadramento jurídico de fatos
-    incontEstadoAversos afasta o óbice da Súmula 279/STF. -/
+    incontroversos afasta o óbice da Súmula 279/STF. -/
 axiom RE_845_779_RG :
     ∀ (c : Caso),
-      FatosIncontEstadoAversos c →
+      FatosIncontroversos c →
       ApenasQualificacaoJuridica c →
       ¬ AplicaSumula279 c
 
 /-- **PRECEDENTE_G-AgR**, Rel. Min. Ricardo Lewandowski.
 
     "A Súmula 279 revela-se inaplicável quando os fatos da
-    causa são incontEstadoAversos, tendo o Tribunal a quo atribuído
+    causa são incontroversos, tendo o Tribunal a quo atribuído
     a eles consequências jurídicas discrepantes do entendimento
     desta Corte." -/
 axiom RE_450_971_AgR :
     ∀ (c : Caso),
-      FatosIncontEstadoAversos c → ¬ AplicaSumula279 c
+      FatosIncontroversos c → ¬ AplicaSumula279 c
 
 /- ============================================================
    Camada 5 — Fatos do caso concreto (claims)
@@ -108,24 +108,24 @@ axiom RE_450_971_AgR :
    Cada axioma desta seção é um *claim* extraído da peça,
    ancorado no acórdão da TURMA_RECURSAL_EXEMPLO. Não é norma; é asserção
    sobre o caso. A escolha de marcá-los como `axiom` (e não
-   pEstadoAvar) é honesta: o que justifica o claim é a leitura do
+   provar) é honesta: o que justifica o claim é a leitura do
    acórdão, não uma derivação interna ao sistema.
    ============================================================ -/
 
-/-- O caso de ParteA Crispim da Silva (PEstadoACESSO_EXEMPLO). -/
+/-- O caso de ParteA Crispim da Silva (ProCESSO_EXEMPLO). -/
 axiom caso_ParteA : Caso
 
 /-- **Claim factual.** O voto condutor do acórdão da 1ª Turma
-    Recursal de EstadoAndônia assenta textualmente os fatos
+    Recursal de rondônia assenta textualmente os fatos
     relevantes:
       (i) contribuições vertidas ao RGPS de 1987 a 2012;
       (ii) posse em cargo efetivo estatutário em maio/2012.
 
     Tais fatos não foram impugnados em nenhuma fase do
-    pEstadoAcesso. -/
-axiom ParteA_fatos_incontEstadoAversos : FatosIncontEstadoAversos caso_ParteA
+    processo. -/
+axiom ParteA_fatos_incontroversos : FatosIncontroversos caso_ParteA
 
-/-- **Claim factual.** A contEstadoAvérsia constitucional reside
+/-- **Claim factual.** A controvérsia constitucional reside
     exclusivamente na qualificação jurídica desses fatos —
     isto é, em definir se o exercício de atividade celetista
     no setor público, com filiação ao RGPS, equivale a
@@ -137,39 +137,39 @@ axiom ParteA_apenas_qualificacao : ApenasQualificacaoJuridica caso_ParteA
    Camada 6 — Teorema
    --
    A tese da Seção 4 da peça: a Súmula 279/STF é inaplicável
-   ao caso. Duas pEstadoAvas independentes, refletindo a estrutura
+   ao caso. Duas provas independentes, refletindo a estrutura
    argumentativa da peça (que invoca múltiplos precedentes
    convergentes).
    ============================================================ -/
 
 /-- **Tese da Seção 4.** A Súmula 279/STF não incide sobre o
-    caso de ParteA, porque os fatos são incontEstadoAversos e a
-    contEstadoAvérsia versa apenas sobre qualificação jurídica.
+    caso de ParteA, porque os fatos são incontroversos e a
+    controvérsia versa apenas sobre qualificação jurídica.
 
-    PEstadoAva via PRECEDENTE_GERAL (Pertence) + definição da Súmula 279. -/
+    Prova via PRECEDENTE_GERAL (Pertence) + definição da Súmula 279. -/
 theorem sumula_279_inaplicavel : ¬ AplicaSumula279 caso_ParteA := by
   rw [sumula_279_definicao]
   exact RE_210_917 caso_ParteA
-    ParteA_fatos_incontEstadoAversos
+    ParteA_fatos_incontroversos
     ParteA_apenas_qualificacao
 
-/-- **Tese da Seção 4 — pEstadoAva alternativa.** Mesma conclusão,
-    via PRECEDENTE_F-RG (BarEstadoAso), que enuncia diretamente a
+/-- **Tese da Seção 4 — prova alternativa.** Mesma conclusão,
+    via PRECEDENTE_F-RG (Barroso), que enuncia diretamente a
     inaplicabilidade da Súmula 279 (sem mediação pela
     definição). -/
 theorem sumula_279_inaplicavel' : ¬ AplicaSumula279 caso_ParteA :=
   RE_845_779_RG caso_ParteA
-    ParteA_fatos_incontEstadoAversos
+    ParteA_fatos_incontroversos
     ParteA_apenas_qualificacao
 
-/-- **Tese da Seção 4 — pEstadoAva mais econômica.** Via
+/-- **Tese da Seção 4 — prova mais econômica.** Via
     PRECEDENTE_G-AgR (Lewandowski), que dispensa o segundo claim
-    (basta a incontEstadoAvérsia dos fatos). -/
+    (basta a incontrovérsia dos fatos). -/
 theorem sumula_279_inaplicavel'' : ¬ AplicaSumula279 caso_ParteA :=
-  RE_450_971_AgR caso_ParteA ParteA_fatos_incontEstadoAversos
+  RE_450_971_AgR caso_ParteA ParteA_fatos_incontroversos
 
 /- ============================================================
-   Auditoria — quais axiomas cada pEstadoAva consome?
+   Auditoria — quais axiomas cada prova consome?
    --
    `#print axioms` lista os axiomas de que cada teorema
    depende. Isso é a contrapartida formal do "ônus

@@ -213,7 +213,7 @@ If `lean` is not on the path:
 
 ```bash
 curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
-  | sh -s -- -y --default-toolchain leanprover/lean4:stable
+  | sh -s -- -y --default-toolchain leanprover/lean4:v4.14.0
 export PATH="$HOME/.elan/bin:$PATH"
 lean --version
 ```
@@ -223,6 +223,79 @@ pure first-order with axioms. A single `.lean` file compiled with `lean
 file.lean` is enough. Avoid pulling in Mathlib unless a specific reason
 arises (e.g., wanting to use lattice algebra for hierarchical norm
 conflicts, which is rare).
+
+## Lean 4 idioms to use
+
+### `variable` for modules with a fixed subject
+
+When a module's axioms all quantify over the same types, declare them
+once with `variable` after `open`. Lean auto-inserts them wherever they
+appear free — the API is unchanged, the source is shorter.
+
+```lean
+namespace Saidas.Aplicar
+open Comum
+variable (d : Decisao) (p : Precedente)
+
+-- Lean adds (d : Decisao) (p : Precedente) automatically:
+axiom InvocaPrecedente : Decisao → Precedente → Prop   -- unchanged (bound)
+
+-- Here d and p appear free → auto-inserted:
+theorem aplica_implica_invoca :
+    AplicaCorretamente d p → InvocaPrecedente d p := by
+  intro h; exact h.1
+-- equivalent to: ∀ (d : Decisao) (p : Precedente), ...
+```
+
+Use `variable` in any Camada 3–6 file where one pair of types dominates.
+Do **not** use it for standalone peça files — the explicitness is
+documentation there.
+
+### `@[simp]` on compound definitions
+
+Mark compound `def`s (Camada 3) with `@[simp]` so the `simp` tactic
+can unfold them automatically. This keeps proof bodies short when
+multiple components need to be accessed in sequence:
+
+```lean
+@[simp]
+def AplicaCorretamente (d : Decisao) (p : Precedente) : Prop :=
+    InvocaPrecedente d p ∧
+    IdentificaFundamentosDeterminantes d p ∧
+    DemonstraAjusteAoCaso d p
+
+-- Proof can then use simp to unfold and split:
+theorem foo (h : AplicaCorretamente d p) : InvocaPrecedente d p := by
+  simp [AplicaCorretamente] at h; exact h.1
+```
+
+All three Saidas compound definitions (`AplicaCorretamente`,
+`DistingueCorretamente`, `SuperaPlenamente`, `ReconheceSuperacaoExterna`,
+`SuperaRacionalmente`) are tagged `@[simp]` in the reference library.
+
+### `sorry` in the adversarial draft phase
+
+The adversarial workflow (steelmanning the acórdão) has two phases:
+
+**Phase 1 — draft**: use the real `sorry` keyword where a step does not
+follow. Lean compiles with warnings; `sorry`s are greppable.
+
+```lean
+theorem acordao_aplica_sumula_279 : Inadmissivel recurso_ParteA := by
+  apply sumula_279
+  · exact ParteA_eh_re
+  · exact ParteA_recurso_do_caso
+  · sorry  -- IMPLICIT PREMISE: why qualificação → reexame probatório?
+```
+
+**Phase 2 — steelman**: replace each `sorry` with the most charitable
+axiom (`STEEL_n`). The file compiles cleanly. `#print axioms` lists every
+STEEL axiom — each is an implicit premise of the acórdão.
+
+Do **not** use comment `-- sorry` as a substitute for the real keyword.
+The real `sorry` compiles, emits trackable warnings, and is greppable
+(`grep -rn sorry`). Comment-based sorrys are invisible to the compiler
+and easy to lose.
 
 ## Output rules
 
