@@ -220,7 +220,8 @@ theorem ataque_3_aplicacao_seletiva :
     (Or.inl tjro_fundamenta_em_adi)
     tjro_nao_aplica_corretamente
     tjro_nao_distingue
-    (apenas_tribunal_fonte_supera_plenamente tjro_nao_fonte_adi_3772)
+    (apenas_tribunal_fonte_supera_plenamente
+       acordao_tjro adi_3772 tjro tjro_nao_fonte_adi_3772)
     tjro_nao_reconhece_superacao
     tjro_nao_supera_racionalmente
 
