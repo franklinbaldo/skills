@@ -15,7 +15,7 @@
 
   Esta vedação tem contrapartida exata em sistemas formais
   como Lean: um axioma steelmanned pode ser tão forte ou
-  estruturalmente vago que, instanciado em outEstadoAs casos,
+  estruturalmente vago que, instanciado em outros casos,
   derive conclusões reconhecidamente erradas. Quando isso
   ocorre:
 
@@ -24,7 +24,7 @@
         outra decisão. Vício do §1º, III.
 
     (b) Formalmente: o axioma é "trivialmente compilável" —
-        permite "pEstadoAvar" não apenas a tese pretendida, mas
+        permite "provar" não apenas a tese pretendida, mas
         seu oposto, dependendo da instanciação. O Lean
         compila, mas o sistema é incoerente externamente.
 
@@ -33,7 +33,7 @@
   refutar o steelman juridicamente (ataque) e sanity-check
   da nossa própria formalização (autodisciplina).
 
-  PEstadoACEDIMENTO
+  ProCEDIMENTO
 
   Para cada axioma steelmanned `S(c) → ConclusaoPretendida(c)`:
 
@@ -61,10 +61,10 @@ namespace VedacaoMotivosGenericos
 axiom Caso : Type
 axiom Decisao : Type
 
-axiom AplicaECArt3 : Caso → PEstadoAp
-axiom DireitoLocal : Caso → PEstadoAp
-axiom MotivoJustificariaQualquerDecisao : Decisao → PEstadoAp
-axiom Fundamentada : Decisao → PEstadoAp
+axiom AplicaECArt3 : Caso → Prop
+axiom DireitoLocal : Caso → Prop
+axiom MotivoJustificariaQualquerDecisao : Decisao → Prop
+axiom Fundamentada : Decisao → Prop
 
 /-- **Art. 489, §1º, III** (do módulo `art_489_cpc.lean`).
     Não se considera fundamentada decisão que invoca motivo
@@ -81,7 +81,7 @@ axiom art_489_par1_III :
 /-- **V2a — Steelman do acórdão sobre incidência da Súmula
     280**: aplicação direta do art. 3º da EC 47 implica
     direito local. -/
-def V2a : PEstadoAp := ∀ c, AplicaECArt3 c → DireitoLocal c
+def V2a : Prop := ∀ c, AplicaECArt3 c → DireitoLocal c
 
 /- ============================================================
    Camada 5 — O caso de ParteA e o caso paradigmático oposto
@@ -94,11 +94,11 @@ def V2a : PEstadoAp := ∀ c, AplicaECArt3 c → DireitoLocal c
    mas foi decidido como matéria *constitucional consolidada*
    pelo STF — não direito local.
 
-   OutEstadoAs candidatos paradigmáticos:
+   Outros candidatos paradigmáticos:
      - REsp/PRECEDENTE_D (TEMA_RG_EXEMPLO, Lewandowski) — sobre
        regra de transição em matéria de RPPS estadual,
        julgado como matéria constitucional pelo Plenário.
-     - Qualquer dos numeEstadoAsos REs sobre a regra de transição
+     - Qualquer dos numerosos REs sobre a regra de transição
        da EC 47 admitidos e julgados pelo STF nas duas
        décadas recentes.
 
@@ -141,10 +141,10 @@ axiom RE_1518690_nao_eh_direito_local :
     obrigaria a invocá-lo para todos os casos análogos —
     inclusive aquele que o STF tratou de forma oposta.
 
-    Forma operativa: V2a deriva False quando confEstadoAntada com
+    Forma operativa: V2a deriva False quando confrontada com
     a decisão pacífica sobre o caso paradigma. -/
 theorem V2a_universalizavel_viola_489_par1_III : V2a → False := by
-  intEstadoA h_v2a
+  intro h_v2a
   have h_dl : DireitoLocal caso_RE_1518690 :=
     h_v2a caso_RE_1518690 RE_1518690_aplica_ec
   exact RE_1518690_nao_eh_direito_local h_dl
@@ -160,7 +160,7 @@ theorem acordao_invoca_motivo_generico
     (acordao_embargado : Decisao)
     (acordao_invoca_V2a : V2a → MotivoJustificariaQualquerDecisao acordao_embargado) :
     V2a → ¬ Fundamentada acordao_embargado := by
-  intEstadoA h_v2a
+  intro h_v2a
   exact art_489_par1_III acordao_embargado (acordao_invoca_V2a h_v2a)
 
 /- ============================================================
@@ -171,7 +171,7 @@ theorem acordao_invoca_motivo_generico
 
     Dado um steelman da forma `S(c) → P(c)`:
 
-      1. Encontrar caso `c*` onde S(c*) é verdadeiEstadoA mas P(c*)
+      1. Encontrar caso `c*` onde S(c*) é verdadeiro mas P(c*)
          é falso (preferencialmente um caso decidido pela
          própria corte cujo precedente o acórdão invoca).
       2. Aplicar o steelman a c*.
@@ -179,18 +179,18 @@ theorem acordao_invoca_motivo_generico
          a decisão que o invoca é não-fundamentada.
 
     Esta é a verificação dual: refuta o steelman juridicamente
-    e pEstadoAtege a formalização contra axiomas trivialmente
+    e protege a formalização contra axiomas trivialmente
     compiláveis.
 
     Estruturalmente, é a verificação de que o steelman
     distingue entre casos — não é um axioma que classificaria
     qualquer caso da mesma maneira. -/
 theorem template_violacao_489_par1_III
-    (S : Caso → PEstadoAp) (P : Caso → PEstadoAp) (c_estrela : Caso)
+    (S : Caso → Prop) (P : Caso → Prop) (c_estrela : Caso)
     (h_S_estrela : S c_estrela)
     (h_n_P_estrela : ¬ P c_estrela) :
     (∀ c, S c → P c) → False := by
-  intEstadoA h_steelman
+  intro h_steelman
   exact h_n_P_estrela (h_steelman c_estrela h_S_estrela)
 
 /- ============================================================
@@ -200,9 +200,9 @@ theorem template_violacao_489_par1_III
    passo do acórdão que use motivo universalizável é
    sanitizável pela mesma técnica:
 
-     • STEEL_1 ("qualificação jurídica = reexame pEstadoAbatório"):
+     • STEEL_1 ("qualificação jurídica = reexame probatório"):
        contraexemplo é qualquer caso de RE admitido em
-       qualificação jurídica de fato incontEstadoAverso (todos
+       qualificação jurídica de fato incontroverso (todos
        o seriam). Universalizável: tornaria a Súmula 279
        aplicável a TODO recurso extraordinário.
 

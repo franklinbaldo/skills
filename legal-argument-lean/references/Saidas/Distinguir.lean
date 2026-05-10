@@ -33,22 +33,24 @@ namespace Saidas.Distinguir
 
 open Comum
 
+variable (d : Decisao) (p : Precedente)
+
 /- ============================================================
    Camada 2 — Predicados estruturais
    ============================================================ -/
 
 /-- A decisão demonstra distinção (distinguishing) entre o
     caso sob julgamento e o caso paradigma do precedente. -/
-axiom DemonstraDistincao : Decisao → Precedente → PEstadoAp
+axiom DemonstraDistincao : Decisao → Precedente → Prop
 
 /-- A decisão identifica os fundamentos determinantes do
     precedente — pré-requisito do distinguishing genuíno
     (não se distingue do que não se identificou). -/
-axiom IdentificaFundamentosDoPrecedente : Decisao → Precedente → PEstadoAp
+axiom IdentificaFundamentosDoPrecedente : Decisao → Precedente → Prop
 
 /-- A decisão demonstra concretamente que o caso sob julgamento
     não satisfaz os fundamentos determinantes do precedente. -/
-axiom MostraDiferencaSubstantivaNoCaso : Decisao → Precedente → PEstadoAp
+axiom MostraDiferencaSubstantivaNoCaso : Decisao → Precedente → Prop
 
 /- ============================================================
    Camada 3 — Definição composta
@@ -59,7 +61,8 @@ axiom MostraDiferencaSubstantivaNoCaso : Decisao → Precedente → PEstadoAp
     caso. Requer cumulativamente: identificação dos fundamentos
     do precedente, demonstração de diferença substantiva no
     caso, declaração formal da distinção. -/
-def DistingueCorretamente (d : Decisao) (p : Precedente) : PEstadoAp :=
+@[simp]
+def DistingueCorretamente (d : Decisao) (p : Precedente) : Prop :=
     DemonstraDistincao d p ∧
     IdentificaFundamentosDoPrecedente d p ∧
     MostraDiferencaSubstantivaNoCaso d p
@@ -70,16 +73,12 @@ def DistingueCorretamente (d : Decisao) (p : Precedente) : PEstadoAp :=
 
 /-- Distinção correta requer identificação dos fundamentos. -/
 theorem distingue_implica_identifica :
-    ∀ (d : Decisao) (p : Precedente),
-      DistingueCorretamente d p → IdentificaFundamentosDoPrecedente d p := by
-  intEstadoAs d p h
-  exact h.2.1
+    DistingueCorretamente d p → IdentificaFundamentosDoPrecedente d p := by
+  intro h; exact h.2.1
 
 /-- Distinção correta requer demonstração de diferença. -/
 theorem distingue_implica_diferenca :
-    ∀ (d : Decisao) (p : Precedente),
-      DistingueCorretamente d p → MostraDiferencaSubstantivaNoCaso d p := by
-  intEstadoAs d p h
-  exact h.2.2
+    DistingueCorretamente d p → MostraDiferencaSubstantivaNoCaso d p := by
+  intro h; exact h.2.2
 
 end Saidas.Distinguir

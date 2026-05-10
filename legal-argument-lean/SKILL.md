@@ -1,18 +1,15 @@
 ---
 name: legal-argument-lean
 description: |
-  Formalize a legal argument (typically a Brazilian peça forense — embargos
-  de declaração, recurso, contestação, parecer) in Lean 4 as an exercise in
-  argumentative auditing. Use whenever the USER asks to "transformar/reduzir/
-  expressar um argumento jurídico em Lean", to "axiomatizar uma peça",
-  "escrever isso como prova matemática", or to "ver o esqueleto lógico" de
-  uma argumentação. Especially well-suited to embargos de declaração and
-  recursos baseados em admissibilidade — argumentos sobre omissão e
-  contradição mapeiam quase um-para-um em lógica formal. The payoff is not
-  the proof itself but the `#print axioms` audit, which exposes hierarquia
-  entre fundamentos jurídicos que a prosa coordena ("e", "ademais") esconde.
-  Do not use this skill for legal drafting itself, for pure normative
-  interpretation, or for casual discussion about formal logic.
+  Formalizes Brazilian legal arguments (peças forenses, especially Embargos
+  de Declaração) in Lean 4. Models procedural vícios anchored in CPC
+  dispositivos, with reusable axiom libraries for art. 489, 927, 1022 et al.
+  Includes a six-phase pipeline for complex cases (Argdown → Lean →
+  subjective legal analysis → defeat synthesis → forensic translation),
+  with strict separation between identification of attacks and resolution of
+  defeats to keep formalization honest. The payoff is not the
+  proof itself but the `#print axioms` audit, which exposes hierarquia entre
+  fundamentos jurídicos que a prosa coordena ("e", "ademais") esconde.
 ---
 
 # legal-argument-lean
@@ -24,32 +21,30 @@ the rhetorical structure of the original peça.
 
 ## When to use this skill
 
-Use whenever the USER asks to:
+Apply when the request involves:
 
-- formalize/translate/reduzir uma peça jurídica em Lean
-- "axiomatizar" or "ver o esqueleto lógico" de uma argumentação
-- expressar um argumento como prova matemática
-- continue an existing Lean formalization of a legal document (e.g.,
-  having done Seção 4, now do Seção 5)
+- formalizing a legal argument (peça forense) in Lean 4
+- structural analysis of an acórdão to identify procedural vícios
+- preparing Embargos de Declaração with formal audit of arguments
+- translating a formal exercise into a Brazilian forensic peça
 
 Especially well-suited to:
 
 - **Embargos de declaração** — reclamação metalógica por excelência
   (omissão = falta de passo; contradição = `⊢ ⊥` literal)
-- **Argumentos de admissibilidade** baseados em súmulas (silogismos
-  limpos)
-- **Argumentos por aderência a precedente** (axiomas nomeados aplicados
-  ao caso)
-- **Argumentos por reductio** (assume a tese contrária + derive `False`)
+- **Argumentos por aderência a precedente vinculante** (axiomas nomeados
+  aplicados ao caso; violação = fora do espaço legítimo do art. 927)
+- **Aplicação seletiva de ratio decidendi** (ressalva ignorada = vício
+  de Warrant incompleto; formalizável via ADI + fato do caso)
+- **Reductio** (assume a tese contrária + derive `False`)
 
 Do **not** use for:
 
-- Drafting the peça itself (use legal drafting workflow)
+- Drafting the peça itself without a formalization goal
 - Pure normative interpretation without an argumentative target
-- Mérito puro centrado em qualificação jurídica (não há nada para
-  formalizar — vira tudo predicado opaco)
-- Argumentos de proporcionalidade ou ponderação (não são lógica
-  clássica)
+- Mérito puro centrado em qualificação jurídica (fica tudo predicado
+  opaco; não há o que derivar)
+- Proporcionalidade ou ponderação (não são lógica clássica)
 
 ## Why this exercise is valuable
 
@@ -176,7 +171,24 @@ theorem sumula_279_inaplicavel : ¬ AplicaSumula279 caso_concreto := by
     apenas_qualificacao
 ```
 
-## Workflow
+## Argdown for argument mapping
+
+The pipeline uses [Argdown](https://argdown.org) as its single notation for
+argument decomposition. Argdown is the operational successor to Toulmin (1958)
+and Dung (1995) — those traditions are cited as intellectual lineage, not as
+pipeline instruments. Argdown captures both argument anatomy (claims, premises,
+warrants) and attack topology (support and defeat relations) in one Markdown-like
+file with an official parser, VS Code plugin, and exporters to Mermaid/Graphviz.
+
+For LLMs, Argdown is natural input: structured, unambiguous, indexed
+documentation. The `<arg-P*> - [A*]` syntax makes attack topology explicit
+without requiring a separate Dung formalism.
+
+## Two workflows
+
+### Direct workflow
+
+For simple cases with a single obvious vício and a clear argumentative target.
 
 1. **Read the peça.** Identify the argumentative structure: what is
    being claimed? Against what acórdão? What are the section-level
@@ -184,28 +196,78 @@ theorem sumula_279_inaplicavel : ¬ AplicaSumula279 caso_concreto := by
 
 2. **Inventory the layers as you read:**
    - What entities populate the universe? → Camada 1
-   - Which qualificações jurídicas are contested or simply asserted? →
-     Camada 2
+   - Which qualificações jurídicas are contested or asserted? → Camada 2
    - Which constitutional/statutory/procedural norms? → Camada 3
    - Which precedents? → Camada 4
    - Which factual claims, with citations to the recorrido? → Camada 5
    - Which conclusions does the peça want? → Camada 6
 
 3. **Write the Lean file** with section headers mirroring the peça's
-   own structure. The file should be readable as a parallel to the
-   peça, not as a recoding of it.
+   own structure. Readable as a parallel to the peça, not a recoding.
 
-4. **Compile** with `lean file.lean`. Setup if needed (see below). The
-   file type-checks silently if it works; `#print axioms` outputs to
-   stdout.
+4. **Compile** with `lean file.lean`. Setup if needed (see below).
 
-5. **End with `#print axioms`** for *every* theorem. This is the audit
-   step — never skip it. Compare axiom sets where multiple proofs of
-   the same theorem exist.
+5. **End with `#print axioms`** for *every* theorem. Never skip.
 
-6. **Report to the USER** the audit results, with strategic
-   interpretation: which proof is most economical, which precedent is
-   load-bearing, which factual claims are critical.
+6. **Report** the audit results: which proof is most economical, which
+   precedent is load-bearing, which factual claims are critical.
+
+### Pipeline workflow
+
+For complex cases with multiple competing arguments or multiple
+omissões. Six processing phases (Fase 0 is the raw-material input stage,
+Fases 1–5 are the analytical phases):
+
+```
+Fase 0: Material original (acórdão + apelação)   ← input stage
+        ↓
+Fase 1: Argdown — decomposição argumentativa unificada
+        (anatomia dos argumentos + topologia de ataques)
+        [pipeline/01_argdown.md]
+        ↓
+Fase 2: Lean (LLM-formalizadora) — um teorema por ataque
+        [pipeline/02_briefing_lean.md]
+        ↓
+Fase 3: Análise subjetiva ⇄ Fase 2 (ciclo iterativo)
+        [pipeline/03_analise_subjetiva.md]
+        ↓
+Fase 4: Síntese de derrotas — marcar derrotas com ref. cruzada
+        [pipeline/04_sintese_derrotas.md]
+        ↓
+Fase 5: Tradução forense (a peça)
+```
+
+Um exemplo completo do pipeline aplicado retroativamente a um caso
+real está em `pipeline/exemplo_marilene/`.
+
+## Five principles of the pipeline
+
+**Princípio 1 — Camada subjetiva.** Compilação Lean é condição
+necessária mas não suficiente para marcar derrota. A Fase 4 avalia
+qualidade material dos axiomas (ancoragem, contra-argumento
+enfrentado, formulação razoável). Se algum critério falha, retorno
+à Fase 3 para refinamento — nunca ajuste direto nos axiomas.
+
+**Princípio 2 — Separação Argdown ↔ Síntese de derrotas.** Argdown
+(Fase 1) mapeia ataques sem decidir vencedores. A Síntese de derrotas
+(Fase 4) marca derrotas com base em Lean (Fase 2) + análise subjetiva
+(Fase 3). Misturar os dois transforma a formalização em ritual de
+confirmação.
+
+**Princípio 3 — Prosa jurídica na análise.** A análise da Fase 4
+é escrita em registro de parecer institucional, com qualificadores
+cautelosos ("tem sólida ancoragem em...", "cabe ressalvar contudo
+que..."). Não em jargão de workspace.
+
+**Princípio 4 — Regra dura sobre falha de compilação.** Se um
+teorema não compila na Fase 2, voltar à Fase 1 e revisar.
+Nunca ajustar axiomas para forçar compilação — isso contamina a
+Fase 3 e invalida o pipeline inteiro.
+
+**Princípio 5 — Duas LLMs, contextos separados.** A LLM-formalizadora
+(Fase 2) busca compilar teoremas relevantes; a LLM-analista (Fase 3)
+avalia honestamente. Idealmente em contextos distintos para evitar
+que a análise opere como justificativa do que a mesma LLM formalizou.
 
 ## Lean 4 setup
 
@@ -213,7 +275,7 @@ If `lean` is not on the path:
 
 ```bash
 curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
-  | sh -s -- -y --default-toolchain leanprover/lean4:stable
+  | sh -s -- -y --default-toolchain leanprover/lean4:v4.14.0
 export PATH="$HOME/.elan/bin:$PATH"
 lean --version
 ```
@@ -223,6 +285,79 @@ pure first-order with axioms. A single `.lean` file compiled with `lean
 file.lean` is enough. Avoid pulling in Mathlib unless a specific reason
 arises (e.g., wanting to use lattice algebra for hierarchical norm
 conflicts, which is rare).
+
+## Lean 4 idioms to use
+
+### `variable` for modules with a fixed subject
+
+When a module's axioms all quantify over the same types, declare them
+once with `variable` after `open`. Lean auto-inserts them wherever they
+appear free — the API is unchanged, the source is shorter.
+
+```lean
+namespace Saidas.Aplicar
+open Comum
+variable (d : Decisao) (p : Precedente)
+
+-- Lean adds (d : Decisao) (p : Precedente) automatically:
+axiom InvocaPrecedente : Decisao → Precedente → Prop   -- unchanged (bound)
+
+-- Here d and p appear free → auto-inserted:
+theorem aplica_implica_invoca :
+    AplicaCorretamente d p → InvocaPrecedente d p := by
+  intro h; exact h.1
+-- equivalent to: ∀ (d : Decisao) (p : Precedente), ...
+```
+
+Use `variable` in any Camada 3–6 file where one pair of types dominates.
+Do **not** use it for standalone peça files — the explicitness is
+documentation there.
+
+### `@[simp]` on compound definitions
+
+Mark compound `def`s (Camada 3) with `@[simp]` so the `simp` tactic
+can unfold them automatically. This keeps proof bodies short when
+multiple components need to be accessed in sequence:
+
+```lean
+@[simp]
+def AplicaCorretamente (d : Decisao) (p : Precedente) : Prop :=
+    InvocaPrecedente d p ∧
+    IdentificaFundamentosDeterminantes d p ∧
+    DemonstraAjusteAoCaso d p
+
+-- Proof can then use simp to unfold and split:
+theorem foo (h : AplicaCorretamente d p) : InvocaPrecedente d p := by
+  simp [AplicaCorretamente] at h; exact h.1
+```
+
+All five Saidas compound definitions (`AplicaCorretamente`,
+`DistingueCorretamente`, `SuperaPlenamente`, `ReconheceSuperacaoExterna`,
+`SuperaRacionalmente`) are tagged `@[simp]` in the reference library.
+
+### `sorry` in the adversarial draft phase
+
+The adversarial workflow (steelmanning the acórdão) has two phases:
+
+**Phase 1 — draft**: use the real `sorry` keyword where a step does not
+follow. Lean compiles with warnings; `sorry`s are greppable.
+
+```lean
+theorem acordao_aplica_sumula_279 : Inadmissivel recurso_ParteA := by
+  apply sumula_279
+  · exact ParteA_eh_re
+  · exact ParteA_recurso_do_caso
+  · sorry  -- IMPLICIT PREMISE: why qualificação → reexame probatório?
+```
+
+**Phase 2 — steelman**: replace each `sorry` with the most charitable
+axiom (`STEEL_n`). The file compiles cleanly. `#print axioms` lists every
+STEEL axiom — each is an implicit premise of the acórdão.
+
+Do **not** use comment `-- sorry` as a substitute for the real keyword.
+The real `sorry` compiles, emits trackable warnings, and is greppable
+(`grep -rn sorry`). Comment-based sorrys are invisible to the compiler
+and easy to lose.
 
 ## Output rules
 
@@ -283,12 +418,19 @@ When reporting to the USER, lead with the strategic insight (e.g.,
 "Prova 3 é a mais robusta porque consome um único claim factual"), not
 with the dump of axiom names.
 
-## Example
+## Example files
 
-A complete worked example — a section of a typical embargos
-(Súmula 279 inapplicability) — is at
-`references/template_secao.lean`. It compiles cleanly under Lean 4 and
-demonstrates all six layers plus the audit.
+- `references/template_secao.lean` — single-section formalization,
+  introductory (Súmula 279 inapplicability)
+- `references/template_adversarial.lean` — adversarial mode,
+  single-steelman per gap
+- `references/template_steelmanning.lean` — exhaustive steelmanning
+  of one gap, four variants, four refutation strategies
+- `references/vedacao_motivos_genericos.lean` — the trivialness
+  check (§1º, III) applied to a generic case
+- `pipeline/exemplo_marilene/` — **retroactive pipeline example**
+  on a complete real case (anonymized): five attacks against an
+  acórdão invoking ADI 3.772, from Argdown through defeat synthesis
 
 ## Reference axiom libraries
 
@@ -370,6 +512,19 @@ LEAN_PATH=. lean acordao_marilene.lean   # peça concreta
     - Pontes estruturais: parágrafo único, I (tese de repetitivo/IAC) e
       parágrafo único, II (qualquer conduta do art. 489, §1º) ↔
       caput do art. 1.022
+
+- **`references/ClaimMeta.lean`** — `namespace ClaimMeta`. Metadados
+  opcionais para axiomas da Camada 5. Dois tipos:
+    - `Proveniencia`: `endogena | fonte_declarada String | fonte_inferida
+      | confirmada_pelo_procurador | pendente` — de onde veio o fato.
+    - `StatusClaim`: `necessaria | contingente | pendente` — se o claim
+      era load-bearing no documento de origem.
+  Predicados opcionais `TemProveniencia` e `TemStatus` para anotação
+  formal sem afetar derivabilidade. Sem imports; standalone.
+
+  Importar quando o caso envolver inferência regressiva (acórdão →
+  documentos anteriores) ou quando for necessário registrar grau de
+  confiança dos axiomas antes de protocolar.
 
 - **`references/Tipos.lean`** — `namespace Comum`. Tipos básicos
   compartilhados (Decisao, Precedente, Caso, Tribunal, Servidor,
@@ -486,9 +641,12 @@ LEAN_PATH=. lean acordao_marilene.lean   # peça concreta
 - **`references/tema_1306_stj.lean`** — `namespace STJ.Tema1306`.
   Covers the **inteiro teor** of Tema 1306/STJ (REsp 2.148.059/MA et
   al., Rel. Min. Luis Felipe Salomão, Corte Especial, j. 20.08.2025),
-  not just the two teses fixadas. Includes:
+  not just the two teses fixadas. Landmark case on fundamentação per
+  relationem — when transcription of prior decision counts as proper
+  reasoning and when it doesn't. Includes:
     - Tese 1 (forma bidirecional) and Tese 2
-    - Distinção doutrinária pura vs. integrativa
+    - Distinção doutrinária pura vs. integrativa (the operative distinction
+      for any peça challenging "decisão que apenas transcreve")
     - Apoio expresso em Tema 339/RG STF
     - Esclarecimento dos ED da FEBRABAN sobre o alcance de "novo"
     - Aplicação ao caso paradigma (transcrição ipsis litteris da
@@ -503,21 +661,25 @@ LEAN_PATH=. lean acordao_marilene.lean   # peça concreta
 
 - **Always** for ED/recursos arguing nulidade por ausência de
   fundamentação. The art. 489 axioms are the canonical hooks.
-- **Always** for arguments invoking or refuting fundamentação per
-  relationem. Tema 1306 plugs into art. 489, §1º, IV with the
-  distinção pura/integrativa giving operational sharpness.
+- **Always** for arguments about precedent vinculante. `art_927_cpc`
+  provides `fora_do_espaco_legitimo_nao_fundamentada` — the operational
+  theorem for peças challenging selective or incomplete application.
+- **Always** for arguments about fundamentação per relationem. Tema 1306
+  plugs into art. 489, §1º, IV with the distinção pura/integrativa
+  giving operational sharpness to any challenge of copy-paste reasoning.
 - For peças invoking other precedents, declare those as new axioms in
   Camada 4 of the peça file (do not modify the libraries themselves —
   treat them as immutable).
 
 ### Combining libraries in a peça
 
-Lean 4 single-file compilation (no `lake` project setup) does not
-import across files. To use both libraries in one peça file, copy the
-relevant `axiom` declarations into the peça file and declare each
-shared name only once. Compatible naming is preserved across the
-libraries: `Decisao`, `Argumento`, `Fundamentada`, `Nula` mean the same
-thing in both. See `exemplo_composicao.lean` for the canonical pattern.
+Lean 4 single-file compilation (no `lake` project setup) imports
+across files via `import` + `LEAN_PATH`. Use `import Tipos`,
+`import Saidas.Aplicar`, etc. at the top of the peça file and compile
+with `LEAN_PATH=path/to/references lean file.lean`. Compatible naming
+is preserved: `Decisao`, `Precedente`, `Fundamentada` mean the same
+across all modules. See `pipeline/exemplo_marilene/02_lean_fase2.lean`
+for the canonical composition pattern.
 
 ## Adversarial mode — formalizing the *embargado*, not the *embargante*
 
@@ -774,6 +936,27 @@ named it. The reader should never know how much work it took.
 - `references/vedacao_motivos_genericos.lean` — the trivialness
   check (§1º, III) applied to a generic case, with reusable template
   for any steelman
+
+## Out of scope (future work)
+
+The skill models the **argumentative and decisional layer**: given a decision,
+is it well-reasoned? Does it use precedents correctly? The following are
+explicitly outside the current scope:
+
+- **Canonical process structure**: `PeticaoInicial`, `Contestacao`,
+  `Despacho`, `Sentenca` as typed entities with validity conditions.
+- **Procedural phases**: postulatória, saneamento, instrução, decisória —
+  the sequence of a lawsuit as a state machine.
+- **Admissibility conditions for appeals**: pressupostos processuais
+  (legitimidade, interesse, possibilidade jurídica), tempestividade,
+  preparo.
+- **Petição inicial as a source of claims**: modeling which claims in
+  the initial petition are `necessaria` vs. `contingente` for the
+  cause of action (the `ClaimMeta` types support this but the library
+  does not currently include petição/contestação modules).
+
+Extensions in these directions are additive — they do not require
+changing existing modules.
 
 ## Convention notes specific to the USER
 

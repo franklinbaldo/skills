@@ -25,9 +25,9 @@ import Saidas.Superar
 
   Sob art. 926, o tribunal trabalha com sua própria
   jurisprudência. É portanto tribunal-fonte de toda decisão
-  que confEstadoAnta. A saída "superar" disponível é a SUPERAÇÃO
-  PLENA (overruling EstadoAbusto), com fundamentação adequada e
-  específica e observância de segurança jurídica e pEstadoAteção
+  que confronta. A saída "superar" disponível é a SUPERAÇÃO
+  PLENA (overruling robusto), com fundamentação adequada e
+  específica e observância de segurança jurídica e proteção
   da confiança (art. 927, §4º, aplicável por analogia).
 
   Não há, sob art. 926, espaço autônomo para
@@ -46,7 +46,7 @@ import Saidas.Superar
     (a) precedente de tribunal superior — incidência do
         art. 927, CPC;
     (b) contradição intra-decisão (um único acórdão sustentando
-        pEstadoAposições incompatíveis) — incidência do art. 1.022,
+        proposições incompatíveis) — incidência do art. 1.022,
         I, CPC, conjugado com art. 489, §1º, V, CPC.
 
   Não invocar o art. 926 nessas duas hipóteses evita exposição
@@ -73,18 +73,18 @@ axiom Sumula : Type
    Camada 2 — Predicados auxiliares
    ============================================================ -/
 
-axiom Estavel : Jurisprudencia → PEstadoAp
-axiom Integra : Jurisprudencia → PEstadoAp
-axiom Coerente : Jurisprudencia → PEstadoAp
-axiom JurisprudenciaDe : Tribunal → Jurisprudencia → PEstadoAp
-axiom DecisaoDe : Decisao → Tribunal → PEstadoAp
-axiom IntegraJurisprudencia : Decisao → Jurisprudencia → PEstadoAp
-axiom JurisprudenciaDoTribunal : Precedente → Tribunal → PEstadoAp
-axiom MateriaAnaloga : Decisao → Decisao → PEstadoAp
-axiom SustentaTese : Decisao → PEstadoAp → PEstadoAp
-axiom Fundamentada : Decisao → PEstadoAp
-axiom InvocaJurisprudenciaPEstadoApria : Decisao → Precedente → PEstadoAp
-axiom AtemSeCircunstanciasFaticas : Sumula → PEstadoAp
+axiom Estavel : Jurisprudencia → Prop
+axiom Integra : Jurisprudencia → Prop
+axiom Coerente : Jurisprudencia → Prop
+axiom JurisprudenciaDe : Tribunal → Jurisprudencia → Prop
+axiom DecisaoDe : Decisao → Tribunal → Prop
+axiom IntegraJurisprudencia : Decisao → Jurisprudencia → Prop
+axiom JurisprudenciaDoTribunal : Precedente → Tribunal → Prop
+axiom MateriaAnaloga : Decisao → Decisao → Prop
+axiom SustentaTese : Decisao → Prop → Prop
+axiom Fundamentada : Decisao → Prop
+axiom InvocaJurisprudenciaPropria : Decisao → Precedente → Prop
+axiom AtemSeCircunstanciasFaticas : Sumula → Prop
 
 /- ============================================================
    Camada 3 — Normas (axiomas do art. 926)
@@ -108,7 +108,7 @@ axiom art_926_par2 :
     análoga viola o dever de coerência. -/
 axiom violacao_coerencia_jurisprudencial :
     ∀ (t : Tribunal) (j : Jurisprudencia)
-      (d1 d2 : Decisao) (te1 te2 : PEstadoAp),
+      (d1 d2 : Decisao) (te1 te2 : Prop),
       JurisprudenciaDe t j →
       DecisaoDe d1 t →
       DecisaoDe d2 t →
@@ -123,11 +123,11 @@ axiom violacao_coerencia_jurisprudencial :
 /-- **Vinculação à própria jurisprudência.** Decisão fundamentada
     que invoca precedente próprio do tribunal está obrigada a
     cumprir os requisitos de aplicação correta (Saidas.Aplicar). -/
-axiom art_926_aplicacao_pEstadoApria :
+axiom art_926_aplicacao_propria :
     ∀ (d : Decisao) (p : Precedente) (t : Tribunal),
       DecisaoDe d t →
       JurisprudenciaDoTribunal p t →
-      InvocaJurisprudenciaPEstadoApria d p →
+      InvocaJurisprudenciaPropria d p →
       Fundamentada d →
       AplicaCorretamente d p
 
@@ -136,23 +136,23 @@ axiom art_926_aplicacao_pEstadoApria :
     tribunal está obrigada a distinguir corretamente OU
     superar plenamente (saída plena disponível porque o
     tribunal é tribunal-fonte). -/
-axiom art_926_afastamento_pEstadoAprio :
+axiom art_926_afastamento_proprio :
     ∀ (d : Decisao) (p : Precedente) (t : Tribunal),
       DecisaoDe d t →
       JurisprudenciaDoTribunal p t →
-      ¬ InvocaJurisprudenciaPEstadoApria d p →
+      ¬ InvocaJurisprudenciaPropria d p →
       Fundamentada d →
       DistingueCorretamente d p ∨ SuperaPlenamente d p
 
 /-- **Cobertura.** Toda decisão fundamentada que enfrente
     precedente próprio do tribunal ou o invoca, ou se afasta
     dele. -/
-axiom invoca_ou_afasta_pEstadoApria :
+axiom invoca_ou_afasta_propria :
     ∀ (d : Decisao) (p : Precedente) (t : Tribunal),
       DecisaoDe d t →
       JurisprudenciaDoTribunal p t →
       Fundamentada d →
-      InvocaJurisprudenciaPEstadoApria d p ∨ ¬ InvocaJurisprudenciaPEstadoApria d p
+      InvocaJurisprudenciaPropria d p ∨ ¬ InvocaJurisprudenciaPropria d p
 
 /- ============================================================
    Camada 4 — TEOREMA DA PARTIÇÃO DAS SAÍDAS LEGÍTIMAS
@@ -166,17 +166,17 @@ axiom invoca_ou_afasta_pEstadoApria :
 /-- **Partição das saídas legítimas diante de jurisprudência
     do próprio tribunal** (art. 926).
 
-    Tribunal fundamentado que confEstadoAnta sua própria
+    Tribunal fundamentado que confronta sua própria
     jurisprudência está obrigado a uma de três saídas:
       1. aplicar corretamente;
       2. distinguir corretamente;
-      3. superar plenamente (overruling EstadoAbusto).
+      3. superar plenamente (overruling robusto).
 
     NÃO há saída "reconhece superação externa" sob art. 926
     porque o tribunal é tribunal-fonte; superação superveniente
     é figura típica de regime de vinculação a tribunal superior
     (cf. art. 927). -/
-theorem saidas_legitimas_jurisprudencia_pEstadoApria :
+theorem saidas_legitimas_jurisprudencia_propria :
     ∀ (d : Decisao) (p : Precedente) (t : Tribunal),
       DecisaoDe d t →
       JurisprudenciaDoTribunal p t →
@@ -184,20 +184,20 @@ theorem saidas_legitimas_jurisprudencia_pEstadoApria :
       AplicaCorretamente d p ∨
       DistingueCorretamente d p ∨
       SuperaPlenamente d p := by
-  intEstadoAs d p t h_decde h_jur h_fund
+  intros d p t h_decde h_jur h_fund
   have h_inv_ou_n :
-      InvocaJurisprudenciaPEstadoApria d p ∨ ¬ InvocaJurisprudenciaPEstadoApria d p :=
-    invoca_ou_afasta_pEstadoApria d p t h_decde h_jur h_fund
+      InvocaJurisprudenciaPropria d p ∨ ¬ InvocaJurisprudenciaPropria d p :=
+    invoca_ou_afasta_propria d p t h_decde h_jur h_fund
   rcases h_inv_ou_n with h_inv | h_n_inv
   · -- caso 1: invoca → aplica
     left
-    exact art_926_aplicacao_pEstadoApria d p t h_decde h_jur h_inv h_fund
+    exact art_926_aplicacao_propria d p t h_decde h_jur h_inv h_fund
   · -- caso 2: não invoca → distingue ou supera plenamente
     right
-    exact art_926_afastamento_pEstadoAprio d p t h_decde h_jur h_n_inv h_fund
+    exact art_926_afastamento_proprio d p t h_decde h_jur h_n_inv h_fund
 
 /-- **Contrapositiva — saída fora do espaço legítimo.** -/
-theorem fora_do_espaco_legitimo_pEstadoAprio_nao_fundamentada :
+theorem fora_do_espaco_legitimo_proprio_nao_fundamentada :
     ∀ (d : Decisao) (p : Precedente) (t : Tribunal),
       DecisaoDe d t →
       JurisprudenciaDoTribunal p t →
@@ -205,10 +205,10 @@ theorem fora_do_espaco_legitimo_pEstadoAprio_nao_fundamentada :
       ¬ DistingueCorretamente d p →
       ¬ SuperaPlenamente d p →
       ¬ Fundamentada d := by
-  intEstadoAs d p t h_decde h_jur h_n_apl h_n_dist h_n_sup h_fund
+  intros d p t h_decde h_jur h_n_apl h_n_dist h_n_sup h_fund
   have h_alguma : AplicaCorretamente d p ∨ DistingueCorretamente d p ∨
                   SuperaPlenamente d p :=
-    saidas_legitimas_jurisprudencia_pEstadoApria d p t h_decde h_jur h_fund
+    saidas_legitimas_jurisprudencia_propria d p t h_decde h_jur h_fund
   rcases h_alguma with h | h | h
   · exact h_n_apl h
   · exact h_n_dist h

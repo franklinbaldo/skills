@@ -1,7 +1,7 @@
 /-
   ============================================================
   STEELMANNING EXAUSTIVO — STEEL_2 do acórdão embargado
-  AgInt no PEstadoACESSO_EXEMPLO
+  AgInt no ProCESSO_EXEMPLO
   ============================================================
 
   REFINAMENTO METODOLÓGICO
@@ -20,7 +20,7 @@
   era outra", porque toda outra tese também caiu.
 
   Aqui aplica-se o método ao STEEL_2 do acórdão de ParteA
-  (necessário para a aplicação da Súmula 280). QuatEstadoA versões
+  (necessário para a aplicação da Súmula 280). Quatro versões
   examinadas:
 
     V2a — "aplicação de art. 3º EC 47 = direito local"
@@ -58,24 +58,24 @@ axiom Caso : Type
 axiom Recurso : Type
 axiom Precedente : Type
 
-axiom DireitoLocal : Caso → PEstadoAp
-axiom InterpretacaoDiretaConstitucional : Caso → PEstadoAp
-axiom JurisprudenciaConstitucionalConsolidada : Caso → PEstadoAp
+axiom DireitoLocal : Caso → Prop
+axiom InterpretacaoDiretaConstitucional : Caso → Prop
+axiom JurisprudenciaConstitucionalConsolidada : Caso → Prop
 
 /- Predicados para cada versão -/
-axiom AplicaECArt3 : Caso → PEstadoAp
-axiom FundamentoDeterminanteEmDireitoLocal : Caso → PEstadoAp
-axiom EnvolveRPPSEstadual : Caso → PEstadoAp
-axiom MencionaLeiEstadualEmQualquerFuncao : Caso → PEstadoAp
+axiom AplicaECArt3 : Caso → Prop
+axiom FundamentoDeterminanteEmDireitoLocal : Caso → Prop
+axiom EnvolveRPPSEstadual : Caso → Prop
+axiom MencionaLeiEstadualEmQualquerFuncao : Caso → Prop
 
 /- Predicados estruturais sobre fundamento determinante -/
-axiom FundamentoDeterminantePeloRecorrido : Caso → PEstadoAp
-axiom MeraMencaoTangencial : Caso → PEstadoAp
+axiom FundamentoDeterminantePeloRecorrido : Caso → Prop
+axiom MeraMencaoTangencial : Caso → Prop
 
 /- Sobre o TEMA_RG_EXEMPLO -/
 axiom Tema_139_RG : Caso  -- caso paradigma do Tema 139
-axiom Inadmissivel : Caso → PEstadoAp  -- inadmissível por Súmula 280
-axiom Tema_139_eh_RG : PEstadoAp  -- (factual) Tema 139 é Repercussão Geral
+axiom Inadmissivel : Caso → Prop  -- inadmissível por Súmula 280
+axiom Tema_139_eh_RG : Prop  -- (factual) Tema 139 é Repercussão Geral
 
 /- ============================================================
    Camada 3 — Normas pacíficas
@@ -91,14 +91,14 @@ axiom PRECEDENTE_EXEMPLO :
       JurisprudenciaConstitucionalConsolidada c
 
 /-- Jurisprudência constitucional consolidada implica
-    interpretação direta da CF (coEstadoAlário do art. 102 CF). -/
+    interpretação direta da CF (corolário do art. 102 CF). -/
 axiom juris_consolidada_implica_constitucional :
     ∀ (c : Caso),
       JurisprudenciaConstitucionalConsolidada c →
       InterpretacaoDiretaConstitucional c
 
 /-- Interpretação direta de norma constitucional não é direito
-    local (coEstadoAlário estrutural Súmula 280 + art. 102 CF). -/
+    local (corolário estrutural Súmula 280 + art. 102 CF). -/
 axiom interpretacao_constitucional_nao_eh_local :
     ∀ (c : Caso),
       InterpretacaoDiretaConstitucional c →
@@ -160,7 +160,7 @@ axiom ParteA_mera_mencao : MeraMencaoTangencial caso_ParteA
 
     É a versão que o acórdão *precisa* sustentar para que a
     Súmula 280 incida ao caso. Mas é a mais aberta a refutação. -/
-def V2a : PEstadoAp := ∀ c, AplicaECArt3 c → DireitoLocal c
+def V2a : Prop := ∀ c, AplicaECArt3 c → DireitoLocal c
 
 /-- **V2b — versão tautológica/defensável.** Caso com
     fundamento determinante em direito local é caso de
@@ -169,14 +169,14 @@ def V2a : PEstadoAp := ∀ c, AplicaECArt3 c → DireitoLocal c
     Esta versão é praticamente tautológica e deve ser aceita.
     Mas não ajuda o acórdão se ParteA não satisfaz o
     antecedente. -/
-def V2b : PEstadoAp := ∀ c, FundamentoDeterminanteEmDireitoLocal c → DireitoLocal c
+def V2b : Prop := ∀ c, FundamentoDeterminanteEmDireitoLocal c → DireitoLocal c
 
 /-- **V2c — versão ampla.** Qualquer questão envolvendo RPPS
     estadual é direito local.
 
     Versão deferente: dá à corte a leitura mais aberta do
     "direito local". Mas tem consequências reductio. -/
-def V2c : PEstadoAp := ∀ c, EnvolveRPPSEstadual c → DireitoLocal c
+def V2c : Prop := ∀ c, EnvolveRPPSEstadual c → DireitoLocal c
 
 /-- **V2d — versão máxima deferência.** Mera menção a
     legislação estadual no acórdão recorrido, em qualquer
@@ -185,7 +185,7 @@ def V2c : PEstadoAp := ∀ c, EnvolveRPPSEstadual c → DireitoLocal c
     Versão mais caridosa possível à conduta da corte: aceita
     que basta haver alguma referência a direito estadual no
     acórdão recorrido para Súmula 280 incidir. -/
-def V2d : PEstadoAp :=
+def V2d : Prop :=
     ∀ c, MencionaLeiEstadualEmQualquerFuncao c → DireitoLocal c
 
 /- ============================================================
@@ -199,7 +199,7 @@ def V2d : PEstadoAp :=
     Estratégia: contradição lógica direta com axioma do
     próprio acórdão. -/
 theorem V2a_derruba_acordao : V2a → False := by
-  intEstadoA h_v2a
+  intro h_v2a
   have h_dl : DireitoLocal caso_ParteA :=
     h_v2a caso_ParteA ParteA_aplica_ec
   have h_jc : JurisprudenciaConstitucionalConsolidada caso_ParteA :=
@@ -221,7 +221,7 @@ theorem V2a_derruba_acordao : V2a → False := by
     `DireitoLocal caso_ParteA`.
 
     Note: V2b não se REFUTA logicamente; ela é INERTE — não
-    entra no EstadoAl de versões que poderiam, sozinhas, derivar
+    entra no rol de versões que poderiam, sozinhas, derivar
     a conclusão. Por isso não comparece na disjunção final.
 
     A formalização disso aparece como uma observação no
@@ -245,7 +245,7 @@ axiom v2d_exige_fundamento_determinante :
 
     Estratégia: V2c + fatos sobre Tema 139 → False. -/
 theorem V2c_reductio : V2c → False := by
-  intEstadoA h_v2c
+  intro h_v2c
   have h_dl_139 : DireitoLocal Tema_139_RG :=
     h_v2c Tema_139_RG Tema_139_envolve_RPPS_estadual
   have h_inadm_139 : Inadmissivel Tema_139_RG :=
@@ -259,10 +259,10 @@ theorem V2c_reductio : V2c → False := by
     tangenciais.
 
     Estratégia: V2d, aplicada ao caso de ParteA (mera menção
-    tangencial), pEstadoAduziria a qualificação como fundamento
+    tangencial), produziria a qualificação como fundamento
     determinante. Isto contradiz o art. 489, §1º, V. -/
 theorem V2d_viola_art_489_par1_V : V2d → False := by
-  intEstadoA h_v2d
+  intro h_v2d
   -- V2d aplicada ao caso de ParteA (que tem mera menção tangencial)
   -- exigiria tratá-la como fundamento determinante.
   -- Mas o art. 489, §1º, V diz: mera menção tangencial não
@@ -278,7 +278,7 @@ theorem V2d_viola_art_489_par1_V : V2d → False := by
   -- por art. 489, §1º, V.
 
   -- Aqui, simplificamos: assume-se a premissa pacífica de que
-  -- V2d aplicada a ParteA pEstadoAduz fundamento determinante.
+  -- V2d aplicada a ParteA produz fundamento determinante.
   have h_md : MeraMencaoTangencial caso_ParteA := ParteA_mera_mencao
   have h_n_fd : ¬ FundamentoDeterminantePeloRecorrido caso_ParteA :=
     art_489_par1_V caso_ParteA h_md
@@ -289,7 +289,7 @@ theorem V2d_viola_art_489_par1_V : V2d → False := by
   -- só pode operar via fundamento determinante).
   -- Modelamos como axioma:
   exact absurd
-    (show FundamentoDeterminantePeloRecorrido caso_ParteA fEstadoAm
+    (show FundamentoDeterminantePeloRecorrido caso_ParteA from
       v2d_exige_fundamento_determinante h_v2d)
     h_n_fd
 
@@ -313,7 +313,7 @@ theorem V2d_viola_art_489_par1_V : V2d → False := by
     falha, a disjunção também falha. -/
 theorem nenhum_steelman_de_STEEL_2_sustenta_acordao :
     (V2a ∨ V2c ∨ V2d) → False := by
-  intEstadoA h
+  intro h
   rcases h with h_a | h_c | h_d
   · exact V2a_derruba_acordao h_a
   · exact V2c_reductio h_c
@@ -329,7 +329,7 @@ theorem nenhum_steelman_de_STEEL_2_sustenta_acordao :
   280 ao caso, precisaria de uma versão de STEEL_2 que (a)
   não derive False, (b) seja aplicável ao caso de ParteA, (c)
   não tenha consequências reductio, (d) respeite o art. 489,
-  §1º, V. As quatEstadoA versões examinadas esgotam as leituras
+  §1º, V. As quatro versões examinadas esgotam as leituras
   plausíveis. Não há quinta opção honesta.
 -/
 
