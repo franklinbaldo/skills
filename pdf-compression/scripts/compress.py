@@ -78,9 +78,25 @@ def compress_pdf(input_path, output_path, mode="bw", max_dim=1200, quality=50, s
                 try:
                     out_io = io.BytesIO()
                     if current_mode == "bw":
-                        # Convert to grayscale first, then binarize
-                        gray_img = img.convert("L")
-                        bw_img = gray_img.point(lambda x: 0 if x < 128 else 255, mode="1")
+                        # Try OpenCV adaptive thresholding first for better text quality
+                        try:
+                            import cv2
+                            import numpy as np
+                            # Convert PIL image to grayscale numpy array
+                            gray_arr = np.array(img.convert("L"))
+                            # Apply Gaussian Adaptive Thresholding
+                            # Block size 21 is a good balance; C=15 helps clear background noise
+                            thresh_arr = cv2.adaptiveThreshold(
+                                gray_arr, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                cv2.THRESH_BINARY, 21, 15
+                            )
+                            bw_img = Image.fromarray(thresh_arr).convert("1")
+                        except Exception as e:
+                            # Fallback to standard Pillow thresholding if cv2/numpy fails
+                            print(f"Warning: OpenCV adaptive threshold failed ({e}). Falling back to simple threshold.", file=sys.stderr)
+                            gray_img = img.convert("L")
+                            bw_img = gray_img.point(lambda x: 0 if x < 128 else 255, mode="1")
+                        
                         bw_img.save(out_io, format="TIFF", compression="group4")
                     elif current_mode == "gray":
                         gray_img = img.convert("L")
