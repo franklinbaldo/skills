@@ -5,7 +5,7 @@ import os
 import sys
 from PIL import Image
 
-def compress_pdf(input_path, output_path, mode="bw", max_dim=1200, quality=50, skip_small=150):
+def compress_pdf(input_path, output_path, mode="bw", max_dim=1200, quality=50, skip_small=150, denoise=False, enhance_contrast=False):
     if not os.path.exists(input_path):
         print(f"Error: Input file '{input_path}' does not exist.", file=sys.stderr)
         sys.exit(1)
@@ -84,12 +84,27 @@ def compress_pdf(input_path, output_path, mode="bw", max_dim=1200, quality=50, s
                             import numpy as np
                             # Convert PIL image to grayscale numpy array
                             gray_arr = np.array(img.convert("L"))
+                            
+                            # Optional: Denoising
+                            if denoise:
+                                gray_arr = cv2.fastNlMeansDenoising(gray_arr, None, h=10, templateWindowSize=7, searchWindowSize=21)
+                                
+                            # Optional: Contrast Enhancement (CLAHE)
+                            if enhance_contrast:
+                                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+                                gray_arr = clahe.apply(gray_arr)
+                                
                             # Apply Gaussian Adaptive Thresholding
                             # Block size 21 is a good balance; C=15 helps clear background noise
                             thresh_arr = cv2.adaptiveThreshold(
                                 gray_arr, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                                 cv2.THRESH_BINARY, 21, 15
                             )
+                            
+                            # Optional: Post-binarization Median Blur to remove residual dots
+                            if denoise:
+                                thresh_arr = cv2.medianBlur(thresh_arr, 3)
+                                
                             bw_img = Image.fromarray(thresh_arr).convert("1")
                         except Exception as e:
                             # Fallback to standard Pillow thresholding if cv2/numpy fails
@@ -100,6 +115,18 @@ def compress_pdf(input_path, output_path, mode="bw", max_dim=1200, quality=50, s
                         bw_img.save(out_io, format="TIFF", compression="group4")
                     elif current_mode == "gray":
                         gray_img = img.convert("L")
+                        try:
+                            import cv2
+                            import numpy as np
+                            gray_arr = np.array(gray_img)
+                            if denoise:
+                                gray_arr = cv2.fastNlMeansDenoising(gray_arr, None, h=10, templateWindowSize=7, searchWindowSize=21)
+                            if enhance_contrast:
+                                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+                                gray_arr = clahe.apply(gray_arr)
+                            gray_img = Image.fromarray(gray_arr)
+                        except Exception:
+                            pass
                         gray_img.save(out_io, format="JPEG", quality=quality, optimize=True)
                     else:  # color
                         color_img = img.convert("RGB")
@@ -147,6 +174,8 @@ if __name__ == "__main__":
     parser.add_argument("--max-dim", type=int, default=1200, help="Maximum dimension (width/height) of images (default: 1200)")
     parser.add_argument("--quality", type=int, default=50, help="JPEG quality for color/gray modes (default: 50)")
     parser.add_argument("--skip-small", type=int, default=150, help="Skip images smaller than this width/height (default: 150)")
+    parser.add_argument("--denoise", action="store_true", help="Apply NLM denoising and median blur to remove noise/speckles")
+    parser.add_argument("--enhance-contrast", action="store_true", help="Apply CLAHE adaptive contrast enhancement to flatten lighting/shadows")
     
     args = parser.parse_args()
     compress_pdf(
@@ -155,5 +184,7 @@ if __name__ == "__main__":
         mode=args.mode,
         max_dim=args.max_dim,
         quality=args.quality,
-        skip_small=args.skip_small
+        skip_small=args.skip_small,
+        denoise=args.denoise,
+        enhance_contrast=args.enhance_contrast
     )
