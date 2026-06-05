@@ -5,7 +5,33 @@ import os
 import sys
 from PIL import Image
 
-def compress_pdf(input_path, output_path, mode="bw", max_dim=1200, quality=50, skip_small=150, denoise=False, enhance_contrast=False):
+def is_scanned_page(page):
+    """
+    Detects if a PDF page is a scanned document page or a native digital page.
+    Heuristics:
+    1. If the page has no text at all, it's considered scanned (if it has images).
+    2. If there is a giant image covering > 85% of the page area, and the amount of
+       text is relatively small (< 800 characters), it's likely a scanned page with OCR text.
+    """
+    text = page.get_text().strip()
+    if not text:
+        return True
+        
+    images = page.get_images(full=True)
+    if images:
+        page_area = page.rect.width * page.rect.height
+        for img in images:
+            xref = img[0]
+            rects = page.get_image_rects(xref)
+            if rects:
+                rect = rects[0]
+                img_area = rect.width * rect.height
+                # If image covers most of the page and text is sparse
+                if (img_area / page_area) > 0.85 and len(text) < 800:
+                    return True
+    return False
+
+def compress_pdf(input_path, output_path, mode="auto", max_dim=1200, quality=50, skip_small=150, denoise=False, enhance_contrast=False):
     if not os.path.exists(input_path):
         print(f"Error: Input file '{input_path}' does not exist.", file=sys.stderr)
         sys.exit(1)
@@ -19,6 +45,15 @@ def compress_pdf(input_path, output_path, mode="bw", max_dim=1200, quality=50, s
         
     total_pages = len(doc)
     print(f"Total pages: {total_pages}")
+    
+    # Classify pages to decide on compression strategy
+    print("Classifying pages (scanned vs native digital)...")
+    page_classifications = {}
+    for page_idx in range(total_pages):
+        page_classifications[page_idx] = "scanned" if is_scanned_page(doc[page_idx]) else "digital"
+        
+    scanned_count = sum(1 for c in page_classifications.values() if c == "scanned")
+    print(f"Classification summary: {scanned_count} scanned pages, {total_pages - scanned_count} native digital pages.")
     
     # Map unique xrefs to first page index they appear on
     image_to_page = {}
@@ -69,9 +104,20 @@ def compress_pdf(input_path, output_path, mode="bw", max_dim=1200, quality=50, s
                     background.paste(img.convert("RGBA"), mask=img.convert("RGBA").split()[-1])
                 img = background
                 
-            # Compress based on mode with fallbacks
-            compressed_bytes = None
+            # Determine best strategy
             current_mode = mode
+            if mode == "auto":
+                page_type = page_classifications[page_idx]
+                if page_type == "scanned":
+                    current_mode = "bw"
+                else:
+                    # For digital pages, keep grayscale if original is grayscale, color otherwise
+                    if img.mode in ("L", "1"):
+                        current_mode = "gray"
+                    else:
+                        current_mode = "color"
+            
+            compressed_bytes = None
             
             # Compression loop with fallback logic
             while compressed_bytes is None:
@@ -95,13 +141,12 @@ def compress_pdf(input_path, output_path, mode="bw", max_dim=1200, quality=50, s
                                 gray_arr = clahe.apply(gray_arr)
                                 
                             # Apply Gaussian Adaptive Thresholding
-                            # Block size 21 is a good balance; C=15 helps clear background noise
                             thresh_arr = cv2.adaptiveThreshold(
                                 gray_arr, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                                 cv2.THRESH_BINARY, 21, 15
                             )
                             
-                            # Optional: Post-binarization Median Blur to remove residual dots
+                            # Optional: Post-binarization Median Blur
                             if denoise:
                                 thresh_arr = cv2.medianBlur(thresh_arr, 3)
                                 
@@ -140,7 +185,7 @@ def compress_pdf(input_path, output_path, mode="bw", max_dim=1200, quality=50, s
                     elif current_mode == "gray":
                         current_mode = "color"
                     else:
-                        raise e  # If everything fails, propagate exception
+                        raise e
             
             page.replace_image(xref, stream=compressed_bytes)
             replaced_count += 1
@@ -167,15 +212,15 @@ def compress_pdf(input_path, output_path, mode="bw", max_dim=1200, quality=50, s
         sys.exit(1)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Compress PDF by downscaling and re-encoding images.")
+    parser = argparse.ArgumentParser(description="Compress PDF with smart scanned vs. native page optimization.")
     parser.add_argument("--input", required=True, help="Path to input PDF file")
     parser.add_argument("--output", required=True, help="Path to output compressed PDF file")
-    parser.add_argument("--mode", choices=["bw", "gray", "color"], default="bw", help="Compression mode (default: bw / CCITT Group 4)")
-    parser.add_argument("--max-dim", type=int, default=1200, help="Maximum dimension (width/height) of images (default: 1200)")
+    parser.add_argument("--mode", choices=["bw", "gray", "color", "auto"], default="auto", help="Compression mode (default: auto)")
+    parser.add_argument("--max-dim", type=int, default=1200, help="Maximum dimension of images (default: 1200)")
     parser.add_argument("--quality", type=int, default=50, help="JPEG quality for color/gray modes (default: 50)")
-    parser.add_argument("--skip-small", type=int, default=150, help="Skip images smaller than this width/height (default: 150)")
-    parser.add_argument("--denoise", action="store_true", help="Apply NLM denoising and median blur to remove noise/speckles")
-    parser.add_argument("--enhance-contrast", action="store_true", help="Apply CLAHE adaptive contrast enhancement to flatten lighting/shadows")
+    parser.add_argument("--skip-small", type=int, default=150, help="Skip images smaller than this threshold (default: 150)")
+    parser.add_argument("--denoise", action="store_true", help="Apply NLM denoising to scanned pages")
+    parser.add_argument("--enhance-contrast", action="store_true", help="Apply contrast enhancement to scanned pages")
     
     args = parser.parse_args()
     compress_pdf(

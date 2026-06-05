@@ -13,7 +13,7 @@ This skill allows the agent to compress and optimize large, scanned, or image-he
 Run the helper script using `uv run` to compress a PDF. It dynamically installs the required libraries (`pymupdf` and `pillow`) so they don't have to be pre-installed globally.
 
 ```bash
-uv run --no-project --with pymupdf,pillow C:\Users\frank\workspace\skills\pdf-compression\scripts\compress.py --input <input_pdf> --output <output_pdf> --mode bw
+uv run --no-project --with pymupdf,pillow C:\Users\frank\.gemini\config\plugins\science\skills\pdf_compression\scripts\compress.py --input <input_pdf> --output <output_pdf> --mode bw
 ```
 
 ## Utility Scripts
@@ -24,7 +24,8 @@ The CLI script provides several options to control the compression style and tar
 - `--input` (required): Absolute path to the source PDF file.
 - `--output` (required): Absolute path to save the compressed/optimized PDF file.
 - `--mode`: The compression algorithm to use:
-  - `bw` (default): Converts images to 1-bit Black & White and compresses using CCITT Group 4. This is extremely efficient for scanned text documents (often reducing size by 90%+).
+  - `auto` (default): Automatically detects scanned pages vs. native digital pages. Scanned pages are binarized using `bw` mode (CCITT Group 4) to achieve max compression. Native digital pages preserve color/grayscale images to prevent degradation of charts, logos, and diagrams.
+  - `bw`: Converts images to 1-bit Black & White and compresses using CCITT Group 4.
   - `gray`: Converts images to 8-bit grayscale and compresses with JPEG.
   - `color`: Preserves image colors and compresses with JPEG.
 - `--max-dim` (default: 1200): Downscale any image whose width or height exceeds this value, maintaining aspect ratio.
@@ -35,12 +36,12 @@ The CLI script provides several options to control the compression style and tar
 
 **1. Compress a scanned text document to minimum size (Black & White):**
 ```bash
-uv run --no-project --with pymupdf,pillow C:\Users\frank\workspace\skills\pdf-compression\scripts\compress.py --input "C:\path\to\document.pdf" --output "C:\path\to\compressed.pdf" --mode bw
+uv run --no-project --with pymupdf,pillow C:\Users\frank\.gemini\config\plugins\science\skills\pdf_compression\scripts\compress.py --input "C:\path\to\document.pdf" --output "C:\path\to\compressed.pdf" --mode bw
 ```
 
 **2. Compress a document while preserving colors:**
 ```bash
-uv run --no-project --with pymupdf,pillow C:\Users\frank\workspace\skills\pdf-compression\scripts\compress.py --input "C:\path\to\document.pdf" --output "C:\path\to\compressed.pdf" --mode color --quality 55 --max-dim 1200
+uv run --no-project --with pymupdf,pillow C:\Users\frank\.gemini\config\plugins\science\skills\pdf_compression\scripts\compress.py --input "C:\path\to\document.pdf" --output "C:\path\to\compressed.pdf" --mode color --quality 55 --max-dim 1200
 ```
 
 ## Common Mistakes
