@@ -243,10 +243,76 @@ def get_names(users) -> list[str]:
 
 ---
 
+### 9. Unnecessary Elif/Else and Returns (RET)
+
+**The Problem:** Storing a return value in a temporary variable only to return it on the next line (**RET504**), or using `else` / `elif` branches after a preceding block has already returned or raised (**RET505** / **RET506**).
+
+```python
+# ❌ INCORRECT (Triggers RET504, RET505)
+def check_value(x):
+    if x > 10:
+        result = "large"
+        return result # RET504 (unnecessary variable assignment before return)
+    else: # RET505 (unnecessary else after return statement)
+        return "small"
+```
+
+```python
+#  CORRECT (0 Ruff Warnings)
+def check_value(x) -> str:
+    if x > 10:
+        return "large"
+    return "small"
+```
+
+---
+
+### 10. Simplify Rules (SIM)
+
+**The Problem:** Writing verbose nested `if` statements or manually returning `True`/`False` based on boolean evaluations, which violates **SIM** (flake8-simplify) rules.
+
+```python
+# ❌ INCORRECT (Triggers SIM102, SIM103)
+def is_valid_user(user):
+    if user.is_active:
+        if user.has_permission: # SIM102 (nested ifs can be combined into a single if)
+            return True
+    return False # SIM103 (unnecessary if-else statement returning boolean)
+```
+
+```python
+#  CORRECT (0 Ruff Warnings)
+def is_valid_user(user) -> bool:
+    return bool(user.is_active and user.has_permission)
+```
+
+---
+
+### 11. Legacy Type Annotations & Syntax (UP)
+
+**The Problem:** Using deprecated structures or importing typing wrappers like `List`, `Dict`, `Tuple`, or `Set` under Python 3.9+ instead of using lowercase builtins (`list`, `dict`, `tuple`, `set`). These are flagged under **UP** (pyupgrade) rules.
+
+```python
+# ❌ INCORRECT (Triggers UP006, UP035)
+from typing import List, Dict, Tuple
+
+def process_data(items: List[str]) -> Dict[str, Tuple[int, int]]:
+    pass
+```
+
+```python
+#  CORRECT (Modern Python 3.9+ - 0 Ruff Warnings)
+def process_data(items: list[str]) -> dict[str, tuple[int, int]]:
+    pass
+```
+
+---
+
 ## Checklist Before Ending Your Turn
 
 1. **Format:** Run `ruff format .` to make sure all code matches the project styling.
 2. **Lint:** Run `ruff check .` to inspect all warnings.
 3. **Fix:** Refactor any violations using the clean patterns described above. Do **NOT** use `# noqa`.
+
 
 
