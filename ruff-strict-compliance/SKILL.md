@@ -308,11 +308,99 @@ def process_data(items: list[str]) -> dict[str, tuple[int, int]]:
 
 ---
 
+### 12. Builtin Shadowing (A)
+
+**The Problem:** Naming variables, function arguments, or class attributes after builtins (like `id`, `type`, `list`, `dict`, `dir`, `input`, `min`, `max`). This is flagged under **A001** / **A002** / **A003**.
+
+```python
+# ❌ INCORRECT (Triggers A001, A002)
+def get_user_by_id(id: int): # A002 (shadowing builtin 'id')
+    list = ["active", "inactive"] # A001 (shadowing builtin 'list')
+    return list
+```
+
+```python
+#  CORRECT (0 Ruff Warnings)
+def get_user_by_id(user_id: int) -> list[str]:
+    statuses = ["active", "inactive"]
+    return statuses
+```
+
+---
+
+### 13. Logging Format and F-Strings (G)
+
+**The Problem:** Using f-strings, `.format()`, or string concatenation inside logging statements (e.g. `logger.info(f"User {name} logged in")`). Doing this forces string interpolation immediately, even if the log level is disabled. Ruff flags this under **G004** (logging-f-string).
+
+```python
+# ❌ INCORRECT (Triggers G004)
+import logging
+logger = logging.getLogger(__name__)
+
+def log_event(name):
+    logger.info(f"Processing event: {name}") # G004 (logging statement uses f-string)
+```
+
+```python
+#  CORRECT (Modern Standard - 0 Ruff Warnings)
+def log_event(name: str):
+    logger.info("Processing event: %s", name) # Lazy evaluation (highly performant)
+```
+
+---
+
+### 14. Insecure Assertions & Silently Swallowed Exceptions (S)
+
+**The Problem:** Using `assert` statements to validate program inputs or critical runtime flow in production code (**S101**). When Python is run in optimized mode (`-O`), all assert statements are stripped out, rendering validation useless. Also, catching exceptions and swallowing them using `pass` or `continue` without logging is flagged under **S110** / **S112**.
+
+```python
+# ❌ INCORRECT (Triggers S101, S110)
+def process_age(age: int):
+    assert age >= 0, "Age cannot be negative" # S101 (assert used in production)
+    try:
+        do_something()
+    except ValueError:
+        pass # S110 (try-except-pass detected, exception silently swallowed)
+```
+
+```python
+#  CORRECT (0 Ruff Warnings)
+def process_age(age: int):
+    if age < 0:
+        raise ValueError("Age cannot be negative")
+    try:
+        do_something()
+    except ValueError as e:
+        logger.warning("Swallowing expected error: %s", e)
+```
+
+---
+
+### 15. Commented-Out Code (ERA)
+
+**The Problem:** Leaving commented-out chunks of code in files, which clutters files. This is flagged under **ERA001**.
+
+```python
+# ❌ INCORRECT (Triggers ERA001)
+def calculate(x):
+    # print(f"debugging x: {x}") # ERA001 (Found commented-out code)
+    return x * 2
+```
+
+```python
+#  CORRECT (0 Ruff Warnings)
+def calculate(x: int) -> int:
+    return x * 2
+```
+
+---
+
 ## Checklist Before Ending Your Turn
 
 1. **Format:** Run `ruff format .` to make sure all code matches the project styling.
 2. **Lint:** Run `ruff check .` to inspect all warnings.
 3. **Fix:** Refactor any violations using the clean patterns described above. Do **NOT** use `# noqa`.
+
 
 
 
