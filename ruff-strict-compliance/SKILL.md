@@ -132,8 +132,39 @@ from math import pi, sin, cos
 
 ---
 
+### 5. Blind Exceptions (BLE) & Tryceratops (TRY)
+
+**The Problem:** Coding agents often catch broad, generic exceptions (`Exception`) to suppress errors, triggering rule **BLE001** (Do not catch blind `Exception`). Furthermore, they use generic `Exception` types or embed verbose strings directly in raised errors, triggering Tryceratops (**TRY**) rules (e.g., `TRY002` for custom exceptions, `TRY003` for avoiding long exception messages).
+
+```python
+# ❌ INCORRECT (Triggers BLE001, TRY002, TRY003)
+def process_data(data):
+    try:
+        return data["value"] * 10
+    except Exception: # BLE001 (blind exception caught)
+        raise Exception("We failed to process the data because the value key was missing or malformed") # TRY002 (raw Exception), TRY003 (long string)
+```
+
+```python
+#  CORRECT (Modern Standard - 0 Ruff Warnings)
+class DataProcessingError(Exception):
+    """Custom exception for domain-specific errors."""
+    pass
+
+def process_data(data: dict) -> int:
+    try:
+        return data["value"] * 10
+    except KeyError as e: # Specific Exception
+        raise DataProcessingError("Missing 'value' key") from e
+    except TypeError as e: # Specific Exception
+        raise DataProcessingError("Value is not a number") from e
+```
+
+---
+
 ## Checklist Before Ending Your Turn
 
 1. **Format:** Run `ruff format .` to make sure all code matches the project styling.
 2. **Lint:** Run `ruff check .` to inspect all warnings.
 3. **Fix:** Refactor any violations using the clean patterns described above. Do **NOT** use `# noqa`.
+
