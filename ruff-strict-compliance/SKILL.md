@@ -162,9 +162,91 @@ def process_data(data: dict) -> int:
 
 ---
 
+### 6. Legacy `os.path` vs Modern `pathlib` (PTH)
+
+**The Problem:** Using legacy string-based path manipulations (`os.path.join`, `os.path.exists`, `os.path.abspath`) instead of Python's modern object-oriented `pathlib.Path`. This is a very common legacy habit that Ruff flags under **PTH** rules.
+
+```python
+# ❌ INCORRECT (Triggers PTH118, PTH110, etc.)
+import os
+
+def get_config_content(filename):
+    full_path = os.path.join(os.getcwd(), "config", filename)
+    if os.path.exists(full_path):
+        with open(full_path, "r") as f:
+            return f.read()
+    return ""
+```
+
+```python
+#  CORRECT (Modern Pathlib - 0 Ruff Warnings)
+from pathlib import Path
+
+def get_config_content(filename: str) -> str:
+    full_path = Path.cwd() / "config" / filename
+    if full_path.exists():
+        return full_path.read_text(encoding="utf-8")
+    return ""
+```
+
+---
+
+### 7. Mutable Class Attributes (RUF012)
+
+**The Problem:** Declaring a mutable collection (like a list or dictionary) as a class attribute without explicitly annotating it as a `ClassVar` or defining it inside `__init__`. In standard classes and dataclasses, this results in shared state among all instances, causing subtle bugs. Ruff flags this under **RUF012**.
+
+```python
+# ❌ INCORRECT (Triggers RUF012)
+class ProjectManager:
+    active_tasks: list[str] = [] # RUF012 (mutable class attribute)
+    default_config: dict[str, str] = {} # RUF012
+```
+
+```python
+#  CORRECT (For static class variables)
+from typing import ClassVar
+
+class ProjectManager:
+    active_tasks: ClassVar[list[str]] = [] # Explicitly marked as ClassVar
+    default_config: ClassVar[dict[str, str]] = {}
+```
+
+```python
+#  CORRECT (For instance-specific attributes)
+class ProjectManager:
+    def __init__(self) -> None:
+        self.active_tasks: list[str] = []
+        self.default_config: dict[str, str] = {}
+```
+
+---
+
+### 8. Unnecessary Comprehensions & Functional Wrappers (C4)
+
+**The Problem:** Writing unnecessarily complex or redundant structures like `list([x for x in data])` or functional wrappers instead of clean native syntax. Ruff flags these under **C4** (flake8-comprehensions) rules.
+
+```python
+# ❌ INCORRECT (Triggers C408, C416)
+def get_names(users):
+    names_list = list([u.name for u in users]) # C416 (unnecessary list comprehension inside list())
+    empty_dict = dict() # C408 (unnecessary dict() call, use {} literal instead)
+    return names_list
+```
+
+```python
+#  CORRECT (0 Ruff Warnings)
+def get_names(users) -> list[str]:
+    names_list = [u.name for u in users] # Simple list comprehension
+    empty_dict = {} # Dictionary literal
+    return names_list
+```
+
+---
+
 ## Checklist Before Ending Your Turn
 
 1. **Format:** Run `ruff format .` to make sure all code matches the project styling.
 2. **Lint:** Run `ruff check .` to inspect all warnings.
 3. **Fix:** Refactor any violations using the clean patterns described above. Do **NOT** use `# noqa`.
+
 
