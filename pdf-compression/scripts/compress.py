@@ -207,8 +207,10 @@ def compress_pdf(input_path, output_path, mode="auto", max_dim=1200, quality=50,
         print(f"Original size: {orig_size / 1024 / 1024:.2f} MB")
         print(f"Compressed size: {new_size / 1024 / 1024:.2f} MB")
         print(f"Reduction: {(1 - new_size/orig_size)*100:.1f}%")
+        doc.close()
     except Exception as e:
         print(f"Error saving PDF: {e}", file=sys.stderr)
+        doc.close()
         sys.exit(1)
 
 if __name__ == "__main__":
