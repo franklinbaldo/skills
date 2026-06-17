@@ -192,11 +192,42 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
                 skip_small=150
             )
             final_size = os.path.getsize(final_part_path)
-            
-            # --- Dynamic Rasterization Fallback ---
             size_per_page_kb = (final_size / 1024) / p_count
+            
+            # Step 2a: If still heavy and color, try grayscale compression
+            if size_per_page_kb > threshold_kb and part_mode not in ("bw", "gray"):
+                print(f"Notice: Part {part_idx} is heavy after standard compression ({size_per_page_kb:.1f} KB/page).")
+                print("Trying grayscale image compression to reduce size while preserving text layer...")
+                temp_gray_path = final_part_path + ".gray.pdf"
+                try:
+                    compress_pdf(
+                        input_path=temp_part_path,
+                        output_path=temp_gray_path,
+                        mode="gray",
+                        max_dim=max_dim,
+                        quality=quality,
+                        skip_small=150
+                    )
+                    gray_size = os.path.getsize(temp_gray_path)
+                    if gray_size < final_size:
+                        reduction = (1 - gray_size / final_size) * 100
+                        print(f"Grayscale compression successful: reduced to {gray_size/1024/1024:.2f} MB ({reduction:.1f}% reduction).")
+                        if os.path.exists(final_part_path):
+                            os.remove(final_part_path)
+                        os.rename(temp_gray_path, final_part_path)
+                        final_size = gray_size
+                        size_per_page_kb = (final_size / 1024) / p_count
+                    else:
+                        print("Grayscale compression did not yield a smaller file size.")
+                except Exception as gray_err:
+                    print(f"Warning: Grayscale fallback failed: {gray_err}.", file=sys.stderr)
+                finally:
+                    if os.path.exists(temp_gray_path):
+                        os.remove(temp_gray_path)
+            
+            # Step 2b: If still heavy, apply page rasterization fallback
             if size_per_page_kb > threshold_kb:
-                print(f"Notice: Part {part_idx} is heavy after standard compression ({size_per_page_kb:.1f} KB/page, limit {threshold_kb} KB/page).")
+                print(f"Notice: Part {part_idx} remains heavy ({size_per_page_kb:.1f} KB/page, limit {threshold_kb} KB/page).")
                 print("Applying dynamic page rasterization fallback to bypass vector/form layout bloating...")
                 
                 temp_raster_path = final_part_path + ".raster.pdf"
@@ -213,7 +244,7 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
                     
                     if raster_size < final_size:
                         reduction = (1 - raster_size / final_size) * 100
-                        print(f"Rasterization successful: reduced from {final_size/1024/1024:.2f} MB to {raster_size/1024/1024:.2f} MB ({reduction:.1f}% reduction).")
+                        print(f"Rasterization successful: reduced to {raster_size/1024/1024:.2f} MB ({reduction:.1f}% reduction).")
                         if os.path.exists(final_part_path):
                             os.remove(final_part_path)
                         os.rename(temp_raster_path, final_part_path)
