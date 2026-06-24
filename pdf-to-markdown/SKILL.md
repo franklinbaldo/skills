@@ -39,13 +39,19 @@ The conversion tool (`convert_pdf.py`) supports specific options to control how 
 Determine the case number (CNJ like `7000834-57.2017.8.22.0014` or NUP like `0016650-48.2014.8.22.0001`) from the file name, the file content, or by querying the database.
 
 ### 2. Set Up Output Directory
-Create a directory named after the case number under the target workspace (e.g. `c:\Users\frank\workspace\<case-number>`).
+Create a directory named after the case number under the target workspace (e.g. `<workspace>/<case-number>`).
 
 ### 3. Convert Documents
 Run the python utility `convert_pdf.py` provided in the skill scripts with the appropriate options:
-```powershell
-python c:\Users\frank\workspace\skills\pdf-to-markdown\scripts\convert_pdf.py --input "path/to/process.pdf" --outdir "path/to/output-directory" [--keep-data-uris] [--docintel-endpoint <URL>]
+```bash
+uv run --no-project --with pymupdf,markitdown \
+  <skill-dir>/scripts/convert_pdf.py \
+  --input "path/to/process.pdf" \
+  --outdir "path/to/output-directory" \
+  [--keep-data-uris] [--docintel-endpoint <URL>]
 ```
+
+> `<skill-dir>` is resolved at install time by `skills.sh` (e.g. `~/skills/pdf-to-markdown`).
 
 The script will:
 - Check if `uvx markitdown` is available and run it with the specified options.

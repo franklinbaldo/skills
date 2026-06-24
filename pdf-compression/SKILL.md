@@ -13,8 +13,10 @@ This skill allows the agent to compress and optimize large, scanned, or image-he
 Run the helper script using `uv run` to compress a PDF. It dynamically installs the required libraries (`pymupdf` and `pillow`) so they don't have to be pre-installed globally.
 
 ```bash
-uv run --no-project --with pymupdf,pillow C:\Users\frank\.gemini\config\plugins\science\skills\pdf_compression\scripts\compress.py --input <input_pdf> --output <output_pdf> --mode bw
+uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py --input <input.pdf> --output <output.pdf> --mode bw
 ```
+
+> `<skill-dir>` is the directory where this skill was installed from (e.g. `~/skills/pdf-compression`). Run `skills.sh` from the repo root to install with correct paths resolved automatically.
 
 ## Utility Scripts
 
@@ -45,17 +47,22 @@ Options:
 
 **1. Compress a scanned text document to minimum size (Black & White):**
 ```bash
-uv run --no-project --with pymupdf,pillow C:\path\to\compress.py --input "C:\path\to\document.pdf" --output "C:\path\to\compressed.pdf" --mode bw
+uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py \
+  --input "/path/to/document.pdf" --output "/path/to/compressed.pdf" --mode bw
 ```
 
 **2. Compress a document while preserving colors:**
 ```bash
-uv run --no-project --with pymupdf,pillow C:\path\to\compress.py --input "C:\path\to\document.pdf" --output "C:\path\to\compressed.pdf" --mode color --quality 55 --max-dim 1200
+uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py \
+  --input "/path/to/document.pdf" --output "/path/to/compressed.pdf" \
+  --mode color --quality 55 --max-dim 1200
 ```
 
 **3. Split a PDF by chapters and compress each part (with dynamic rasterization fallback for heavy parts):**
 ```bash
-uv run --no-project --with pymupdf,pillow,opencv-python,numpy C:\path\to\split_and_compress.py --input "C:\path\to\document.pdf" --output-dir "C:\path\to\split_dir" --threshold-kb 150
+uv run --no-project --with pymupdf,pillow,opencv-python,numpy \
+  <skill-dir>/scripts/split_and_compress.py \
+  --input "/path/to/document.pdf" --output-dir "/path/to/split_dir" --threshold-kb 150
 ```
 
 
