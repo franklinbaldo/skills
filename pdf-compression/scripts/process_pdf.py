@@ -383,7 +383,8 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
     input_dir = os.path.dirname(os.path.abspath(input_pdf))
     basename = os.path.basename(input_pdf)
     name_without_ext, ext = os.path.splitext(basename)
-    merged_output_path = os.path.join(input_dir, f"{name_without_ext}_compressed{ext}")
+    suffix = f"_compressed_{nup}up" if nup > 1 else "_compressed"
+    merged_output_path = os.path.join(input_dir, f"{name_without_ext}{suffix}{ext}")
     
     merged_doc.save(merged_output_path)
     merged_doc.close()
@@ -391,6 +392,7 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
     merged_size = os.path.getsize(merged_output_path)
     print(f"Successfully generated merged optimized PDF at: {merged_output_path}")
     print(f"Merged File Size: {merged_size / 1024 / 1024:.2f} MB (Reduction: {(1 - merged_size / orig_total_size)*100:.1f}%)")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Split PDF by bookmarks/TOC and compress each part.")
