@@ -43,6 +43,13 @@ Options:
 - `--mode`: Compression mode (same as `compress.py`). For documents whose bookmark contains "autos digitalizados" or "digitalizado", B&W mode is automatically forced.
 - `--threshold-kb` (default: 150): The size limit in KB per page. If a split PDF exceeds this limit after standard compression, it is automatically rasterized to bypass vector/form bloating.
 
+### `2up.py`
+This script combines consecutive pages of a PDF side-by-side (2-up layout) into a single landscape page in a new PDF, keeping text layers fully searchable.
+
+Options:
+- `--input` (required): Absolute path to the source PDF file.
+- `--output` (required): Absolute path to save the 2-up PDF file.
+
 ### Example Commands:
 
 **1. Compress a scanned text document to minimum size (Black & White):**
@@ -63,6 +70,12 @@ uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py \
 uv run --no-project --with pymupdf,pillow,opencv-python,numpy \
   <skill-dir>/scripts/split_and_compress.py \
   --input "/path/to/document.pdf" --output-dir "/path/to/split_dir" --threshold-kb 150
+```
+
+**4. Combine pages side-by-side (2-up layout):**
+```bash
+uv run --no-project --with pymupdf <skill-dir>/scripts/2up.py \
+  --input "/path/to/document.pdf" --output "/path/to/2up_document.pdf"
 ```
 
 
