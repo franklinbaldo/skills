@@ -6,6 +6,7 @@ import unicodedata
 import fitz  # PyMuPDF
 from PIL import Image
 import io
+import math
 
 try:
     from compress import compress_pdf
@@ -78,7 +79,60 @@ def rasterize_pdf(input_path, output_path, dpi=150, quality=50, mode="gray"):
     new_doc.close()
     doc.close()
 
-def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, quality=50, threshold_kb=150):
+def convert_to_nup(input_path, output_path, nup=1):
+    if nup <= 1:
+        return
+        
+    if nup == 2:
+        cols, rows = 2, 1
+    elif nup == 3:
+        cols, rows = 3, 1
+    elif nup == 4:
+        cols, rows = 2, 2
+    elif nup == 6:
+        cols, rows = 3, 2
+    elif nup == 8:
+        cols, rows = 4, 2
+    elif nup == 9:
+        cols, rows = 3, 3
+    elif nup == 12:
+        cols, rows = 4, 3
+    elif nup == 16:
+        cols, rows = 4, 4
+    else:
+        cols = int(math.ceil(math.sqrt(nup)))
+        rows = int(math.ceil(nup / cols))
+        
+    src = fitz.open(input_path)
+    doc = fitz.open()
+    total_pages = len(src)
+    
+    chunk_size = cols * rows
+    for start_idx in range(0, total_pages, chunk_size):
+        ref_page = src[start_idx]
+        w, h = ref_page.rect.width, ref_page.rect.height
+        
+        out_w = w * cols
+        out_h = h * rows
+        
+        new_page = doc.new_page(width=out_w, height=out_h)
+        
+        for r in range(rows):
+            for c in range(cols):
+                idx = start_idx + (r * cols) + c
+                if idx < total_pages:
+                    x0 = c * w
+                    y0 = r * h
+                    x1 = x0 + w
+                    y1 = y0 + h
+                    rect = fitz.Rect(x0, y0, x1, y1)
+                    new_page.show_pdf_page(rect, src, idx)
+                    
+    doc.save(output_path)
+    doc.close()
+    src.close()
+
+def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, quality=50, threshold_kb=150, nup=1):
     if not os.path.exists(input_pdf):
         print(f"Error: Input file '{input_pdf}' does not exist.", file=sys.stderr)
         sys.exit(1)
@@ -174,6 +228,20 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
         part_doc.save(temp_part_path)
         part_doc.close()
         
+        # 1b. Group pages if nup > 1
+        if nup > 1:
+            print(f"Applying {nup}-up page grouping layout...")
+            temp_nup_path = temp_part_path + ".nup.pdf"
+            convert_to_nup(temp_part_path, temp_nup_path, nup)
+            if os.path.exists(temp_part_path):
+                os.remove(temp_part_path)
+            os.rename(temp_nup_path, temp_part_path)
+            
+        # Get N-up page count
+        part_check = fitz.open(temp_part_path)
+        p_count_nup = len(part_check)
+        part_check.close()
+        
         temp_size = os.path.getsize(temp_part_path)
         
         # 2. Compress the temporary file into the final path
@@ -192,7 +260,7 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
                 skip_small=150
             )
             final_size = os.path.getsize(final_part_path)
-            size_per_page_kb = (final_size / 1024) / p_count
+            size_per_page_kb = (final_size / 1024) / p_count_nup
             
             # Step 2a: If still heavy and color, try grayscale compression
             if size_per_page_kb > threshold_kb and part_mode not in ("bw", "gray"):
@@ -216,7 +284,7 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
                             os.remove(final_part_path)
                         os.rename(temp_gray_path, final_part_path)
                         final_size = gray_size
-                        size_per_page_kb = (final_size / 1024) / p_count
+                        size_per_page_kb = (final_size / 1024) / p_count_nup
                     else:
                         print("Grayscale compression did not yield a smaller file size.")
                 except Exception as gray_err:
@@ -258,13 +326,13 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
                         os.remove(temp_raster_path)
             
             print(f"Final part size: {final_size / 1024 / 1024:.2f} MB (Overall Reduction: {(1 - final_size / temp_size)*100:.1f}%)")
-            parts_info.append((final_part_path, final_size, p_count, title))
+            parts_info.append((final_part_path, final_size, p_count_nup, title))
         except Exception as e:
             print(f"Error compressing part {part_idx}: {e}", file=sys.stderr)
             # Fallback: keep uncompressed version
             os.rename(temp_part_path, final_part_path)
             final_size = os.path.getsize(final_part_path)
-            parts_info.append((final_part_path, final_size, p_count, title))
+            parts_info.append((final_part_path, final_size, p_count_nup, title))
         finally:
             import gc
             import time
@@ -333,6 +401,8 @@ if __name__ == "__main__":
     parser.add_argument("--quality", type=int, default=50, help="JPEG quality (default: 50)")
     parser.add_argument("--threshold-kb", type=int, default=150, help="Threshold in KB per page to trigger rasterization fallback (default: 150)")
 
+    parser.add_argument("--nup", type=int, default=1, help="N-up layout (e.g. 2, 4, 8 pages per page). Default: 1")
+
     args = parser.parse_args()
     split_and_compress_toc(
         input_pdf=args.input,
@@ -340,5 +410,6 @@ if __name__ == "__main__":
         mode=args.mode,
         max_dim=args.max_dim,
         quality=args.quality,
-        threshold_kb=args.threshold_kb
+        threshold_kb=args.threshold_kb,
+        nup=args.nup
     )
