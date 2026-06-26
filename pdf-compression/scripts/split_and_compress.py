@@ -258,13 +258,13 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
                         os.remove(temp_raster_path)
             
             print(f"Final part size: {final_size / 1024 / 1024:.2f} MB (Overall Reduction: {(1 - final_size / temp_size)*100:.1f}%)")
-            parts_info.append((final_part_path, final_size, p_count))
+            parts_info.append((final_part_path, final_size, p_count, title))
         except Exception as e:
             print(f"Error compressing part {part_idx}: {e}", file=sys.stderr)
             # Fallback: keep uncompressed version
             os.rename(temp_part_path, final_part_path)
             final_size = os.path.getsize(final_part_path)
-            parts_info.append((final_part_path, final_size, p_count))
+            parts_info.append((final_part_path, final_size, p_count, title))
         finally:
             import gc
             import time
@@ -283,16 +283,46 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
     doc.close()
     
     print("\n================ SUMMARY ================")
-    total_compressed_size = sum(size for _, size, _ in parts_info)
+    total_compressed_size = sum(size for _, size, _, _ in parts_info)
     print(f"Original Total Size: {orig_total_size / 1024 / 1024:.2f} MB")
     print(f"Compressed Total Size: {total_compressed_size / 1024 / 1024:.2f} MB")
     print(f"Overall Size Reduction: {(1 - total_compressed_size / orig_total_size) * 100:.1f}%")
     print(f"Total parts created: {len(parts_info)}")
     print("Top 20 largest parts:")
     sorted_parts = sorted(parts_info, key=lambda x: x[1], reverse=True)
-    for path, size, p_count in sorted_parts[:20]:
+    for path, size, p_count, _ in sorted_parts[:20]:
         print(f" - {os.path.basename(path)}: {size / 1024 / 1024:.2f} MB ({p_count} pages)")
     print("=========================================")
+
+    # Reassemble optimized parts into a single merged PDF
+    print("\nReassembling optimized parts into a single merged PDF...")
+    merged_doc = fitz.open()
+    merged_toc = []
+    merged_page_offset = 0
+    
+    for final_part_path, _, p_count, part_title in parts_info:
+        part_doc = fitz.open(final_part_path)
+        merged_doc.insert_pdf(part_doc)
+        part_doc.close()
+        
+        # Format the bookmark title nicely
+        clean_title = part_title.replace('_', ' ').replace('-', ' ').strip()
+        merged_toc.append([1, clean_title, merged_page_offset + 1])
+        merged_page_offset += p_count
+        
+    merged_doc.set_toc(merged_toc)
+    
+    input_dir = os.path.dirname(os.path.abspath(input_pdf))
+    basename = os.path.basename(input_pdf)
+    name_without_ext, ext = os.path.splitext(basename)
+    merged_output_path = os.path.join(input_dir, f"{name_without_ext}_compressed{ext}")
+    
+    merged_doc.save(merged_output_path)
+    merged_doc.close()
+    
+    merged_size = os.path.getsize(merged_output_path)
+    print(f"Successfully generated merged optimized PDF at: {merged_output_path}")
+    print(f"Merged File Size: {merged_size / 1024 / 1024:.2f} MB (Reduction: {(1 - merged_size / orig_total_size)*100:.1f}%)")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Split PDF by bookmarks/TOC and compress each part.")
