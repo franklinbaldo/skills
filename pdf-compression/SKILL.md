@@ -34,14 +34,15 @@ The CLI script provides several options to control the compression style and tar
 - `--quality` (default: 50): JPEG compression quality (1-100) for `gray` and `color` modes.
 - `--skip-small` (default: 150): Do not compress images with both dimensions smaller than this threshold (useful to protect logos, icons, and small vector graphics from compression artifacts).
 
-### `split_and_compress.py`
-This script splits a large PDF based on its bookmarks (Table of Contents) and compresses each split document. It also includes an automatic rasterization fallback for heavy vector or form-heavy pages that exceed a specific KB-per-page limit.
+### `process_pdf.py`
+This script splits a large PDF based on its bookmarks (Table of Contents), applies a customizable N-up layout, compresses each split document (with binarization, downscaling, grayscale, and rasterization fallbacks), and re-merges the optimized parts back into a single PDF with rebuilt bookmarks.
 
 Options:
 - `--input` (required): Absolute path to the source PDF file.
 - `--output-dir` (required): Absolute path to the directory to save the split PDFs.
 - `--mode`: Compression mode (same as `compress.py`). For documents whose bookmark contains "autos digitalizados" or "digitalizado", B&W mode is automatically forced.
 - `--threshold-kb` (default: 150): The size limit in KB per page. If a split PDF exceeds this limit after standard compression, it is automatically rasterized to bypass vector/form bloating.
+- `--nup` (default: 1): Combine N pages from the original PDF into a grid on each page of the output PDF (e.g. 2, 4, 8, etc.).
 
 ### `2up.py`
 This script combines consecutive pages of a PDF side-by-side (2-up layout) into a single landscape page in a new PDF, keeping text layers fully searchable.
@@ -65,14 +66,14 @@ uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py \
   --mode color --quality 55 --max-dim 1200
 ```
 
-**3. Split a PDF by chapters and compress each part (with dynamic rasterization fallback for heavy parts):**
+**3. Split, N-up (2-up), compress, and re-merge a PDF (with dynamic rasterization fallback for heavy parts):**
 ```bash
 uv run --no-project --with pymupdf,pillow,opencv-python,numpy \
-  <skill-dir>/scripts/split_and_compress.py \
-  --input "/path/to/document.pdf" --output-dir "/path/to/split_dir" --threshold-kb 150
+  <skill-dir>/scripts/process_pdf.py \
+  --input "/path/to/document.pdf" --output-dir "/path/to/split_dir" --threshold-kb 150 --nup 2
 ```
 
-**4. Combine pages side-by-side (2-up layout):**
+**4. Combine pages side-by-side (2-up layout) of a single PDF file directly:**
 ```bash
 uv run --no-project --with pymupdf <skill-dir>/scripts/2up.py \
   --input "/path/to/document.pdf" --output "/path/to/2up_document.pdf"
