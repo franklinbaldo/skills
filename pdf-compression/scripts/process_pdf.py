@@ -2,6 +2,7 @@ import os
 import sys
 import argparse
 import re
+import shutil
 import unicodedata
 import fitz  # PyMuPDF
 from PIL import Image
@@ -231,8 +232,9 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
 
         # 1a. If also_plain and nup > 1, compress the plain (nup=1) version now
         if nup > 1 and also_plain:
-            plain_part_filename = part_filename.replace(".pdf", "_plain.pdf")
+            plain_part_filename = part_filename[:-4] + "_plain.pdf" if part_filename.endswith(".pdf") else part_filename + "_plain.pdf"
             plain_part_path = os.path.join(output_dir, plain_part_filename)
+            plain_count = end - start
             try:
                 plain_mode = mode
                 if "autos digitalizados" in title.lower() or "digitalizado" in title.lower():
@@ -246,10 +248,11 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
                     skip_small=150,
                 )
                 plain_size = os.path.getsize(plain_part_path)
-                plain_count = end - start
-                parts_info_plain.append((plain_part_path, plain_size, plain_count, title))
             except Exception as plain_err:
-                print(f"Warning: plain compression of part {part_idx} failed: {plain_err}", file=sys.stderr)
+                print(f"Warning: plain compression of part {part_idx} failed: {plain_err}. Keeping uncompressed version.", file=sys.stderr)
+                shutil.copyfile(temp_part_path, plain_part_path)
+                plain_size = os.path.getsize(plain_part_path)
+            parts_info_plain.append((plain_part_path, plain_size, plain_count, title))
 
         # 1b. Group pages if nup > 1
         if nup > 1:
