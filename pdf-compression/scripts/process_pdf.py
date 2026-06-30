@@ -2,7 +2,10 @@ import os
 import sys
 import argparse
 import re
+import shutil
 import unicodedata
+import gc
+import time
 import fitz  # PyMuPDF
 from PIL import Image
 import io
@@ -132,7 +135,106 @@ def convert_to_nup(input_path, output_path, nup=1):
     doc.close()
     src.close()
 
-def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, quality=50, threshold_kb=150, nup=1):
+def _compress_with_size_fallback(temp_path, final_path, mode, title, max_dim, quality, threshold_kb, p_count, part_idx):
+    """Compress temp_path to final_path, applying grayscale/rasterization fallbacks if still
+    above threshold_kb per page afterward. Raises if the initial compress_pdf call fails."""
+    compress_pdf(
+        input_path=temp_path,
+        output_path=final_path,
+        mode=mode,
+        max_dim=max_dim,
+        quality=quality,
+        skip_small=150,
+    )
+    final_size = os.path.getsize(final_path)
+    size_per_page_kb = (final_size / 1024) / p_count
+
+    is_scanned = "autos digitalizados" in title.lower() or "digitalizado" in title.lower()
+
+    # Step a: If still heavy and color, try grayscale compression
+    if size_per_page_kb > threshold_kb and mode not in ("bw", "gray"):
+        print(f"Notice: Part {part_idx} is heavy after standard compression ({size_per_page_kb:.1f} KB/page).")
+        print("Trying grayscale image compression to reduce size while preserving text layer...")
+        temp_gray_path = final_path + ".gray.pdf"
+        try:
+            compress_pdf(
+                input_path=temp_path,
+                output_path=temp_gray_path,
+                mode="gray",
+                max_dim=max_dim,
+                quality=quality,
+                skip_small=150,
+            )
+            gray_size = os.path.getsize(temp_gray_path)
+            if gray_size < final_size:
+                reduction = (1 - gray_size / final_size) * 100
+                print(f"Grayscale compression successful: reduced to {gray_size/1024/1024:.2f} MB ({reduction:.1f}% reduction).")
+                if os.path.exists(final_path):
+                    os.remove(final_path)
+                os.replace(temp_gray_path, final_path)
+                final_size = gray_size
+                size_per_page_kb = (final_size / 1024) / p_count
+            else:
+                print("Grayscale compression did not yield a smaller file size.")
+        except Exception as gray_err:
+            print(f"Warning: Grayscale fallback failed: {gray_err}.", file=sys.stderr)
+        finally:
+            gc.collect()
+            if os.path.exists(temp_gray_path):
+                for attempt in range(1, 11):
+                    try:
+                        os.remove(temp_gray_path)
+                        break
+                    except PermissionError:
+                        if attempt == 10:
+                            print(f"Warning: Could not delete {temp_gray_path}.", file=sys.stderr)
+                        else:
+                            time.sleep(0.3)
+
+    # Step b: If still heavy, apply page rasterization fallback
+    if size_per_page_kb > threshold_kb:
+        print(f"Notice: Part {part_idx} remains heavy ({size_per_page_kb:.1f} KB/page, limit {threshold_kb} KB/page).")
+        print("Applying dynamic page rasterization fallback to bypass vector/form layout bloating...")
+
+        temp_raster_path = final_path + ".raster.pdf"
+        try:
+            raster_mode = "bw" if is_scanned else "gray"
+            rasterize_pdf(
+                input_path=temp_path,
+                output_path=temp_raster_path,
+                dpi=150,
+                quality=quality,
+                mode=raster_mode,
+            )
+            raster_size = os.path.getsize(temp_raster_path)
+
+            if raster_size < final_size:
+                reduction = (1 - raster_size / final_size) * 100
+                print(f"Rasterization successful: reduced to {raster_size/1024/1024:.2f} MB ({reduction:.1f}% reduction).")
+                if os.path.exists(final_path):
+                    os.remove(final_path)
+                os.replace(temp_raster_path, final_path)
+                final_size = raster_size
+            else:
+                print("Rasterization did not yield a smaller file size. Keeping original compressed PDF.")
+        except Exception as re_err:
+            print(f"Warning: Rasterization fallback failed: {re_err}. Keeping original compressed PDF.", file=sys.stderr)
+        finally:
+            gc.collect()
+            if os.path.exists(temp_raster_path):
+                for attempt in range(1, 11):
+                    try:
+                        os.remove(temp_raster_path)
+                        break
+                    except PermissionError:
+                        if attempt == 10:
+                            print(f"Warning: Could not delete {temp_raster_path}.", file=sys.stderr)
+                        else:
+                            time.sleep(0.3)
+
+    return final_size
+
+def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, quality=50, threshold_kb=150, nup=1, also_plain=True):
     if not os.path.exists(input_pdf):
         print(f"Error: Input file '{input_pdf}' does not exist.", file=sys.stderr)
         sys.exit(1)
@@ -206,7 +308,8 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
             
     print(f"Grouped into {len(parts)} unique parts by page start.")
     
-    parts_info = []
+    parts_info = []       # (final_path, size, p_count_nup, title)
+    parts_info_plain = [] # (final_path, size, p_count_orig, title) — nup=1 versions
 
     for part in parts:
         part_idx = part["index"]
@@ -222,12 +325,31 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
         
         print(f"\n--- Processing Part {part_idx}/{len(parts)}: '{title}' (Pages {start+1} to {end}) ---")
         
-        # 1. Extract the pages into a temporary file
+        # 1. Extract the pages into a temporary file (plain, nup=1)
         part_doc = fitz.open()
         part_doc.insert_pdf(doc, from_page=start, to_page=end-1)
         part_doc.save(temp_part_path)
         part_doc.close()
-        
+
+        # 1a. If also_plain and nup > 1, compress the plain (nup=1) version now
+        if nup > 1 and also_plain:
+            plain_part_filename = part_filename[:-4] + "_plain.pdf" if part_filename.endswith(".pdf") else part_filename + "_plain.pdf"
+            plain_part_path = os.path.join(output_dir, plain_part_filename)
+            plain_count = end - start
+            try:
+                plain_mode = mode
+                if "autos digitalizados" in title.lower() or "digitalizado" in title.lower():
+                    plain_mode = "bw"
+                plain_size = _compress_with_size_fallback(
+                    temp_part_path, plain_part_path, plain_mode, title,
+                    max_dim, quality, threshold_kb, plain_count, part_idx,
+                )
+            except Exception as plain_err:
+                print(f"Warning: plain compression of part {part_idx} failed: {plain_err}. Keeping uncompressed version.", file=sys.stderr)
+                shutil.copyfile(temp_part_path, plain_part_path)
+                plain_size = os.path.getsize(plain_part_path)
+            parts_info_plain.append((plain_part_path, plain_size, plain_count, title))
+
         # 1b. Group pages if nup > 1
         if nup > 1:
             print(f"Applying {nup}-up page grouping layout...")
@@ -250,92 +372,21 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
             if "autos digitalizados" in title.lower() or "digitalizado" in title.lower():
                 print("Forcing B&W mode ('bw') for scanned document to achieve maximum compression.")
                 part_mode = "bw"
-                
-            compress_pdf(
-                input_path=temp_part_path,
-                output_path=final_part_path,
-                mode=part_mode,
-                max_dim=max_dim,
-                quality=quality,
-                skip_small=150
+
+            final_size = _compress_with_size_fallback(
+                temp_part_path, final_part_path, part_mode, title,
+                max_dim, quality, threshold_kb, p_count_nup, part_idx,
             )
-            final_size = os.path.getsize(final_part_path)
-            size_per_page_kb = (final_size / 1024) / p_count_nup
-            
-            # Step 2a: If still heavy and color, try grayscale compression
-            if size_per_page_kb > threshold_kb and part_mode not in ("bw", "gray"):
-                print(f"Notice: Part {part_idx} is heavy after standard compression ({size_per_page_kb:.1f} KB/page).")
-                print("Trying grayscale image compression to reduce size while preserving text layer...")
-                temp_gray_path = final_part_path + ".gray.pdf"
-                try:
-                    compress_pdf(
-                        input_path=temp_part_path,
-                        output_path=temp_gray_path,
-                        mode="gray",
-                        max_dim=max_dim,
-                        quality=quality,
-                        skip_small=150
-                    )
-                    gray_size = os.path.getsize(temp_gray_path)
-                    if gray_size < final_size:
-                        reduction = (1 - gray_size / final_size) * 100
-                        print(f"Grayscale compression successful: reduced to {gray_size/1024/1024:.2f} MB ({reduction:.1f}% reduction).")
-                        if os.path.exists(final_part_path):
-                            os.remove(final_part_path)
-                        os.rename(temp_gray_path, final_part_path)
-                        final_size = gray_size
-                        size_per_page_kb = (final_size / 1024) / p_count_nup
-                    else:
-                        print("Grayscale compression did not yield a smaller file size.")
-                except Exception as gray_err:
-                    print(f"Warning: Grayscale fallback failed: {gray_err}.", file=sys.stderr)
-                finally:
-                    if os.path.exists(temp_gray_path):
-                        os.remove(temp_gray_path)
-            
-            # Step 2b: If still heavy, apply page rasterization fallback
-            if size_per_page_kb > threshold_kb:
-                print(f"Notice: Part {part_idx} remains heavy ({size_per_page_kb:.1f} KB/page, limit {threshold_kb} KB/page).")
-                print("Applying dynamic page rasterization fallback to bypass vector/form layout bloating...")
-                
-                temp_raster_path = final_part_path + ".raster.pdf"
-                try:
-                    raster_mode = "bw" if ("autos digitalizados" in title.lower() or "digitalizado" in title.lower()) else "gray"
-                    rasterize_pdf(
-                        input_path=temp_part_path,
-                        output_path=temp_raster_path,
-                        dpi=150,
-                        quality=quality,
-                        mode=raster_mode
-                    )
-                    raster_size = os.path.getsize(temp_raster_path)
-                    
-                    if raster_size < final_size:
-                        reduction = (1 - raster_size / final_size) * 100
-                        print(f"Rasterization successful: reduced to {raster_size/1024/1024:.2f} MB ({reduction:.1f}% reduction).")
-                        if os.path.exists(final_part_path):
-                            os.remove(final_part_path)
-                        os.rename(temp_raster_path, final_part_path)
-                        final_size = raster_size
-                    else:
-                        print("Rasterization did not yield a smaller file size. Keeping original compressed PDF.")
-                except Exception as re_err:
-                    print(f"Warning: Rasterization fallback failed: {re_err}. Keeping original compressed PDF.", file=sys.stderr)
-                finally:
-                    if os.path.exists(temp_raster_path):
-                        os.remove(temp_raster_path)
-            
+
             print(f"Final part size: {final_size / 1024 / 1024:.2f} MB (Overall Reduction: {(1 - final_size / temp_size)*100:.1f}%)")
             parts_info.append((final_part_path, final_size, p_count_nup, title))
         except Exception as e:
             print(f"Error compressing part {part_idx}: {e}", file=sys.stderr)
             # Fallback: keep uncompressed version
-            os.rename(temp_part_path, final_part_path)
+            os.replace(temp_part_path, final_part_path)
             final_size = os.path.getsize(final_part_path)
             parts_info.append((final_part_path, final_size, p_count_nup, title))
         finally:
-            import gc
-            import time
             gc.collect()
             if os.path.exists(temp_part_path):
                 for attempt in range(1, 11):
@@ -362,35 +413,55 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
         print(f" - {os.path.basename(path)}: {size / 1024 / 1024:.2f} MB ({p_count} pages)")
     print("=========================================")
 
-    # Reassemble optimized parts into a single merged PDF
-    print("\nReassembling optimized parts into a single merged PDF...")
-    merged_doc = fitz.open()
-    merged_toc = []
-    merged_page_offset = 0
-    
-    for final_part_path, _, p_count, part_title in parts_info:
-        part_doc = fitz.open(final_part_path)
-        merged_doc.insert_pdf(part_doc)
-        part_doc.close()
-        
-        # Format the bookmark title nicely
-        clean_title = part_title.replace('_', ' ').replace('-', ' ').strip()
-        merged_toc.append([1, clean_title, merged_page_offset + 1])
-        merged_page_offset += p_count
-        
-    merged_doc.set_toc(merged_toc)
-    
+    def _merge_parts(parts_list, output_path):
+        """Merge a list of (path, size, p_count, title) into a single bookmarked PDF."""
+        merged_doc = fitz.open()
+        merged_toc = []
+        merged_page_offset = 0
+        for final_part_path, _, p_count, part_title in parts_list:
+            part_doc = fitz.open(final_part_path)
+            merged_doc.insert_pdf(part_doc)
+            part_doc.close()
+            clean_title = part_title.replace('_', ' ').replace('-', ' ').strip()
+            merged_toc.append([1, clean_title, merged_page_offset + 1])
+            merged_page_offset += p_count
+        merged_doc.set_toc(merged_toc)
+        merged_doc.save(output_path)
+        merged_doc.close()
+        return os.path.getsize(output_path)
+
     input_dir = os.path.dirname(os.path.abspath(input_pdf))
     basename = os.path.basename(input_pdf)
     name_without_ext, ext = os.path.splitext(basename)
-    suffix = f"_compressed_{nup}up" if nup > 1 else "_compressed"
-    merged_output_path = os.path.join(input_dir, f"{name_without_ext}{suffix}{ext}")
-    
-    merged_doc.save(merged_output_path)
-    merged_doc.close()
-    
-    merged_size = os.path.getsize(merged_output_path)
-    print(f"Successfully generated merged optimized PDF at: {merged_output_path}")
+
+    # Always produce the plain _compressed version
+    plain_suffix = "_compressed"
+    plain_merged_path = os.path.join(input_dir, f"{name_without_ext}{plain_suffix}{ext}")
+
+    if nup > 1 and also_plain and parts_info_plain:
+        # Reassemble from the individually-compressed plain parts
+        print("\nReassembling plain (no n-up) optimized parts into a single merged PDF...")
+        plain_merged_size = _merge_parts(parts_info_plain, plain_merged_path)
+        print(f"Plain compressed PDF: {plain_merged_path}")
+        print(f"Plain Merged File Size: {plain_merged_size / 1024 / 1024:.2f} MB (Reduction: {(1 - plain_merged_size / orig_total_size)*100:.1f}%)")
+        # Clean up individual plain parts
+        for plain_path, _, _, _ in parts_info_plain:
+            if os.path.exists(plain_path):
+                os.remove(plain_path)
+    elif nup <= 1:
+        # nup=1 path: merge the regular compressed parts as the plain output
+        print("\nReassembling optimized parts into a single merged PDF...")
+        plain_merged_size = _merge_parts(parts_info, plain_merged_path)
+        print(f"Successfully generated merged optimized PDF at: {plain_merged_path}")
+        print(f"Merged File Size: {plain_merged_size / 1024 / 1024:.2f} MB (Reduction: {(1 - plain_merged_size / orig_total_size)*100:.1f}%)")
+        return  # done — no nup version needed
+
+    # Reassemble the n-up version
+    nup_suffix = f"_compressed_{nup}up"
+    merged_output_path = os.path.join(input_dir, f"{name_without_ext}{nup_suffix}{ext}")
+    print(f"\nReassembling {nup}-up optimized parts into a single merged PDF...")
+    merged_size = _merge_parts(parts_info, merged_output_path)
+    print(f"Successfully generated {nup}-up merged PDF at: {merged_output_path}")
     print(f"Merged File Size: {merged_size / 1024 / 1024:.2f} MB (Reduction: {(1 - merged_size / orig_total_size)*100:.1f}%)")
 
 
@@ -403,7 +474,8 @@ if __name__ == "__main__":
     parser.add_argument("--quality", type=int, default=50, help="JPEG quality (default: 50)")
     parser.add_argument("--threshold-kb", type=int, default=150, help="Threshold in KB per page to trigger rasterization fallback (default: 150)")
 
-    parser.add_argument("--nup", type=int, default=1, help="N-up layout (e.g. 2, 4, 8 pages per page). Default: 1")
+    parser.add_argument("--nup", type=int, default=1, help="N-up layout (e.g. 2, 4, 8 pages per page). Default: 1. When nup>1, a plain _compressed version is also always produced.")
+    parser.add_argument("--no-plain", action="store_true", default=False, help="When nup>1, skip generating the plain _compressed (nup=1) version.")
 
     args = parser.parse_args()
     split_and_compress_toc(
@@ -413,5 +485,6 @@ if __name__ == "__main__":
         max_dim=args.max_dim,
         quality=args.quality,
         threshold_kb=args.threshold_kb,
-        nup=args.nup
+        nup=args.nup,
+        also_plain=not args.no_plain,
     )
