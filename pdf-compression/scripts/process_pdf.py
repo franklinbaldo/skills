@@ -33,21 +33,72 @@ def sanitize_filename(name, max_len=80):
     return name
 
 def parse_bookmark_title(title, part_idx, default_date="0000-00-00"):
-    match = re.match(r"^(.*?)\s*\|\s*NUM:\s*(\d+)\s*\|\s*(\d{2})/(\d{2})/(\d{4})", title)
-    if match:
-        desc = match.group(1).strip()
-        num_id = match.group(2).strip()
-        day, month, year = match.group(3), match.group(4), match.group(5)
+    title = title.strip()
+    part_suffix = f"{part_idx:04d}"
+    
+    desc = title
+    num_id = None
+    isodate = None
+    
+    # 1. PJE Format (e.g., "PETIÇÃO INICIAL | NUM: 115465694 | 08/01/2025 14:13" or with YYYY-MM-DD date)
+    pje_match = re.match(r"^(.*?)\s*\|\s*NUM:\s*(\d+)\s*\|\s*(\d{2})/(\d{2})/(\d{4})", title)
+    if pje_match:
+        desc = pje_match.group(1).strip()
+        num_id = pje_match.group(2).strip()
+        day, month, year = pje_match.group(3), pje_match.group(4), pje_match.group(5)
         isodate = f"{year}-{month}-{day}"
     else:
-        desc = title.strip()
-        num_id = "00000000"
-        isodate = default_date
-        
-    desc_sanitized = sanitize_filename(desc)
-    part_suffix = f"part_{part_idx:04d}"
-    filename = f"{isodate}_{num_id}_{desc_sanitized}_{part_suffix}.pdf"
-    return filename
+        pje_match_iso = re.match(r"^(.*?)\s*\|\s*NUM:\s*(\d+)\s*\|\s*(\d{4})-(\d{2})-(\d{2})", title)
+        if pje_match_iso:
+            desc = pje_match_iso.group(1).strip()
+            num_id = pje_match_iso.group(2).strip()
+            isodate = f"{pje_match_iso.group(3)}-{pje_match_iso.group(4)}-{pje_match_iso.group(5)}"
+
+    # 2. SEI Format (e.g., "Ofício 25345 (0053210931)" or "Relatório 0053213473")
+    if num_id is None:
+        sei_match_paren = re.match(r"^(.*?)\s*\(\s*(\d{7,12})\s*\)\s*$", title)
+        if sei_match_paren:
+            desc = sei_match_paren.group(1).strip()
+            num_id = sei_match_paren.group(2).strip()
+        else:
+            sei_match_space = re.match(r"^(.*?)\s+(\d{7,12})\s*$", title)
+            if sei_match_space:
+                desc = sei_match_space.group(1).strip()
+                num_id = sei_match_space.group(2).strip()
+
+    # 3. Kanoe Format (e.g., "2024-08-30 - Sentença" or "Sentença - 2024-08-30")
+    if isodate is None:
+        kanoe_match_date_first = re.match(r"^(\d{4}-\d{2}-\d{2})\s*-\s*(.*?)$", title)
+        if kanoe_match_date_first:
+            isodate = kanoe_match_date_first.group(1)
+            desc = kanoe_match_date_first.group(2).strip()
+        else:
+            kanoe_match_date_last = re.match(r"^(.*?)\s*-\s*(\d{4}-\d{2}-\d{2})$", title)
+            if kanoe_match_date_last:
+                desc = kanoe_match_date_last.group(1).strip()
+                isodate = kanoe_match_date_last.group(2)
+            else:
+                kanoe_match_slash_first = re.match(r"^(\d{2})/(\d{2})/(\d{4})\s*-\s*(.*?)$", title)
+                if kanoe_match_slash_first:
+                    day, month, year = kanoe_match_slash_first.group(1), kanoe_match_slash_first.group(2), kanoe_match_slash_first.group(3)
+                    isodate = f"{year}-{month}-{day}"
+                    desc = kanoe_match_slash_first.group(4).strip()
+                else:
+                    kanoe_match_slash_last = re.match(r"^(.*?)\s*-\s*(\d{2})/(\d{2})/(\d{4})$", title)
+                    if kanoe_match_slash_last:
+                        desc = kanoe_match_slash_last.group(1).strip()
+                        day, month, year = kanoe_match_slash_last.group(2), kanoe_match_slash_last.group(3), kanoe_match_slash_last.group(4)
+                        isodate = f"{year}-{month}-{day}"
+
+    # Build filename elements: [ordinal]_[isodate-se-houver]_[ID]_[description]
+    parts = [part_suffix]
+    if isodate:
+        parts.append(isodate)
+    if num_id:
+        parts.append(num_id)
+    parts.append(sanitize_filename(desc))
+    
+    return "_".join(parts) + ".pdf"
 
 def rasterize_pdf(input_path, output_path, dpi=150, quality=50, mode="gray"):
     doc = fitz.open(input_path)
