@@ -102,10 +102,12 @@ def parse_bookmark_title(title, part_idx, default_date="0000-00-00", kanoe_dates
                         desc = kanoe_match_slash_last.group(1).strip()
                         day, month, year = kanoe_match_slash_last.group(2), kanoe_match_slash_last.group(3), kanoe_match_slash_last.group(4)
                         isodate = f"{year}-{month}-{day}"
-    # Build filename elements: [ordinal]_[isodate-se-houver]_[description]
+    # Build filename elements: [ordinal]_[isodate-se-houver]_[ID]_[description]
     parts = [part_suffix]
     if isodate:
         parts.append(isodate)
+    if num_id:
+        parts.append(num_id)
     parts.append(sanitize_filename(desc))
     
     return "_".join(parts) + ".pdf"
