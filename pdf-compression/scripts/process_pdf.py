@@ -32,6 +32,8 @@ def sanitize_filename(name, max_len=80):
         name = name[:max_len].strip('_')
     return name
 
+
+
 def parse_bookmark_title(title, part_idx, default_date="0000-00-00"):
     title = title.strip()
     part_suffix = f"{part_idx:04d}"
@@ -66,7 +68,19 @@ def parse_bookmark_title(title, part_idx, default_date="0000-00-00"):
                 desc = sei_match_space.group(1).strip()
                 num_id = sei_match_space.group(2).strip()
 
-    # 3. Kanoe Format (e.g., "2024-08-30 - Sentença" or "Sentença - 2024-08-30")
+    # 3. Kanoe Format (e.g., "121121280 - PETIÇÃO INICIAL (PETIÇÃO INICIAL)")
+    # Check ID-first format
+    if num_id is None:
+        kanoe_id_match = re.match(r"^(\d{7,12})\s*-\s*(.*?)$", title)
+        if kanoe_id_match:
+            num_id = kanoe_id_match.group(1).strip()
+            remaining = kanoe_id_match.group(2).strip()
+            # Clean up common extensions in description
+            desc_clean = re.sub(r'\.pdf\b', '', remaining, flags=re.IGNORECASE)
+            desc_clean = re.sub(r'\.pd\b', '', desc_clean, flags=re.IGNORECASE)
+            desc = desc_clean
+
+    # 4. Kanoe / Fallback Date-based Format (e.g., "2024-08-30 - Sentença" or "Sentença - 2024-08-30")
     if isodate is None:
         kanoe_match_date_first = re.match(r"^(\d{4}-\d{2}-\d{2})\s*-\s*(.*?)$", title)
         if kanoe_match_date_first:
