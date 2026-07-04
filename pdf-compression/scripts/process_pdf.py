@@ -34,7 +34,7 @@ def sanitize_filename(name, max_len=80):
 
 
 
-def parse_bookmark_title(title, part_idx, default_date="0000-00-00"):
+def parse_bookmark_title(title, part_idx, default_date="0000-00-00", kanoe_dates=None):
     title = title.strip()
     part_suffix = f"{part_idx:04d}"
     
@@ -67,7 +67,6 @@ def parse_bookmark_title(title, part_idx, default_date="0000-00-00"):
             if sei_match_space:
                 desc = sei_match_space.group(1).strip()
                 num_id = sei_match_space.group(2).strip()
-
     # 3. Kanoe Format (e.g., "121121280 - PETIÇÃO INICIAL (PETIÇÃO INICIAL)")
     # Check ID-first format
     if num_id is None:
@@ -79,8 +78,8 @@ def parse_bookmark_title(title, part_idx, default_date="0000-00-00"):
             desc_clean = re.sub(r'\.pdf\b', '', remaining, flags=re.IGNORECASE)
             desc_clean = re.sub(r'\.pd\b', '', desc_clean, flags=re.IGNORECASE)
             desc = desc_clean
-
-    # 4. Kanoe / Fallback Date-based Format (e.g., "2024-08-30 - Sentença" or "Sentença - 2024-08-30")
+            if kanoe_dates and num_id in kanoe_dates:
+                isodate = kanoe_dates[num_id]
     if isodate is None:
         kanoe_match_date_first = re.match(r"^(\d{4}-\d{2}-\d{2})\s*-\s*(.*?)$", title)
         if kanoe_match_date_first:
@@ -314,12 +313,32 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
     print(f"Total pages: {total_pages}")
     
     orig_total_size = os.path.getsize(input_pdf)
-    print(f"Original file size: {orig_total_size / 1024 / 1024:.2f} MB")
-    
-    # Extract TOC
     print("Reading bookmarks (TOC) from PDF...")
     toc = doc.get_toc()
     
+    # Try to extract date mapping from Kanoe index table if present
+    kanoe_dates = {}
+    try:
+        start_page = None
+        end_page = None
+        for idx, (level, title, page) in enumerate(toc):
+            if title.lower() in ('índice', 'indice'):
+                start_page = page - 1
+                if idx + 1 < len(toc):
+                    end_page = toc[idx+1][2] - 1
+                break
+        if start_page is not None:
+            if end_page is None:
+                end_page = len(doc)
+            index_text = ""
+            for p in range(start_page, min(end_page, len(doc))):
+                index_text += doc[p].get_text("text") + "\n"
+            for m in re.finditer(r'(\d{2})/(\d{2})/(\d{4})\s+\d{2}:\d{2}:\d{2}.*?(\d{7,12})\s*-\s*', index_text, re.DOTALL):
+                day, month, year, doc_id = m.group(1), m.group(2), m.group(3), m.group(4)
+                kanoe_dates[doc_id] = f"{year}-{month}-{day}"
+    except Exception as parse_err:
+        print(f"Warning: Could not parse Kanoe index table dates: {parse_err}", file=sys.stderr)
+
     level1_items = [item for item in toc if item[0] == 1]
     if not level1_items:
         print("Warning: No level 1 bookmarks found in the PDF. Cannot split by chapters.", file=sys.stderr)
@@ -383,9 +402,7 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
         end = part["end_page"]
         p_count = end - start
         
-        part_filename = parse_bookmark_title(title, part_idx, default_date)
-        
-        temp_part_path = os.path.join(output_dir, f"temp_part_{part_idx:03d}.pdf")
+        part_filename = parse_bookmark_title(title, part_idx, default_date, kanoe_dates=kanoe_dates)
         final_part_path = os.path.join(output_dir, part_filename)
         
         print(f"\n--- Processing Part {part_idx}/{len(parts)}: '{title}' (Pages {start+1} to {end}) ---")
