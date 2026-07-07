@@ -28,8 +28,8 @@ being drafted, not by a literary-critical classification.
 
 ## Curto-seco-confessional
 
-This is the voice's center of gravity (see "The voice, described
-directly" in SKILL.md). Read it first; the others orbit it.
+This is the voice's center of gravity (see `references/voice.md`).
+Read it first; the others orbit it.
 
 The sentence is short. It tells you something true about the author
 and then gets out of the way before you can pity him. You almost
