@@ -14,14 +14,17 @@ Each skill is installed as a directory under `~/.claude/skills/<name>/`, with it
 
 | Skill | Description |
 | --- | --- |
+| [datajud](datajud/SKILL.md) | Query case metadata (docket + movements) from any Brazilian court via the CNJ DataJud public API. |
 | [franklin-blog](franklin-blog/SKILL.md) | Write posts for Franklin's blog, preserving his voice via draft-and-react workflow. |
 | [juris-tjro](juris-tjro/SKILL.md) | Search TJRO (Rondonia court) case law via the JURIS system. |
 | [legal-argument-lean](legal-argument-lean/SKILL.md) | Formalize Brazilian legal arguments (CPC-anchored vicios) in Lean 4. |
 | [llm-work-via-subagents](llm-work-via-subagents/SKILL.md) | Do bulk LLM work with parallel subagents instead of API-key scripts. |
 | [meme-image](meme-image/SKILL.md) | Generate image memes via the memegen.link API for markdown content. |
+| [notebooklm-processos](notebooklm-processos/SKILL.md) | Draft grounded NotebookLM question blocks to verify case-file facts before drafting. |
 | [opf-finetune](opf-finetune/SKILL.md) | Fine-tune the OpenAI Privacy Filter for custom span/token classification. |
 | [pdf-compression](pdf-compression/SKILL.md) | Compress image-heavy or scanned PDFs via downscaling and CCITT G4/JPEG re-encoding. |
 | [pdf-to-markdown](pdf-to-markdown/SKILL.md) | Convert court/process PDFs (PJe, SEI) into structured Markdown per document. |
+| [revisao-minutas](revisao-minutas/SKILL.md) | Adversarial risk triage of draft legal filings before they're submitted. |
 | [ruff-strict-compliance](ruff-strict-compliance/SKILL.md) | Enforce zero-warning Ruff linting and formatting in Python projects. |
 | [text-meme-injection](text-meme-injection/SKILL.md) | Inject text memes (EN and PT-BR) into long-form prose without breaking voice. |
 | [verne-orchestration](verne-orchestration/SKILL.md) | Orchestrate Jules coding sessions via the Verne CLI (uvx verne). |
