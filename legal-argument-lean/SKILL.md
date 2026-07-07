@@ -355,6 +355,13 @@ python3 scripts/axiom_graph.py --input axiom_audit.txt --out docs/axiom_graph.md
 # optional labels: --effect ... --pretensao ... --conclusion <root theorem>
 ```
 
+**This script lives at the repo root, one level above this skill's own
+directory, so it only runs from a full checkout of the skills repo —
+`skills.sh` does not bundle it into a standalone install.** If you only
+have this skill installed (no `scripts/` next to it), skip the script
+and read the `#print axioms` output directly using the classification
+rules above.
+
 Both `scripts/axiom_graph.py` and `scripts/lean_docgen_md.py` are wired
 into CI (`.github/workflows/lean-compile.yml`), which compiles the
 reference modules topologically, audits every `template_*.lean`, and
@@ -426,14 +433,16 @@ under "Example files" below.
 
 For full per-module documentation, generate it from the Lean docstrings
 with the repo-root script — `python3 scripts/lean_docgen_md.py --src
-legal-argument-lean/references --out docs/references` — or read the
-`/-- ... -/` docstrings in the `.lean` files directly.
+legal-argument-lean/references --out docs/references` (only available
+from a full repo checkout, same caveat as `axiom_graph.py` above) — or
+read the `/-- ... -/` docstrings in the `.lean` files directly.
 
-Rules of thumb: art. 489 axioms are the canonical hooks for any nulidade
-por ausência de fundamentação; `art_927_cpc` provides
+Always use art. 489 axioms as the canonical hooks for any nulidade por
+ausência de fundamentação; always use `art_927_cpc`'s
 `fora_do_espaco_legitimo_nao_fundamentada` for challenges to selective
-precedent application; `tema_1306_stj` plugs into art. 489, §1º, IV for
-copy-paste (per relationem) reasoning.
+precedent application; always use `tema_1306_stj` for art. 489, §1º, IV
+copy-paste (per relationem) reasoning. These are the required library
+for their respective argument type, not optional suggestions.
 
 ### Combining libraries in a peça
 
@@ -460,45 +469,36 @@ composition pattern.
 ## Adversarial mode — summary
 
 The most powerful application: formalize the **acórdão under attack**,
-not one's own argument. Loop: translate the acórdão's chain leaving
-`sorry` at every non-deductive step → replace each `sorry` with the
-most charitable axiom (`STEEL_n`) → compile → `#print axioms` exposes
-every implicit premise → attempt to derive `False`. First apply the
-**filtro de trivialidade** (readings conflicting with systemic
-presuppositions are dispatched in a comment, never dignified as
-steelmans); then steelman the surviving readings **exhaustively** —
-3–5 variants per gap, each refuted by its own strategy.
+not one's own argument, via steelman-by-sorry-replacement applied
+**exhaustively** across every plausible reading of each gap. Trivially
+descartable readings are filtered before formalization; the rest get
+3–5 steelman variants each, refuted by one of five strategies.
 
-**MANDATORY trivialness check (art. 489, §1º, III) — never skip.** For
-every steelman `S(c) → P(c)`, find a paradigmatic counterexample `c*`
-(often a precedent the acórdão itself cites) where `P(c*)` is manifestly
-false yet `S(c*)` holds: deriving `P(c*)` contradicts `¬ P(c*)`, so the
-steelman "se prestaria a justificar qualquer outra decisão". Both a
-legal refutation strategy and a sanity check against axioms strong
-enough to compile trivially; when it succeeds it is the most economical
-refutation and the peça should lead with it. Worked example:
-`references/vedacao_motivos_genericos.lean`.
+**One step is MANDATORY and never skipped: the art. 489, §1º, III
+trivialness check.** A steelman that would justify literally any
+outcome — provable by finding a counterexample case the steelman's
+logic also "proves" — fails as a matter of law, not just of formal
+elegance, and is usually the cheapest refutation available.
 
 **Read `references/adversarial.md` in full before any adversarial
-formalization** — it details the loop, the filtro, the variant ladder,
-and all five refutation strategies.
+formalization** — it has the full loop, the filtro, the variant
+ladder, all five refutation strategies, and the trivialness-check
+procedure worked through step by step.
 
 ## From workspace to forensic peça — summary
 
 The Lean exercise is **workspace**, not **product**. The peça describes
-the case, not the path to the conclusion: open with the processual verb
-("o acórdão aplicou a Súmula 280 sem indicar..."), never the analytical
-setup ("cumpre examinar sob qual leitura..."). Any term coined inside
-the Lean file — "steelman", "universalização vazia", "partição", "saída
-legítima" — stays in the Lean file; the peça uses only vocabulary that
-exists in processo civil manuals and ementas. Show conclusions, not the
-discovery process: trivial leituras are silently absent, and the peça
-reads as if the lawyer simply *saw* the vício. Per-paragraph test: does
-this describe the case, or how I reached the conclusion about it?
+the case, not the path to the conclusion: it opens with what the
+acórdão did wrong, never with the analytical setup that led there. Any
+term coined inside the Lean file stays in the Lean file — the peça
+uses only vocabulary from processo civil manuals and ementas. The
+discovery process (discarded readings, the steelmanning trail) stays
+invisible; the peça reads as if the lawyer simply *saw* the vício.
 
 **Read `references/forensic-translation.md` in full before writing the
-peça** — it has the complete workspace→forensic vocabulary table and
-translation rules.
+peça** — it has the worked before/after example, the complete
+workspace→forensic vocabulary table, and the per-paragraph translation
+test.
 
 ## Out of scope (future work)
 

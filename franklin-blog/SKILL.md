@@ -79,10 +79,12 @@ person visibly thinking out loud, exposing himself and carrying the
 reader at the same time. Voicelessness — correct, polished,
 could-be-anyone prose — is the failure mode, not incorrectness.
 
-**Read `references/voice.md` (relative to this skill's directory)
-before drafting and during any voice-fidelity pass.** It holds the
-full profile: the four axes and the concrete moves the drafts are
-judged against.
+The summary above is enough for most drafts. **Read
+`references/voice.md` (relative to this skill's directory) during a
+dedicated voice-fidelity pass, or whenever the one-breath summary
+isn't enough to judge a specific passage** — it holds the full
+profile: the four axes and the concrete moves drafts are judged
+against.
 
 ## Reference pool, not citation pool
 
@@ -93,8 +95,9 @@ none of them, and a post that visibly imitates any single reference
 has failed. The categories, narrative descriptions, author lists, and
 the two hard rules against imitation live in
 `references/reference-pool.md` (relative to this skill's directory).
-**Read that file before drafting a post, and again whenever a
-voice-calibration pass is needed.**
+**Consult that file when a draft needs a wider sampling space or
+during a voice-calibration pass** — it isn't required reading for
+every post.
 
 ## Workflow: draft-first
 
@@ -297,10 +300,12 @@ it does not repeat the closing of either of the two previous posts.
 **No Borges in the body.** Author convention. Bibliographic
 references in "For further reading" / "Para se aprofundar" are fine.
 
-**Visual rest every ~200 words** for non-confessional registers.
-Confessional or emotionally weighted passages may go without; the
-passage decides. Visual rest = image meme, mermaid, SVG, embedded
-map, footnote, pull quote, section header, or text-meme block.
+**Visual rest every ~400–500 words** for non-confessional registers —
+the same cadence meme-image and text-meme-injection use, since the
+three skills share one rhythm. Confessional or emotionally weighted
+passages may go without; the passage decides. Visual rest = image
+meme, mermaid, SVG, embedded map, footnote, pull quote, section
+header, or text-meme block.
 
 ## Visual apparatus
 

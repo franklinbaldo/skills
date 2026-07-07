@@ -25,8 +25,10 @@ for skill_dir in "$REPO_DIR"/*/; do
   cp -R "${skill_dir%/}" "$dest"
 
   # Resolve <skill-dir> placeholder to the installed directory,
-  # since bundled files now live there
-  sed -i "s|<skill-dir>|${dest}|g" "$dest/SKILL.md"
+  # since bundled files now live there. Avoid `sed -i` (GNU and BSD
+  # sed take incompatible flags for it); redirect to a temp file instead.
+  sed "s|<skill-dir>|${dest}|g" "$dest/SKILL.md" > "$dest/SKILL.md.tmp"
+  mv "$dest/SKILL.md.tmp" "$dest/SKILL.md"
 
   echo "✓ $skill_name"
   count=$((count + 1))
