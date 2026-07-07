@@ -32,8 +32,10 @@ Trigger this skill when the user asks for any of:
 - review of a blog post / Substack / essay where they want the register
   lighter
 
-Also load this skill from the `franklin-essay` skill whenever a blog post
-needs text memes — `franklin-essay` defers all text-meme mechanics here.
+The `franklin-essay` skill is a separate, optional skill that is not
+bundled with this one. Where installed, it defers all text-meme
+mechanics here; this skill works standalone and does not assume
+`franklin-essay` is present.
 
 ## When NOT to use
 
@@ -93,8 +95,9 @@ They're set pieces.
 
 ## Stability tiers
 
-Every meme in the catalog below carries a tier. The skill exists to
-lighten prose without dating it; tier informs choice.
+Every meme in the catalogs (see "Meme catalogs" below) carries a tier.
+The skill exists to lighten prose without dating it; tier informs
+choice.
 
 | Tier | Age | Risk of aging | Notes |
 |------|-----|---------------|-------|
@@ -218,269 +221,21 @@ If you can't identify the register confidently, **ask one question**
 before proposing anything: "Esse post é mais ensaio sério com lampejos
 secos, ou é mais um diário Substack onde dá pra ser autoirônico?"
 
-## Catalog — EN inline
+## Meme catalogs
 
-### Stable tier (decade+, safe default)
+The full meme catalogs live in reference files loaded on demand —
+before proposing or injecting any meme, read the catalog matching the
+target language (paths relative to this skill's directory):
 
-- **"rent free [in my head]"** — describes something occupying mental
-  real estate involuntarily. *"That review has been living rent free in
-  my head for a week."*
-- **"the duality of [man / X]"** — naming two contradictory facts
-  simultaneously. *"The duality of doing serious philosophy on a
-  Substack between meme posts."*
-- **"and I took that personally"** — Michael Jordan format; responding
-  emotionally to a general claim. *"Someone said the post was 'fine.'
-  And I took that personally."*
-- **"we live in a society"** — Joker-ironic; mock-grand statement about
-  decline or absurdity. Use sparingly; high cringe ceiling if overused.
-- **"is this loss?"** — recognition signal for hidden / cryptic
-  references. Niche; works in a footnote.
-- **"X has entered the chat"** / **"X has left the chat"** — narrative
-  interjection. *"At this point Kant has entered the chat."*
-- **"this is fine"** — denial in face of disaster. Often paired with
-  the image meme; works inline alone too.
-- **"POV: [scenario]"** — second-person frame. Can be inline tag or
-  full block. *"POV: you've just spent 2,000 words defending Heraclitus
-  and someone asks if you've read Parmenides."*
-- **"and that's on [X]"** — declaration of finality, period. *"That's
-  on epistemology."*
-- **"I'm normal about [X]"** — sarcastic; means very-not-normal.
-  *"I'm normal about this essay collection. I'm normal about it."*
-- **"X-coded"** — adjectival vibe-signal. *"The argument is very
-  Heideggerian-coded."*
-- **"it's giving [X]"** — diagnostic; pattern-recognition of a vibe.
-  *"It's giving Plato cave but the prisoners have Wi-Fi."*
-- **"the [noun] of it all"** — abstract noun-ifying a mood or quality.
-  *"The audacity of it all."*
-- **"main character energy"** — narrative-protagonist register about a
-  real person or stance. *"There's a main character energy to writing
-  in public."*
+- `references/catalog-en.md` — EN inline formats and EN block formats
+- `references/catalog-pt-br.md` — PT-BR inline (brasileiro-internet
+  default, plus the literário-deadpan subset) and PT-BR block formats,
+  including loanword and translation guidance
 
-### In-rotation tier (1–3 years, currently active)
-
-- **"hits different"** — distinguishing one instance by quality of
-  effect. *"Reading Borges in a Porto Velho heat wave hits different."*
-- **"low-key / high-key"** — intensifier modulator. *"Low-key this is
-  the best paragraph in the post."*
-- **"the audacity"** — exclamation at boldness, often paired with a
-  noun. *"The audacity of titling a post 'On Method.'"*
-- **"tell me you're X without telling me you're X"** — indirect
-  identification. *"Tell me you've been reading Wolfram without telling
-  me you've been reading Wolfram."*
-- **"the X is X-ing"** — gerund-loop diagnostic; the math is mathing,
-  the gaslight is gaslighting, the drama is dramaing. *"The
-  hermeneutics is hermeneuticking."* Bends well, ages fast — borderline
-  with risky.
-- **"name a more iconic duo"** — declaration of pairing. *"Plato and
-  the doubt about writing. Name a more iconic duo."*
-- **"[X]-core" suffix** — aesthetic/identity registration. *"Very
-  cottagecore aspirations."* / *"Weirdcore reasoning."*
-- **"the worst person you know just made a great point"** —
-  uncomfortable concession. *"This is the worst-person-you-know-just-
-  made-a-great-point variety of insight."*
-- **"in this essay I will" (subverted)** — admitting and abandoning a
-  thesis. *"In this essay I will not, in fact, argue anything."*
-- **"bestie..."** — gentle correction signal, slightly worried.
-  *"Bestie, that's not what Heraclitus said."*
-- **"iykyk / if you know you know"** — in-group signal. Reads as
-  smug if overused.
-
-### Risky / TikTok-coded tier (will age fast)
-
-Use only if the post benefits from being dated to a moment, or if
-you're deliberately writing a time-capsule piece.
-
-- **"very demure, very mindful"** (2024, Jools Lebron) — performative
-  modesty signal. Already aging.
-- **"delulu"** — affectionate-delusional, positive register.
-- **"girl, [X]"** family — girl dinner, girl math, girl logic, girl
-  career. Gendered template; use with awareness.
-- **"I oop"** — interjection of surprise.
-- **"no thoughts head empty"** — performative blank.
-- **"I'm not crying you're crying"** — emotional deflection.
-- **"the way that [X]"** — Stan-Twitter intensifier. Inline only;
-  no block form.
-- **"ate / served / mother / no crumbs"** — Stan-Twitter cluster.
-  Inline only. Wrong register for Franklin's blog; included for
-  awareness, not deployment.
-
-## Catalog — EN block formats
-
-- **Greentext (>be me)** — green-bordered first-person catastrophe.
-  Render with `>` line prefix in markdown blockquote. 4–8 lines
-  ideal. Native habitat: tech-adjacent, cosmic-confusion, mundane
-  catastrophe. Avoid 4chan-native content (slurs, "based" as
-  approval, ironic bigotry).
-- **Dialogic "nobody: / me:"** — voice-trap for an inappropriate or
-  excessive response.
-  ```
-  nobody:
-  absolutely no one:
-  me, at 3am, reading Plutarch: "what if the E is a vowel"
-  ```
-- **POV: blocks** — second-person scene-setting, 1–3 lines. *"POV:
-  you've just read 'know thyself' as a software requirement."*
-- **Escalation lists ("they don't know that...")** — increasing
-  absurdity. Each line a tier higher.
-- **Galaxy brain tiers** — four increasing levels of "insight,"
-  each more cosmic and more absurd than the last. Works in
-  cosmic-philosophy register; cringe in dry essay register.
-- **"Tag yourself"** — self-identification list. Six to eight
-  short items, each a register-type. *"Tag yourself in this post: I
-  am the third footnote."*
-- **"Type of guy that..."** — caricature enumeration. *"Type of
-  guy who reads De E apud Delphos in the original Greek but
-  pronounces 'epsilon' wrong."*
-- **"[Topic] starter pack"** — visual or textual cluster of
-  associated items. Textual version: bullet list under a header.
-- **"Things I think about a lot:"** — random enumeration, usually
-  3–5 items, deadpan. Works as block opener.
-- **Behavior / alignment chart** — D&D 3×3 grid format (lawful
-  good → chaotic evil, two axes). Block form: a small markdown
-  table.
-- **Before/after diptych** — two-line contrast under "Before:" /
-  "After:" labels.
-
-## Catalog — PT-BR inline
-
-Franklin's PT-BR register is **brasileiro-internet** by default
-(per user decision). The literário-deadpan subset is available for
-posts that explicitly want a drier voice.
-
-### Stable tier — brasileiro-internet
-
-- **"tô passada / tô pasmo"** — incredulity. *"Li o parecer e tô
-  pasmo."*
-- **"morri"** — figurative reaction; laughed / can't even.
-  *"Li o título do livro e morri."*
-- **"passei pano"** — forgiveness / giving cover / excusing.
-  *"Passei pano pro Heráclito porque ele já estava velho quando
-  escreveu isso."* Excellent for ironic concessions.
-- **"que role"** — what a saga. *"Que role o argumento dele aqui."*
-- **"vai dar nada"** — anti-paranoia, dismissive of consequences.
-  *"Vai dar nada — Sócrates só vai tomar uma cicuta."*
-- **"isso é tão Brasil"** — recognition of national absurdity.
-  *"O artigo 5º com um ponto e vírgula no meio. Isso é tão Brasil."*
-- **"tô fora"** — refusal. *"Argumentar com kantiano às onze da
-  noite? Tô fora."*
-- **"ah, vai"** — dismissive interjection.
-- **"que isso, meu Deus"** — exasperation. *"Plotino dizendo que o
-  Uno transcende o ser. Que isso, meu Deus."*
-- **"tá comédia"** — recognition of absurdity as adjective.
-  *"O capítulo sobre causação tá comédia."*
-- **"vish"** — pre-cringe interjection. *"O autor cita Foucault no
-  primeiro parágrafo. Vish."*
-- **"menos, [nome]"** — gentle pushback at performance.
-  *"Menos, Heidegger."* Works on real people, characters, or stances.
-- **"imagina que coisa"** — deadpan irony, after stating something
-  absurd. *"O templo tinha três inscrições e nenhum guia. Imagina
-  que coisa."*
-- **"que aulinha"** — sarcastic praise of an overlong explanation.
-  *"Cinco páginas sobre o que é o ser. Que aulinha."*
-- **"vai dar certo"** — optimism, deployable ironically or
-  unironically. Context-dependent.
-- **"fica difícil"** — resignation deadpan. *"Quando o STF muda de
-  ideia três vezes no mesmo ano, fica difícil."*
-
-### In-rotation tier — brasileiro-internet
-
-- **"Brasil 2026 é um filme"** — current-events absurdity
-  recognition. Time-bound but currently active. *"Senador acusado
-  de fraude vira relator de reforma anti-fraude. Brasil 2026 é um
-  filme."*
-- **"perdoem-me a [nome], mas..."** — apology-as-setup for a
-  contrarian take. *"Perdoem-me a crítica continental, mas isso é
-  só análise mal feita."*
-- **"tá serenando"** — calming-down register, often ironic.
-  *"Depois de quatro páginas de raiva, tá serenando."*
-- **"vibrou"** — resonated chaotically. *"O parágrafo final
-  vibrou."*
-- **"comédia"** (as adjective) — absurd situation. *"O voto vencido
-  é comédia."*
-- **"treta / que treta"** — drama recognition. *"Toda a discussão
-  Foucault × Habermas é uma treta de 1981."*
-- **"mlk vai / vai mlk"** — encouragement. *"Sócrates argumentando
-  na praça. Vai mlk."*
-- **"pelo amor de Deus"** — high exasperation. *"Pelo amor de
-  Deus, leia o original."*
-
-### Subset — literário-deadpan
-
-For posts that want a drier voice. Subset of the above plus:
-
-- **"[nome], te juro"** — affectionate exasperation. *"Plotino, te
-  juro."*
-- **"que isso?"** — deadpan questioning of an absurd claim.
-- **"vai entender"** — interpretive resignation. *"O Stagirita
-  passa metade do livro classificando peixes. Vai entender."*
-- **"imagina ali"** — placeholder for an unspecified scene.
-  *"Imagina ali Diógenes, na cuba, esperando o sol voltar."*
-- **"fica difícil"** (lives in both registers)
-- **"imagina que coisa"** (lives in both registers)
-- **"menos, [nome]"** (lives in both registers)
-
-### Risky tier — PT-BR
-
-- **"modo X ativado"** — performative shift.
-- **"tô numa pira"** — current-state.
-- **"que delicinha"** (ironic, about non-food) — affected register.
-- **"se virem... 🏃"** — passive-aggressive run-away. Emoji-bound;
-  ages with platform.
-- **"core memory unlocked"** (loanword in PT) — TikTok-coded.
-
-### Loanwords that work intact in PT-BR
-
-Brazilian internet readers parse these. Don't translate:
-
-- "main character energy"
-- "POV:"
-- "rent free na minha cabeça"
-- "it's giving" (often pronounced "is givin'")
-- "core memory"
-- "X-coded"
-- "hits different"
-- "the math is mathing" (sometimes "a matemática tá matematicando")
-
-### Translates cleanly (PT)
-
-- "the duality of man" → *"a dualidade do homem"*
-- "we're so back" → *"estamos tão de volta"*
-- "we live in a society" → *"vivemos numa sociedade"* (irony preserved)
-- ">be me" → *">eu"* (works; PT-Brasil 4chan diaspora)
-- "and that's on X" → *"e isso é por causa de X"* (looser)
-
-### Don't translate (loses everything)
-
-- "the [noun] of it all"
-- "ate, no crumbs"
-- "served"
-- "mother"
-
-These need English to keep their stan-Twitter texture. In PT posts:
-either keep in English (italicized) or skip.
-
-## Catalog — PT-BR block formats
-
-- **Greentext (>eu)** — same form, PT first person. 4–8 lines.
-- **Dialogic "ninguém: / eu:"** — direct translation of "nobody: /
-  me:". Works clean.
-- **POV: blocks** — stay in English; "POV:" is universal in PT
-  internet.
-- **"Brasil mode: ativado" + lista de absurdos** — escalation block
-  specific to brasileiro-internet register.
-  ```
-  Brasil mode:
-  - juiz federal tem férias de 60 dias
-  - juiz federal aposentado tem férias de 60 dias
-  - juiz federal aposentado morto tem férias de 60 dias
-  ```
-- **"Tipo de cara que..."** — caricature enumeration, PT version of
-  "Type of guy that..." *"Tipo de cara que cita Foucault no
-  introdução e Habermas na conclusão sem perceber a contradição."*
-- **"Atualização do meu Brasil hoje:"** — running-gag block format,
-  list of absurd current events.
-- **Behavior chart "do brasileiro médio"** — D&D-style grid
-  adapted. Niche but lands.
+Both catalogs are organized by the stability tiers defined above, and
+every entry carries a tier tag — the tier system, the cut test, and
+the core principles in this file apply to every catalog entry. For
+mixed-language posts, read both files.
 
 ## Language: PT vs EN — combined posts
 
@@ -612,7 +367,7 @@ REJECTED
 
 ## Maintenance notes
 
-This catalog will age. Quarterly review:
+The catalogs in `references/` will age. Quarterly review:
 
 - Move items between tiers as cycles run their course (in-rotation
   → stable, or in-rotation → risky-then-cut).
