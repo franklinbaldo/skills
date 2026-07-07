@@ -2,6 +2,7 @@
 name: pdf-compression
 description: >-
   Optimize and compress large image-heavy or scanned PDFs by downscaling images and re-encoding them using CCITT Group 4 (black and white) or JPEG (grayscale/color).
+  Use when compressing scanned PDFs, splitting large court PDFs by bookmarks, applying N-up (2-up/4-up) layouts, or when the user says "compress this PDF" / "PDF muito grande".
 ---
 
 # PDF Compression
@@ -83,4 +84,5 @@ uv run --no-project --with pymupdf <skill-dir>/scripts/2up.py \
 ## Common Mistakes
 
 - **Running with standard Python instead of `uv run`:** Standard python invocation might fail if `pymupdf` or `pillow` are not installed in the global environment. Always run using `uv run --no-project --with pymupdf,pillow`.
+- **Forgetting `process_pdf.py`'s extra dependencies:** `process_pdf.py` also needs `opencv-python` and `numpy` (for binarization/rasterization). Run it with `uv run --no-project --with pymupdf,pillow,opencv-python,numpy` — using only `pymupdf,pillow` will fail with import errors.
 - **Using `bw` mode for photos/color-heavy figures:** If the PDF has high-resolution colored graphs, photos, or diagrams where color is critical, `bw` mode will binarize them into high-contrast black and white, making them unreadable. Use `color` or `gray` mode for these files.
