@@ -1,28 +1,35 @@
-# ⚡ Skills & Expertise
+# skills
 
-Welcome to my skills repository. This space is dedicated to showcasing my technical competencies, project experiences, and continuous learning journey.
+A collection of [Claude Code agent skills](https://docs.claude.com/en/docs/claude-code/skills) by Franklin Baldo, plus Lean 4 tooling for legal formalization.
 
-## 🚀 Core Competencies
+## Install
 
-- **Frontend Development**: React, Next.js, Svelte, TailwindCSS
-- **Backend Systems**: Node.js, Python, Go, PostgreSQL
-- **DevOps & Infrastructure**: Docker, Kubernetes, GitHub Actions
-- **Design Systems**: Modern UI/UX principles, Cobogó design tokens
+```bash
+bash skills.sh
+```
 
-## 🛠️ Tech Stack
+Each skill is installed as a directory under `~/.claude/skills/<name>/`, with its bundled `references/` and `scripts/` copied alongside `SKILL.md`. The `<skill-dir>` placeholder in skill instructions is resolved to the installed path. Re-running the script replaces previous installs (and cleans up flat `<name>.md` files from the old install scheme).
 
-| Category | Tools |
-| :--- | :--- |
-| **Languages** | Javascript (ES6+), Typescript, Python, SQL |
-| **Frameworks** | Next.js, Vite, SvelteKit |
-| **Styling** | Vanilla CSS, CSS Modules, Tailwind |
-| **Databases** | MongoDB, PostgreSQL, Redis |
+## Skills
 
-## 📈 Learning Path
+| Skill | Description |
+| --- | --- |
+| [franklin-blog](franklin-blog/SKILL.md) | Write posts for Franklin's blog, preserving his voice via draft-and-react workflow. |
+| [juris-tjro](juris-tjro/SKILL.md) | Search TJRO (Rondonia court) case law via the JURIS system. |
+| [legal-argument-lean](legal-argument-lean/SKILL.md) | Formalize Brazilian legal arguments (CPC-anchored vicios) in Lean 4. |
+| [llm-work-via-subagents](llm-work-via-subagents/SKILL.md) | Do bulk LLM work with parallel subagents instead of API-key scripts. |
+| [meme-image](meme-image/SKILL.md) | Generate image memes via the memegen.link API for markdown content. |
+| [opf-finetune](opf-finetune/SKILL.md) | Fine-tune the OpenAI Privacy Filter for custom span/token classification. |
+| [pdf-compression](pdf-compression/SKILL.md) | Compress image-heavy or scanned PDFs via downscaling and CCITT G4/JPEG re-encoding. |
+| [pdf-to-markdown](pdf-to-markdown/SKILL.md) | Convert court/process PDFs (PJe, SEI) into structured Markdown per document. |
+| [ruff-strict-compliance](ruff-strict-compliance/SKILL.md) | Enforce zero-warning Ruff linting and formatting in Python projects. |
+| [text-meme-injection](text-meme-injection/SKILL.md) | Inject text memes (EN and PT-BR) into long-form prose without breaking voice. |
+| [verne-orchestration](verne-orchestration/SKILL.md) | Orchestrate Jules coding sessions via the Verne CLI (uvx verne). |
 
-- [ ] Advanced Rust patterns
-- [ ] Distributed Systems Architecture
-- [ ] AI-Agentic Workflows
+## Repo-level scripts
 
----
-*Generated with ❤️ by Antigravity*
+`scripts/` contains Lean 4 tooling used by the [`lean-compile.yml`](.github/workflows/lean-compile.yml) workflow: `lean_docgen_md.py` generates Markdown docs from Lean sources, and `axiom_graph.py` builds an axiom dependency graph. These support the `legal-argument-lean` skill.
+
+## Note
+
+Some skills (franklin-blog, meme-image, text-meme-injection) reference a `franklin-essay` skill that is kept outside this repository.
