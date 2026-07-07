@@ -8,6 +8,8 @@ description: >-
 
 # Verne — Jules Orchestration via CLI
 
+> **Verne vs. in-harness subagents:** use this skill to delegate work to **external Jules API sessions** — async, cross-repo, and they survive after your own session ends. If you just need to fan out parallel LLM work (labeling, reviewing, extracting) **within the current session**, use the `llm-work-via-subagents` skill instead.
+
 **Verne** é a CLI para a Jules API. Rode sempre via `uvx` — não requer instalação permanente.
 
 ```bash
@@ -89,7 +91,7 @@ verne interactive
 
 ## Orchestration Protocol (Master/Worker)
 
-Para tarefas que envolvem múltiplos repositórios, use o padrão Master/Worker documentado em `ORCHESTRATION_PROTOCOL.md` do repositório verne.
+Para tarefas que envolvem múltiplos repositórios, use o padrão Master/Worker documentado em `ORCHESTRATION_PROTOCOL.md` do repositório verne (não deste repo — se o arquivo não existir lá, use o protocolo inline abaixo, incluindo o schema JSON, como fallback).
 
 ### Fluxo básico
 1. **Master session** (sem repo) define estratégia global
@@ -240,4 +242,4 @@ A issue deve descrever **experiência real**, não abstrata:
 - Issues: https://github.com/franklinbaldo/verne/issues
 - Jules API docs: https://developers.google.com/jules/api/reference/rest
 - API key: https://jules.google.com/settings#api
-- Orchestration Protocol: `ORCHESTRATION_PROTOCOL.md` no repo verne
+- Orchestration Protocol: `ORCHESTRATION_PROTOCOL.md` no repo verne (pode não existir; nesse caso, use o protocolo inline e o schema JSON desta skill)

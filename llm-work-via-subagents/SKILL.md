@@ -16,6 +16,8 @@ description: >-
 
 # Do LLM work by spawning subagents, not by scripting an API
 
+> **Scope:** this skill is about fanning out **in-harness subagents within the current session** — synchronous orchestration you supervise. For delegating coding tasks to **external, async Jules sessions** (multi-repo work that keeps running after your session ends), use the `verne-orchestration` skill instead.
+
 ## The default
 
 You are an agent that can spawn subagents. When a task needs an LLM applied to **many

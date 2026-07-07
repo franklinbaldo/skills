@@ -2,6 +2,7 @@
 name: pdf-compression
 description: >-
   Optimize and compress large image-heavy or scanned PDFs by downscaling images and re-encoding them using CCITT Group 4 (black and white) or JPEG (grayscale/color).
+  Use when compressing scanned PDFs, splitting large court PDFs by bookmarks, applying N-up (2-up/4-up) layouts, or when the user says "compress this PDF" / "PDF muito grande".
 ---
 
 # PDF Compression
@@ -16,7 +17,7 @@ Run the helper script using `uv run` to compress a PDF. It dynamically installs 
 uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py --input <input.pdf> --output <output.pdf> --mode bw
 ```
 
-> `<skill-dir>` is the directory where this skill was installed from (e.g. `~/skills/pdf-compression`). Run `skills.sh` from the repo root to install with correct paths resolved automatically.
+> `<skill-dir>` is resolved by `skills.sh` to the *installed* skill directory (e.g. `~/.claude/skills/pdf-compression`), not the source repo checkout. Run `skills.sh` from the repo root to install with the placeholder resolved automatically.
 
 ## Utility Scripts
 
@@ -83,4 +84,5 @@ uv run --no-project --with pymupdf <skill-dir>/scripts/2up.py \
 ## Common Mistakes
 
 - **Running with standard Python instead of `uv run`:** Standard python invocation might fail if `pymupdf` or `pillow` are not installed in the global environment. Always run using `uv run --no-project --with pymupdf,pillow`.
+- **Skipping `process_pdf.py`'s optional dependencies:** `process_pdf.py` can also use `opencv-python` and `numpy` for adaptive thresholding. If they're missing, it falls back automatically to plain Pillow thresholding (with a warning) rather than failing — add `uv run --no-project --with pymupdf,pillow,opencv-python,numpy` only if you want the OpenCV-based enhancement.
 - **Using `bw` mode for photos/color-heavy figures:** If the PDF has high-resolution colored graphs, photos, or diagrams where color is critical, `bw` mode will binarize them into high-contrast black and white, making them unreadable. Use `color` or `gray` mode for these files.

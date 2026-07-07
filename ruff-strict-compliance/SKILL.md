@@ -1,7 +1,10 @@
 ---
 name: ruff-strict-compliance
 description: >-
-  Enforces strict compliance with Ruff linting and formatting rules. Stops agents from using '# noqa' comments, dismissing warnings as "stylistic," or claiming rules do not apply to CLI tools like Typer.
+  Enforces strict, zero-warning compliance with Ruff linting and formatting.
+  Use when writing or editing Python in a Ruff-linted project, fixing `ruff check`
+  or `ruff format` failures, or when tempted to add `# noqa` / dismiss a warning
+  as "stylistic" or "not applicable to CLI tools like Typer."
 ---
 
 # Ruff Strict Compliance
@@ -15,7 +18,7 @@ This skill enforces **strict, zero-warning compliance** with the Ruff linter and
 
 ### 1. No Excuses, No Dismissals
 * You are **never** allowed to dismiss a Ruff warning as "purely stylistic," "optional," or "non-critical." 
-* You must fix the underlying code pattern. If Ruff flags it, it is a code smell.
+* You must fix the underlying code pattern. If a rule the project has enabled flags it, treat it as a code smell — note that several rule families used below (PTH, TRY, BLE, G, ERA, S) are opt-in strict families that only fire when the project enables them (see "Enabling these rules").
 
 ### 2. Zero-Tolerance for `# noqa`
 * Do **NOT** add `# noqa` or `# type: ignore` comments to bypass Ruff alerts.
@@ -23,6 +26,20 @@ This skill enforces **strict, zero-warning compliance** with the Ruff linter and
 
 ### 3. Verification
 * After editing any Python code, you must run `ruff check` and `ruff format` to verify compliance. Do not wait for the user to report lint failures.
+
+---
+
+## Enabling these rules
+
+Ruff's default `select` only enables `E4`, `E7`, `E9`, and `F`. Several recipes below (PTH, TRY, BLE, G, ERA, S, plus B, C4, SIM, RET, UP, A, RUF) cover **opt-in** families that only fire if the project enables them in `pyproject.toml`:
+
+```toml
+[tool.ruff.lint]
+select = ["ALL"]  # or explicitly: ["E", "F", "B", "C4", "SIM", "RET", "UP", "A", "PTH", "TRY", "BLE", "G", "ERA", "S", "RUF"]
+ignore = ["D", "ANN", "COM812"]  # common ignores; tune to the project
+```
+
+If the project has no such config, propose adding one rather than assuming these rules are active.
 
 ---
 
@@ -83,7 +100,7 @@ def process_items(items: list = [], config: dict = dict()):
 #  CORRECT
 from typing import Optional
 
-def process_items(items: Optional[list] = None, config: Optional[dir] = None):
+def process_items(items: Optional[list] = None, config: Optional[dict] = None):
     if items is None:
         items = []
     if config is None:
@@ -351,7 +368,7 @@ def log_event(name: str):
 
 ### 14. Insecure Assertions & Silently Swallowed Exceptions (S)
 
-**The Problem:** Using `assert` statements to validate program inputs or critical runtime flow in production code (**S101**). When Python is run in optimized mode (`-O`), all assert statements are stripped out, rendering validation useless. Also, catching exceptions and swallowing them using `pass` or `continue` without logging is flagged under **S110** / **S112**.
+**The Problem:** Using `assert` statements to validate program inputs or critical runtime flow in production code (**S101**). When Python is run in optimized mode (`-O`), all assert statements are stripped out, rendering validation useless. Also, an exception handler whose body is just `pass` is flagged under **S110** (try-except-pass), and one that is just `continue` under **S112** (try-except-continue) — these fire on the bare `pass`/`continue` handler itself, regardless of anything else; resolve them by actually handling, logging, or re-raising the exception.
 
 ```python
 # ❌ INCORRECT (Triggers S101, S110)
