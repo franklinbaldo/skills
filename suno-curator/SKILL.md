@@ -51,7 +51,8 @@ node <skill-dir>/scripts/audit-catalog.mjs --repo . --format markdown
 
 The audit fetches the profile once, compares by `sunoId`, tolerates the expected
 PT/EN pair sharing one ID, and reports missing clips, blog-only IDs,
-same-language duplicates, metadata gaps, and title drift.
+same-language duplicates, metadata gaps, genre violations, and title drift.
+Use `--profile-json <snapshot.json>` for offline or reproducible evaluation.
 
 For the detailed current data contract, read
 [`references/blog-contract.md`](references/blog-contract.md). For exact session
@@ -132,7 +133,14 @@ Use for one song or one PT/EN pair.
 
 ## Validate before proposing a PR
 
-Use the commands that the current checkout declares. At minimum, when relevant:
+Validate this skill's deterministic audit itself:
+
+```bash
+node --test <skill-dir>/scripts/audit-catalog.test.mjs
+```
+
+Then use the commands declared by the current blog checkout. At minimum, when
+relevant:
 
 ```bash
 npx prettier --check .
