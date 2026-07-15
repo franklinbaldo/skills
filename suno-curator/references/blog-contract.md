@@ -133,6 +133,28 @@ Operational rules:
 The bundled audit script implements this read-only comparison and supports
 `--profile-json` for offline evaluation.
 
+### Useful clip fields
+
+`id` (UUID), `title`, `audio_url`, `image_url`, `is_public`, `created_at`,
+`metadata.prompt` (lyrics), `metadata.tags` (the Suno style prompt),
+`metadata.duration`. The profile response also carries `playlists` (id, name) —
+read them to understand how Franklin groups the work on the Suno side.
+
+### Canonical URLs
+
+- Song: `https://suno.com/song/<id>`
+- Playlist: `https://suno.com/playlist/<id>`
+- Embed: `https://suno.com/embed/<id>`
+
+## Commit and PR conventions
+
+- Commits: `tipo(escopo): resumo` — e.g. `feat(music): sync 4 new songs from
+suno`, `chore(music): rfc-0011 genre cleanup`. Hrönir evaluation sessions use
+  their own format (`hronir: <N> matches — <agent-id>`).
+- Prose in commits/docs is Portuguese; code and identifiers English; music
+  posts PT by default (see the blog's `CLAUDE.md`, "Convenções do repo").
+- Merge commits, never squash.
+
 ## Known drift to check
 
 At the time this reference was written, both

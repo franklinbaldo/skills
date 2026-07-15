@@ -77,6 +77,9 @@ For each candidate, gather:
   genuinely supports the claim.
 - Cap highlights at a useful decision set, normally 3–5.
 - Explain exclusions when an obvious popular or high-ranked song is not chosen.
+- Check series continuity concretely — e.g. the _Moving Window_ series (12+
+  numbered parts): verify ordering and gaps, and whether Suno-side playlists
+  still reflect the catalog's actual grouping.
 - Separate recommendations into:
   - blog changes the agent may implement;
   - Suno-side actions Franklin must decide and perform.
