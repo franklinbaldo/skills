@@ -41,7 +41,7 @@ genre:
   await writeFile(
     profile,
     JSON.stringify({
-      num_total_clips: 2,
+      num_total_clips: 3,
       clips: [
         {
           id: "clip-1",
@@ -51,6 +51,7 @@ genre:
           metadata: { duration: 120 },
         },
         { id: "clip-2", title: "Two", is_public: true, metadata: {} },
+        { id: "clip-private", title: "Private", is_public: false, metadata: {} },
       ],
     })
   );
