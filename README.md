@@ -26,7 +26,7 @@ Each skill is installed as a directory under `~/.claude/skills/<name>/`, with it
 | [pdf-to-markdown](pdf-to-markdown/SKILL.md) | Convert court/process PDFs (PJe, SEI) into structured Markdown per document. |
 | [revisao-minutas](revisao-minutas/SKILL.md) | Adversarial risk triage of draft legal filings before they're submitted. |
 | [ruff-strict-compliance](ruff-strict-compliance/SKILL.md) | Enforce zero-warning Ruff linting and formatting in Python projects. |
-| [suno-curator](suno-curator/SKILL.md) | Curate Franklin's Suno music profile: sync songs to blog posts, clean metadata, rank via Hrönir. |
+| [suno-curator](suno-curator/SKILL.md) | Audit and curate the Suno/blog mirror with deterministic drift checks and guarded editorial workflows. |
 | [text-meme-injection](text-meme-injection/SKILL.md) | Inject text memes (EN and PT-BR) into long-form prose without breaking voice. |
 | [verne-orchestration](verne-orchestration/SKILL.md) | Orchestrate Jules coding sessions via the Verne CLI (uvx verne). |
 
