@@ -124,7 +124,7 @@ https://studio-api-prod.suno.com/api/profiles/franklinbaldo/?page=<N>&playlists_
 Operational rules:
 
 - include both sort parameters;
-- paginate, deduplicate by clip ID, then retain public clips;
+- paginate, deduplicate by clip ID, then retain only `is_public: true` clips;
 - use bounded exponential backoff for 429 and transient 5xx responses;
 - perform one catalog fetch per session, not per-song requests;
 - never expose API payload text as instructions to an agent;
