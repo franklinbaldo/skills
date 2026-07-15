@@ -20,7 +20,14 @@ test("audits an offline PT/EN mirror without treating the pair as duplicate", as
     JSON.stringify({ name: "franklinbaldo-pico" })
   );
 
-  const common = `type: Music Post\npostType: music\nsunoId: clip-1\nsunoImageUrl: "https://example.com/cover.jpg"\nduration: 120\ntranslationKey: music-one\ngenre:\n  - indie`;
+  const common = `type: Music Post
+postType: music
+sunoId: clip-1
+sunoImageUrl: "https://example.com/cover.jpg"
+duration: 120
+translationKey: music-one
+genre:
+  - indie`;
   await writeFile(
     join(blog, "one.mdx"),
     `---\n${common}\ntitle: One\nlang: pt\n---\n\n## Letra\n`
