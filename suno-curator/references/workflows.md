@@ -24,7 +24,8 @@ from quietly turning into editorial rewriting or destructive cleanup.
    duration, style prompt, and clip ID.
 6. Curate 1–3 genres from RFC 0011; do not derive a long prompt-shaped list.
 7. Load `franklin-blog` and draft composer notes. When the song's context is
-   unknown, mark the notes incomplete instead of inventing a creation story.
+   unknown, leave the notes explicitly incomplete instead of inventing a
+   creation story.
 8. Create/update the EN companion only when requested or required by the current
    repository policy. Keep the semantic pair aligned.
 9. Re-run the audit and validation commands.
