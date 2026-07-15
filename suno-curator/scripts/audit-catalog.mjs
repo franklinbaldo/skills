@@ -15,24 +15,27 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--help") return { ...args, help: true };
+    if (["--repo", "--profile-json", "--format"].includes(arg) && !argv[i + 1]) {
+      throw new Error(`${arg} requires a value`);
+    }
     if (arg === "--repo") args.repo = argv[++i];
     else if (arg === "--profile-json") args.profileJson = argv[++i];
     else if (arg === "--format") args.format = argv[++i];
     else throw new Error(`Unknown argument: ${arg}`);
   }
-  if (!args.repo) throw new Error("--repo requires a path");
-  if (!args.profileJson && args.profileJson !== null)
-    throw new Error("--profile-json requires a path");
   if (!new Set(["json", "markdown"]).has(args.format))
     throw new Error("--format must be json or markdown");
   return args;
 }
 
-const sleep = (ms) => new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
+const sleep = (ms) =>
+  new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
 
 async function fetchJson(url) {
   for (let attempt = 0; attempt < 4; attempt++) {
-    const response = await fetch(url, { headers: { Accept: "application/json" } });
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+    });
     if (response.ok) return response.json();
     if ((response.status === 429 || response.status >= 500) && attempt < 3) {
       await sleep(1000 * 2 ** attempt);
@@ -61,7 +64,7 @@ function clipsFromPages(pages) {
   const byId = new Map();
   for (const page of pages) {
     for (const clip of page?.clips ?? []) {
-      if (clip?.id && clip.is_public !== false && !byId.has(clip.id)) {
+      if (clip?.id && clip.is_public === true && !byId.has(clip.id)) {
         byId.set(clip.id, clip);
       }
     }
@@ -79,7 +82,9 @@ async function loadProfile(profileJson) {
   const first = await fetchJson(pageUrl(1));
   pages.push(first);
   const total = Math.max(0, Number(first?.num_total_clips ?? 0));
-  const seen = new Set((first?.clips ?? []).map((clip) => clip?.id).filter(Boolean));
+  const seen = new Set(
+    (first?.clips ?? []).map((clip) => clip?.id).filter(Boolean)
+  );
   let page = 2;
   while (seen.size < total) {
     const next = await fetchJson(pageUrl(page));
@@ -118,7 +123,9 @@ function scalar(fm, key) {
 
 function listField(fm, key) {
   const lines = fm.split(/\r?\n/);
-  const index = lines.findIndex((line) => new RegExp(`^${key}:\\s*$`).test(line));
+  const index = lines.findIndex((line) =>
+    new RegExp(`^${key}:\\s*$`).test(line)
+  );
   if (index === -1) return [];
   const values = [];
   for (let i = index + 1; i < lines.length; i++) {
@@ -170,7 +177,10 @@ function audit(clips, posts) {
     .map((clip) => ({ id: clip.id, title: clip.title ?? null }));
   const blogOnlyIds = [...postsById.keys()]
     .filter((id) => !clipsById.has(id))
-    .map((id) => ({ id, posts: postsById.get(id).map((post) => post.path) }));
+    .map((id) => ({
+      id,
+      posts: postsById.get(id).map((post) => post.path),
+    }));
 
   const sameLanguageDuplicates = [];
   for (const [id, group] of postsById) {
@@ -191,7 +201,13 @@ function audit(clips, posts) {
   const titleDrift = [];
   for (const post of posts) {
     const missing = [];
-    for (const key of ["sunoId", "lang", "translationKey", "sunoImageUrl", "duration"])
+    for (const key of [
+      "sunoId",
+      "lang",
+      "translationKey",
+      "sunoImageUrl",
+      "duration",
+    ])
       if (!post[key]) missing.push(key);
     if (missing.length) metadataGaps.push({ path: post.path, missing });
 
@@ -199,19 +215,39 @@ function audit(clips, posts) {
       (label) => label.length > 40 || /[:,;]/.test(label)
     );
     if (post.genre.length > 5 || invalid.length)
-      genreViolations.push({ path: post.path, count: post.genre.length, invalid });
+      genreViolations.push({
+        path: post.path,
+        count: post.genre.length,
+        invalid,
+      });
 
     const clip = clipsById.get(post.sunoId);
-    if (clip && post.lang === "pt" && post.title && clip.title && post.title !== clip.title)
-      titleDrift.push({ path: post.path, source: clip.title, blog: post.title });
+    if (
+      clip &&
+      post.lang === "pt" &&
+      post.title &&
+      clip.title &&
+      post.title !== clip.title
+    )
+      titleDrift.push({
+        path: post.path,
+        source: clip.title,
+        blog: post.title,
+      });
 
     if (clip) {
       const expectedDuration = sourceDuration(clip);
       const actualDuration = post.duration ? Number(post.duration) : null;
-      if (expectedDuration !== null && actualDuration !== null && expectedDuration !== actualDuration)
+      if (
+        expectedDuration !== null &&
+        actualDuration !== null &&
+        expectedDuration !== actualDuration
+      )
         metadataGaps.push({
           path: post.path,
-          mismatch: { duration: { source: expectedDuration, blog: actualDuration } },
+          mismatch: {
+            duration: { source: expectedDuration, blog: actualDuration },
+          },
         });
     }
   }
@@ -220,7 +256,8 @@ function audit(clips, posts) {
     summary: {
       publicClips: clips.length,
       musicPosts: posts.length,
-      mirroredIds: [...clipsById.keys()].filter((id) => postsById.has(id)).length,
+      mirroredIds: [...clipsById.keys()].filter((id) => postsById.has(id))
+        .length,
       missingFromBlog: missingFromBlog.length,
       blogOnlyIds: blogOnlyIds.length,
       sameLanguageDuplicates: sameLanguageDuplicates.length,
@@ -239,7 +276,8 @@ function audit(clips, posts) {
 
 function markdown(report) {
   const lines = ["# Suno catalog audit", "", "## Summary", ""];
-  for (const [key, value] of Object.entries(report.summary)) lines.push(`- **${key}:** ${value}`);
+  for (const [key, value] of Object.entries(report.summary))
+    lines.push(`- **${key}:** ${value}`);
   for (const section of [
     "missingFromBlog",
     "blogOnlyIds",
@@ -263,9 +301,13 @@ async function main() {
     return;
   }
   const repoRoot = resolve(args.repo);
-  const packageJson = JSON.parse(await readFile(join(repoRoot, "package.json"), "utf8"));
+  const packageJson = JSON.parse(
+    await readFile(join(repoRoot, "package.json"), "utf8")
+  );
   if (packageJson.name !== "franklinbaldo-pico")
-    throw new Error(`Unexpected repository package name: ${packageJson.name ?? "missing"}`);
+    throw new Error(
+      `Unexpected repository package name: ${packageJson.name ?? "missing"}`
+    );
 
   const [clips, posts] = await Promise.all([
     loadProfile(args.profileJson),
@@ -273,7 +315,9 @@ async function main() {
   ]);
   const report = audit(clips, posts);
   process.stdout.write(
-    args.format === "json" ? `${JSON.stringify(report, null, 2)}\n` : markdown(report)
+    args.format === "json"
+      ? `${JSON.stringify(report, null, 2)}\n`
+      : markdown(report)
   );
 }
 
