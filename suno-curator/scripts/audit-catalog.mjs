@@ -81,12 +81,17 @@ async function loadProfile(profileJson) {
   const pages = [];
   const first = await fetchJson(pageUrl(1));
   pages.push(first);
-  const total = Math.max(0, Number(first?.num_total_clips ?? 0));
+  // num_total_clips is undocumented API surface. If it's ever missing or
+  // renamed, treat the total as unknown rather than silently defaulting to
+  // 0 — a 0 total would stop pagination after page 1 with no error, hiding
+  // every clip past the first page.
+  const rawTotal = Number(first?.num_total_clips);
+  const total = Number.isFinite(rawTotal) ? Math.max(0, rawTotal) : null;
   const seen = new Set(
     (first?.clips ?? []).map((clip) => clip?.id).filter(Boolean)
   );
   let page = 2;
-  while (seen.size < total) {
+  while (total === null || seen.size < total) {
     const next = await fetchJson(pageUrl(page));
     pages.push(next);
     const clips = next?.clips ?? [];
@@ -138,7 +143,20 @@ function listField(fm, key) {
 
 function trackIds(fm) {
   const lines = fm.split(/\r?\n/);
-  const start = lines.findIndex((line) => /^tracks:\s*$/.test(line));
+  const tracksLine = lines.findIndex((line) => /^tracks:/.test(line));
+  if (tracksLine === -1) return [];
+  // Flow-style YAML (`tracks: [{sunoId: "abc"}, ...]`) is valid but isn't a
+  // block sequence — pull sunoId values directly out of the bracketed text
+  // instead of falling through to the block-sequence reader below, which
+  // would otherwise silently see no items and return [].
+  const flowMatch = lines[tracksLine].match(/^tracks:\s*(\[.*\])\s*$/);
+  if (flowMatch) {
+    const ids = [...flowMatch[1].matchAll(/sunoId:\s*(["']?)([^"',}\]]+)\1/g)].map(
+      (match) => match[2].trim()
+    );
+    return [...new Set(ids)].filter(Boolean);
+  }
+  const start = /^tracks:\s*$/.test(lines[tracksLine]) ? tracksLine : -1;
   if (start === -1) return [];
   const ids = [];
   // itemIndent is the indent of the "- " that starts each tracks[] item,

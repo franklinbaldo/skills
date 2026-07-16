@@ -68,6 +68,13 @@ observe the call). Scripted end-to-end in this skill:
 - `scripts/mint-bearer-token.mjs` — reads the stored cookie back and calls
   the Clerk endpoint above to mint a fresh Bearer on demand. Verified live:
   cookie → minted Bearer → `200` from `studio-api-prod.suno.com/api/session/`.
+- `scripts/keyring.mjs`'s `deleteSecret(target)` — no script calls this
+  automatically; it's the manual credential-rotation step. If Franklin ever
+  wants to revoke the stored cookie (e.g. after logging out everywhere, or
+  suspecting the credential store was exposed), run
+  `node -e "import('./keyring.mjs').then(k => k.deleteSecret('suno-clerk-client-cookie'))"`
+  from `suno-profile/scripts/`, then re-run `login-and-capture.mjs` to
+  capture a fresh cookie.
 
 **What this skill still won't do:** touch the cookie or credential store
 without Franklin present to log in and trigger the capture, or use a minted
