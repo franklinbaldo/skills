@@ -292,6 +292,19 @@ text while mapping this endpoint.
 | Add/remove/reorder songs | `POST /api/playlist/update_clips/` | `{"playlist_id", "update_type": "add"\|"remove"\|"remove_by_id"\|"reorder", "metadata": {"clip_ids": [...]}, "recommendation_metadata": {}}` |
 | Delete | `POST /api/playlist/trash/` | `{"playlist_id": "..."}` |
 
+**`set_metadata` and `image_url`, confirmed live (2026-07-16):** passing
+the *existing* cover's plain `https://` URL back in `image_url` fails
+with `400 {"detail": "Failed to upload image"}` — the endpoint tries to
+upload whatever string is given, and a plain URL isn't a valid upload
+payload; it needs an actual base64 `data:image/...` URI to set a new
+cover. **Omitting `image_url` entirely is safe** — confirmed the cover
+survives untouched, along with `name`, when only `description` is sent.
+So despite the `PATCH /api/profiles/v2/{handle}`-style "full object"
+framing in the row above, `set_metadata` is closer to a genuine partial
+update for fields you don't touch — still worth verifying the untouched
+fields survived on the next read rather than assuming, since this
+wasn't true of the profile endpoint.
+
 Known issues, observed directly:
 
 - `update_clips` with `update_type: "remove"` or `"remove_by_id"` returned a
