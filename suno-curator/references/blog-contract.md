@@ -133,6 +133,11 @@ Operational rules:
 The bundled audit script implements this read-only comparison and supports
 `--profile-json` for offline evaluation.
 
+This endpoint carries clips and playlists only — no bio, genre tags, pin
+captions, or social links. For those, see the `suno-profile` skill's
+`references/write-api.md` ("Reading the profile"), which documents the
+separate `/api/profiles/v2/{handle}` endpoint that actually carries them.
+
 ### Useful clip fields
 
 `id` (UUID), `title`, `audio_url`, `image_url`, `is_public`, `created_at`,

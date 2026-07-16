@@ -172,3 +172,78 @@ genre:
   assert.equal(report.titleDrift[0].path, "src/content/blog/tempo.mdx");
   assert.equal(report.titleDrift[0].source, "O  Tempo");
 });
+
+test("indexes a track's sunoId regardless of key order within the item", async () => {
+  const root = await mkdtemp(join(tmpdir(), "suno-curator-"));
+  const blog = join(root, "src", "content", "blog");
+  await mkdir(blog, { recursive: true });
+  await writeFile(
+    join(root, "package.json"),
+    JSON.stringify({ name: "franklinbaldo-pico" })
+  );
+
+  // genre's own nested list ("- indie") uses the same "- " marker as a new
+  // tracks[] item; a parser that treats every dash as a potential item
+  // boundary can lose track of the real item indent once it walks past a
+  // sub-list, and then fail to recognize sunoId lines that follow it.
+  await writeFile(
+    join(blog, "reordered.mdx"),
+    `---
+type: Music Post
+postType: music
+title: Primary
+lang: pt
+sunoId: clip-primary
+sunoImageUrl: "https://example.com/cover.jpg"
+duration: 120
+translationKey: music-reordered
+genre:
+  - indie
+tracks:
+  - label: "Alt version"
+    genre:
+      - indie
+      - spoken word
+    sunoId: clip-track
+    duration: 90
+---
+
+## Letra
+`
+  );
+
+  const profile = join(root, "profile.json");
+  await writeFile(
+    profile,
+    JSON.stringify({
+      num_total_clips: 2,
+      clips: [
+        {
+          id: "clip-primary",
+          title: "Primary",
+          is_public: true,
+          metadata: { duration: 120 },
+        },
+        {
+          id: "clip-track",
+          title: "Alt version",
+          is_public: true,
+          metadata: { duration: 90 },
+        },
+      ],
+    })
+  );
+
+  const { stdout } = await execFileAsync(process.execPath, [
+    script,
+    "--repo",
+    root,
+    "--profile-json",
+    profile,
+    "--format",
+    "json",
+  ]);
+  const report = JSON.parse(stdout);
+  assert.equal(report.summary.mirroredIds, 2);
+  assert.deepEqual(report.missingFromBlog, []);
+});

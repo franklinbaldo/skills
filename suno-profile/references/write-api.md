@@ -105,6 +105,26 @@ the clip object itself.
 {"is_public": true, "submit_to_contest": false}
 ```
 
+## Reading the profile
+
+Two distinct, non-overlapping endpoints — using the wrong one for a given
+field is a real gap, not just a style choice:
+
+- `GET /api/profiles/{handle}/?page=<N>&playlists_sort_by=created_at&clips_sort_by=created_at`
+  (unversioned, no `v2`) — paginated **clips and playlists listing**. This
+  is what `suno-curator`'s `blog-contract.md` and `audit-catalog.mjs`
+  use. It does **not** carry the bio, genre tags, pin captions, or social
+  links — don't expect them here.
+- `GET /api/profiles/v2/{handle}` — the actual profile object:
+  `metadata` (display name, handle, avatar/cover URLs), `bio`
+  (`profile_description`, `user_inputted_genres`, `section_order`),
+  `social_links`, top-level `pin_captions`
+  (`[{"clip_id", "caption"}, ...]`), `stats` (followers, plays, clip
+  count), and `feed` (pinned songs and other profile sections — see
+  `pin-caption`'s note above on where `is_pinned` shows up). This is the
+  endpoint for bio/genre/pin-caption work and for `curation-plan.md`'s
+  self-critique, which reads live profile state before proposing changes.
+
 ## Profile (bio, genres, social links)
 
 `PATCH /api/profiles/v2/{handle}`

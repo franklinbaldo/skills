@@ -141,6 +141,14 @@ function trackIds(fm) {
   const start = lines.findIndex((line) => /^tracks:\s*$/.test(line));
   if (start === -1) return [];
   const ids = [];
+  // itemIndent is the indent of the "- " that starts each tracks[] item,
+  // fixed once from the first such line. A sub-field's own nested list
+  // (e.g. genre: - indie) uses the same "- " marker at a deeper indent —
+  // only a dash exactly at itemIndent is a new tracks[] item boundary;
+  // anything deeper (a genre entry, a block-scalar line) must never be
+  // mistaken for one, or a later sunoId line can be missed depending on
+  // where genre happens to fall in the item's key order.
+  let itemIndent = null;
   let keyIndent = null;
   for (let i = start + 1; i < lines.length; i++) {
     const line = lines[i];
@@ -148,15 +156,17 @@ function trackIds(fm) {
     const indent = line.match(/^\s*/)[0].length;
     if (indent === 0) break;
     const dash = line.match(/^(\s*)-\s+(.*)$/);
-    if (dash) {
-      keyIndent = dash[1].length + 2;
+    if (dash && (itemIndent === null || dash[1].length === itemIndent)) {
+      itemIndent = dash[1].length;
+      keyIndent = itemIndent + 2;
       const inline = dash[2].match(/^sunoId:\s*(.*)$/);
       if (inline)
         ids.push(inline[1].trim().replace(/^(["'])(.*)\1$/, "$2"));
       continue;
     }
-    // Only lines at the item-key indent count — deeper lines belong to
-    // block scalars like sunoStyle and must not be parsed as keys.
+    // Only lines at the item-key indent count — deeper lines belong to a
+    // sub-list like genre or a block scalar like sunoStyle and must not be
+    // parsed as keys.
     if (keyIndent !== null && indent === keyIndent) {
       const match = line.match(/^\s*sunoId:\s*(.*)$/);
       if (match)
