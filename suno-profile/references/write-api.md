@@ -54,6 +54,23 @@ Accepts a subset of:
 - Tags/genre are **not** part of this endpoint's schema (top-level `tags`
   and nested `metadata.tags` are both silently ignored).
 
+**Known historical data-quality issue, found and fixed live:** some older
+song `caption` values (written well before this session, by whatever
+client wrote them at the time) have every accented character replaced by
+a plain space — e.g. `"M sica"` instead of `"Música"`. Verified with an
+isolated, from-scratch `curl` (bypassing any script, straight to disk,
+inspected at the byte level: the character in place of `ú` is byte `32`,
+an ordinary space) that this is genuine stored corruption on Suno's side,
+not an artifact of any fetch/parse pipeline. The current write path
+handles UTF-8 correctly — a same-session round-trip test (write a normal
+accented string via `set_metadata`'s `caption`, wait out propagation
+delay, re-read from scratch) came back byte-correct. **Fix: just rewrite
+the caption with normal UTF-8 text; no special encoding, HTML entities,
+or NFD-vs-NFC handling needed.** Treat any caption with this exact
+pattern (accented letters missing, replaced by a bare space, and nowhere
+else does the surrounding text look truncated) as this known issue, not
+a new bug to investigate from scratch.
+
 ## Song tags / genre
 
 `POST /api/gen/{clip_id}/set_display_tags`

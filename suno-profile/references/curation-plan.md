@@ -56,6 +56,16 @@ or why it stands alone), and its pin caption. Look at the slate as a set —
 flag redundancy (two slots making the same pitch) and gaps (a strong
 thread with no pinned representative).
 
+## Song descriptions
+
+Catalog-wide completeness, not just pinned songs — a song's own `caption`
+(distinct from its pin caption) is real searchable text sitting empty on
+most songs by default. Run the audit method below, report the percentage
+empty and a play-count-sorted priority list, and draft captions for a
+small batch (5-10) at a time with Franklin rather than writing dozens
+unilaterally in one pass — this is real editorial work, same discipline
+as bio/pinned-caption drafting.
+
 ## Playlists
 
 Existing playlists and their theme/status (active, needs a refresh, should
@@ -84,6 +94,28 @@ flagging something feels off).
 - Keep the plan shorter than the temptation suggests. A profile with 10
   pinned slots and 5 genre tags doesn't need a plan longer than a page to
   cover them well.
+
+## Auditing song-description completeness
+
+Per-clip `caption` isn't in the paginated profile listing (`blog-contract.md`'s
+endpoint) — it only comes back from `GET /api/clip/{id}/`, one request
+per song. For a catalog-sized audit (dozens to ~100 songs):
+
+- Fetch the basic clip list once (id, title, play_count) from the
+  paginated endpoint, then fetch each clip's full detail with modest
+  concurrency (5 workers was fine) and a small stagger between requests
+  (~150ms) — Suno rate-limits sustained bursts, and a full-catalog audit
+  is exactly the kind of sustained load that trips it.
+- Sort empty-caption results by `play_count` descending — that's the
+  actual prioritization signal (a highly-played song with no caption is
+  a bigger gap than an obscure one).
+- While reading captions that do exist, watch for the corrupted-old-data
+  pattern in `write-api.md` (accented characters replaced by plain
+  spaces) — worth a quick rewrite-with-correct-text fix on sight, not a
+  separate investigation each time.
+- Report the completeness percentage and a prioritized list; don't draft
+  the missing captions in the same breath — that's the next, separate,
+  Franklin-reviewed step (see "Song descriptions" in the template above).
 
 ## Applying the plan
 
