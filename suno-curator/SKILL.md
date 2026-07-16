@@ -121,6 +121,31 @@ Use for one song or one PT/EN pair.
 - Load `franklin-blog` before voice work and keep PT/EN semantics aligned in one
   commit when the change is substantive.
 
+### 5. Curation plan
+
+Use when the goal is the profile's overall identity, not one field or one
+song — deciding what the Suno profile as a whole should say and show, then
+applying that in pieces over multiple sessions.
+
+- The plan is a single living document, not a one-shot deliverable. Write
+  it to `<blog-repo>/docs/suno-curation-plan.md` (propose this location to
+  Franklin the first time; follow wherever he actually keeps it after
+  that).
+- Use the template and drafting guidance in
+  [`references/curation-plan.md`](references/curation-plan.md).
+- A planning session drafts or revises the plan. It does **not** apply
+  every recommendation from the plan in the same session — read
+  `references/curation-plan.md`'s "Applying the plan" section for how
+  incremental application and review work together.
+- Every apply session (bio, tags, pinned songs, playlists) should check
+  itself against the current plan and note any drift — either the change
+  matches the plan, or the plan is stale and should be revised, but silent
+  disagreement between the two is a bug.
+- Applying anything from the plan to live Suno data still requires the same
+  explicit authorization as any other write covered in `write-api.md` —
+  the plan documents *what to aim for*, it doesn't grant standing
+  permission to write.
+
 ## Repository contract that usually applies
 
 - Music posts are identified by `type: Music Post` and `postType: music`.
