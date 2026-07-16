@@ -1,0 +1,153 @@
+# Suno write API (reverse-engineered)
+
+**Status: documentation only.** This skill's non-negotiable boundaries
+(see `SKILL.md`) still forbid publishing, unpublishing, renaming, deleting,
+or editing playlists on Suno — every Suno-side action stays a
+recommendation for Franklin. This file exists so that a future,
+explicitly-authorized write workflow doesn't have to rediscover the API
+from scratch.
+
+Discovered 2026-07-16 by capturing real browser requests (DevTools Network
+tab) against a live, authenticated session and confirming each field by
+reading the value back afterward. Not from any public/official Suno
+documentation — Suno does not publish a write API.
+
+## Base
+
+- Host: `https://studio-api-prod.suno.com`
+- Auth: `Authorization: Bearer <Clerk JWT>` header, captured from a live
+  browser session (no public way to mint one headlessly). Tokens are
+  short-lived (`exp` claim, roughly 1 hour) and session-bound — do not persist
+  them in the repo or in skill files.
+- Most write calls are `POST` with a trailing slash; a couple of exceptions
+  are noted below. `DELETE` is **not** supported anywhere in this API
+  (confirmed: `405 Method not allowed`) — don't reuse REST conventions from
+  unrelated APIs without testing them first.
+- Success does not always mean the change is visible on the very next `GET`
+  — there is a short read-after-write propagation delay (observed up to
+  ~10s) on several endpoints. Don't conclude a write failed from one stale
+  read; re-check after a few seconds.
+
+## Song (clip) metadata
+
+`POST /api/gen/{clip_id}/set_metadata/`
+
+Accepts a subset of:
+
+```json
+{
+  "title": "...",
+  "lyrics": "...",
+  "caption": "...",
+  "caption_mentions": {"user_mentions": []},
+  "remove_image_cover": false,
+  "remove_video_cover": false,
+  "image_s3_id": "image_<clip_id>"
+}
+```
+
+- This is the same endpoint the "Edit song details" modal submits as a
+  whole — even fields the user didn't touch get resent, unchanged.
+- Cover image is set via `image_s3_id` (e.g. `image_<clip_id>`), **not**
+  `image_url`. A plain `image_url` field is silently ignored (accepted with
+  200, never applied).
+- Tags/genre are **not** part of this endpoint's schema (top-level `tags`
+  and nested `metadata.tags` are both silently ignored).
+
+## Song tags / genre
+
+`POST /api/gen/{clip_id}/set_display_tags`
+
+```json
+{"display_tags": "folk, spoken-word, Latin, borges"}
+```
+
+Comma-separated string. Confirmed this is genuinely a separate write path
+from `set_metadata` — the two were tried independently. Read back via the
+top-level `display_tags` field on `GET /api/clip/{clip_id}/` (not
+`metadata.tags`, which holds a different, longer AI-style description and
+is not directly settable this way).
+
+## Cover image generation (AI)
+
+`POST /api/gen/prompt_image/`
+
+```json
+{
+  "generated_text_id": "...",
+  "prompt": "...",
+  "clip_id": "...",
+  "quantity": 2,
+  "image_gen_category": "advanced"
+}
+```
+
+## Song visibility (publish/unpublish)
+
+`POST /api/gen/{clip_id}/set_visibility/`
+
+```json
+{"is_public": true, "submit_to_contest": false}
+```
+
+## Profile (bio, genres, social links)
+
+`PATCH /api/profiles/v2/{handle}`
+
+```json
+{
+  "metadata": {"display_name": "...", "handle": "..."},
+  "bio": {
+    "profile_description": "...",
+    "user_inputted_genres": ["ambient", "folk", "..."],
+    "section_order": ["pinned_songs", "songs", "hooks", "playlists", "personas"]
+  },
+  "social_links": {
+    "spotify_link": null,
+    "soundcloud_link": null,
+    "x_link": "https://x.com/...",
+    "instagram_link": null,
+    "youtube_link": null,
+    "tiktok_link": null
+  }
+}
+```
+
+This is a full-object PATCH — send every field, not just the one being
+changed, or the omitted fields may be cleared. Confirmed the hard way: an
+early capture accidentally overwrote the live profile bio with placeholder
+text while mapping this endpoint.
+
+## Playlists
+
+| Action | Endpoint | Body |
+|---|---|---|
+| Create | `POST /api/playlist/create/` | `{"name": "..."}` |
+| Edit metadata | `POST /api/playlist/set_metadata` | `{"playlist_id", "name", "description", "image_url"}` (cover as a base64 `data:image/...` URI, unlike song covers) |
+| Visibility | `POST /api/playlist_reaction/{playlist_id}/set_visibility/` | `{"is_public": bool}` |
+| Add/remove/reorder songs | `POST /api/playlist/update_clips/` | `{"playlist_id", "update_type": "add"\|"remove"\|"remove_by_id"\|"reorder", "metadata": {"clip_ids": [...]}, "recommendation_metadata": {}}` |
+| Delete | `POST /api/playlist/trash/` | `{"playlist_id": "..."}` |
+
+Known issues, observed directly:
+
+- `update_clips` with `update_type: "remove"` or `"remove_by_id"` returned a
+  generic `500 An unexpected error occurred` (`error_type: "server_error"`)
+  every time it was tried, even though the shape matches the schema (a
+  malformed body gets a clean `422` with the accepted enum values instead).
+  This looks like a real bug in Suno's backend, not a client-side mistake.
+  Despite the 500, the removal was later observed to have actually applied
+  (confirmed on a delayed re-read) — the failure may be in the response
+  path, not the mutation itself. Treat a 500 here as "maybe applied,
+  reverify before retrying" rather than "definitely failed."
+- `trash` on a non-empty playlist returned `204` immediately but the
+  playlist stayed `is_trashed: false` for longer than the usual propagation
+  delay; it did eventually take effect. Empty playlists trashed cleanly and
+  immediately.
+
+## Deliberately not verified
+
+- Bulk/multi-song operations beyond playlists (e.g. batch visibility
+  toggles) — not tested.
+- Whether `set_metadata`'s `lyrics` field has a length limit or markdown
+  handling.
+- Rate limits on any of the above.

@@ -57,7 +57,10 @@ Use `--profile-json <snapshot.json>` for offline or reproducible evaluation.
 For the detailed current data contract, read
 [`references/blog-contract.md`](references/blog-contract.md). For exact session
 flows and report formats, read
-[`references/workflows.md`](references/workflows.md).
+[`references/workflows.md`](references/workflows.md). For the reverse-engineered
+Suno write API (title, tags, cover, visibility, profile, playlists) — currently
+documentation only, since the boundaries above still forbid using it — read
+[`references/write-api.md`](references/write-api.md).
 
 ## Choose exactly one session mode
 
