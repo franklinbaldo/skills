@@ -41,13 +41,11 @@ itself says or shows, use this one.
   real song instead of a test one), say so immediately and revert before
   doing anything else. Don't let a slip pass silently because the visible
   symptom looks minor.
-- Trashing a song (`references/quality-review.md`) is the single
-  highest-consequence write this skill can make — reversibility isn't
-  fully confirmed, unlike a caption or a pin. A low-quality signal (low
-  play count, a garbled title, a redundant alternate take) is grounds to
-  *propose* a candidate, never grounds to call the trash endpoint
-  yourself. Always present candidates and get explicit per-clip or
-  per-batch authorization first.
+- Trashing a song is the single highest-consequence write this skill can
+  make — this boundary applies to it with no exception, and it's the
+  write most likely to need the reminder. See
+  `references/quality-review.md` for the full process (never
+  autonomous; propose candidates, get explicit authorization first).
 - A full-object endpoint (e.g. the profile `PATCH`) must be sent with every
   field, not just the one being changed — fetch current state first. This
   skill exists partly because that exact mistake once overwrote a live
