@@ -1,11 +1,11 @@
 # Suno write API (reverse-engineered)
 
-**Status: documentation only.** This skill's non-negotiable boundaries
-(see `SKILL.md`) still forbid publishing, unpublishing, renaming, deleting,
-or editing playlists on Suno — every Suno-side action stays a
-recommendation for Franklin. This file exists so that a future,
-explicitly-authorized write workflow doesn't have to rediscover the API
-from scratch.
+**Status: write only with explicit authorization.** Under this skill's
+non-negotiable boundaries (see `SKILL.md`), any write to Suno happens only
+when Franklin explicitly authorizes that specific change, in that session —
+documenting an endpoint here grants no standing permission to use it. This
+file exists so an authorized write doesn't have to rediscover the API from
+scratch.
 
 Discovered 2026-07-16 by capturing real browser requests (DevTools Network
 tab) against a live, authenticated session and confirming each field by
