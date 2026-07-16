@@ -102,10 +102,46 @@ flagging something feels off).
 
 ## Review cadence
 
-- No fixed schedule — review when: a new song opens a potential new thread,
-  a pinned song stops representing its thread well, Franklin says something
-  feels off, or it's been long enough that neither of you remembers what's
-  actually live vs. planned.
-- A review session re-reads the live profile state (not just the plan
-  document — the two can have drifted) and reconciles differences before
-  proposing new changes.
+Two kinds of trigger, either one is sufficient:
+
+- **Event-based**: a new song opens a potential new thread, a pinned song
+  stops representing its thread well, or Franklin says something feels
+  off.
+- **Time-based**: at the start of any suno-curator session, check the
+  plan's `Last reviewed` date. If it's been more than a week (or the plan
+  has no date, meaning it's never been reviewed), run the self-critique
+  below before doing anything else that session — don't wait for Franklin
+  to ask.
+
+A review session re-reads the live profile state (not just the plan
+document — the two can have drifted) and reconciles differences before
+proposing new changes.
+
+## Self-critique checklist
+
+The actual content of a time-triggered review. Go through the live
+profile — not the plan document, the real bio/tags/pinned songs/playlists
+via `write-api.md`'s read calls — and answer each honestly, citing
+specifics rather than a vague pass/fail:
+
+- **Taste**: Does the pinned-song slate still read as a coherent set (see
+  `curation-plan.md`'s "Pinned songs" section and `seo-and-taste.md`'s
+  curation guidance)? Any redundant slots making the same pitch? Any
+  strong recurring thread with no pinned representative?
+- **SEO**: Does the bio still state genre/sound in the first sentence,
+  avoid superlatives, and carry a concrete detail (per
+  `seo-and-taste.md`)? Do the 5 genre tags still mix broad/searchable with
+  specific/differentiating, or has one become dead weight? Do pinned-song
+  captions still say something specific and non-redundant with each
+  other?
+- **Consistency**: Does the bio's identity claim still match what the
+  recurring-threads list and the actual catalog show? Has a new song
+  contradicted or outgrown the identity statement? Do playlist
+  titles/descriptions still match their stated thesis, or has one drifted
+  into "everything tagged X"?
+
+Report the findings to Franklin as a short list — what still holds, what's
+drifted, and what you'd propose changing — then update the plan's
+`Last reviewed` date once the review itself (not necessarily every
+resulting change) is done. Don't apply changes from a self-critique
+without the same authorization any other write requires.

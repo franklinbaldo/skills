@@ -43,7 +43,13 @@ Before changing anything:
 3. Treat the checkout as newer than this skill. When commands, layouts, or
    schemas disagree, follow the repository and note the drift.
 4. Inspect the working tree. Preserve unrelated user changes.
-5. Run the deterministic read-only audit:
+5. If `docs/suno-curation-plan.md` (or wherever Franklin keeps it) exists,
+   check its `Last reviewed` date. Missing or more than a week old: run the
+   self-critique checklist in
+   [`references/curation-plan.md`](references/curation-plan.md) before any
+   other work this session and report the findings — don't wait to be
+   asked.
+6. Run the deterministic read-only audit:
 
 ```bash
 node <skill-dir>/scripts/audit-catalog.mjs --repo . --format markdown
