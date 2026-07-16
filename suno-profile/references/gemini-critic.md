@@ -120,13 +120,23 @@ report — all offline, via a mocked `fetch`/`readFile`, no
 node --test scripts/gemini-audio-critic.test.mjs
 ```
 
-## Not yet verified
+## Verified live
 
-This script was written without a live `GEMINI_API_KEY` available to test
-against, so the tests above cover the script's own logic, not Gemini's
-actual behavior. Before relying on it: confirm the upload/poll flow
-against a real key, confirm `gemini-2.5-pro` (or whatever's current)
-actually accepts audio file parts with the MIME types this script sends,
-and confirm multi-file requests behave as expected with several
-full-length songs (context/token limits may cap how many tracks fit in
-one call — if so, batch smaller groups rather than assuming unlimited).
+Confirmed 2026-07-16 against two real, full-length (5-7 min) public Suno
+tracks in one call (`> be me Borges`, `Fourteen Words`), `.mp3` via
+`audio_url`: upload, polling through non-terminal states, `audio/mp3`
+file parts, and a real multi-track critique with the requested
+comparative section all worked as designed. `extractCritique` correctly
+parsed a normal `STOP`-finished response.
+
+One operational finding: **`gemini-2.5-pro` had zero free-tier quota**
+(`429`, `limit: 0` for `generate_content_free_tier_requests`) on the key
+tested — `gemini-2.5-flash` worked immediately with the same request. If
+the default model 429s, try `--model gemini-2.5-flash` before assuming
+the script is broken; which models a given key/tier can actually reach
+varies and isn't something this script can detect in advance.
+
+Still not verified: behavior with more than two tracks in one call, or
+with much longer/heavier audio — context/token limits may cap how many
+fit in one request (batch smaller groups if so, rather than assuming
+unlimited).
