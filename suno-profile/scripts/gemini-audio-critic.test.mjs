@@ -3,9 +3,11 @@ import test from "node:test";
 import {
   parseArgs,
   extMimeType,
+  resolveMimeType,
   buildPrompt,
   waitUntilActive,
   loadAudio,
+  extractCritique,
 } from "./gemini-audio-critic.mjs";
 
 test("parseArgs: parses one or more --track flags", () => {
@@ -43,11 +45,32 @@ test("parseArgs: rejects an unknown format", () => {
 });
 
 test("extMimeType: guesses from extension, ignoring query/hash", () => {
-  assert.equal(extMimeType("song.mp3"), "audio/mpeg");
+  assert.equal(extMimeType("song.mp3"), "audio/mp3");
   assert.equal(extMimeType("https://cdn.example.com/song.wav?token=abc"), "audio/wav");
   assert.equal(extMimeType("song.flac#frag"), "audio/flac");
-  assert.equal(extMimeType("song.m4a"), "audio/mp4");
+  assert.equal(extMimeType("song.aiff"), "audio/aiff");
+  assert.equal(extMimeType("song.aif"), "audio/aiff");
   assert.equal(extMimeType("song.unknownext"), null);
+});
+
+test("extMimeType: does not recognize formats Gemini doesn't support (M4A, Opus)", () => {
+  assert.equal(extMimeType("song.m4a"), null);
+  assert.equal(extMimeType("song.opus"), null);
+});
+
+test("resolveMimeType: normalizes a Content-Type alias (audio/mpeg -> audio/mp3)", () => {
+  assert.equal(resolveMimeType("track", "audio/mpeg; charset=binary"), "audio/mp3");
+});
+
+test("resolveMimeType: rejects an audio/* Content-Type Gemini doesn't support, falling back to extension", () => {
+  // audio/mp4 (M4A over HTTP) isn't in Gemini's supported list — must not
+  // be accepted just because it starts with "audio/"; falls back to the
+  // extension, which for a .mp3 URL correctly resolves anyway.
+  assert.equal(resolveMimeType("track.mp3", "audio/mp4"), "audio/mp3");
+});
+
+test("resolveMimeType: throws when neither an unsupported header nor the extension resolve", () => {
+  assert.throws(() => resolveMimeType("track", "audio/mp4"), /Gemini-supported audio MIME type/);
 });
 
 test("loadAudio: local file uses extension-based mimeType", async () => {
@@ -75,7 +98,7 @@ test("loadAudio: throws rather than silently mislabeling an undetectable MIME ty
       loadAudio("https://cdn.example.com/track", {
         fetch: async () => new Response(new ArrayBuffer(4), { status: 200, headers: {} }),
       }),
-    /Cannot determine audio MIME type/
+    /Cannot determine a Gemini-supported audio MIME type/
   );
 });
 
@@ -144,4 +167,33 @@ test("waitUntilActive: gives up after maxAttempts on a stuck non-terminal state"
       }),
     /never became ACTIVE/
   );
+});
+
+test("extractCritique: returns the joined text on a normal STOP finish", () => {
+  const result = {
+    candidates: [
+      { finishReason: "STOP", content: { parts: [{ text: "Verse one." }, { text: "Verse two." }] } },
+    ],
+  };
+  assert.equal(extractCritique(result), "Verse one.\nVerse two.");
+});
+
+test("extractCritique: throws on a prompt-level block instead of returning an empty string", () => {
+  const result = { promptFeedback: { blockReason: "SAFETY" } };
+  assert.throws(() => extractCritique(result), /blocked the request.*SAFETY/);
+});
+
+test("extractCritique: throws when there are no candidates at all", () => {
+  assert.throws(() => extractCritique({}), /no candidates/);
+  assert.throws(() => extractCritique({ candidates: [] }), /no candidates/);
+});
+
+test("extractCritique: throws on a non-STOP finishReason (e.g. blocked mid-generation)", () => {
+  const result = { candidates: [{ finishReason: "SAFETY", content: { parts: [] } }] };
+  assert.throws(() => extractCritique(result), /did not finish normally.*SAFETY/);
+});
+
+test("extractCritique: throws on a STOP candidate with no actual text in any part", () => {
+  const result = { candidates: [{ finishReason: "STOP", content: { parts: [{ text: "" }] } }] };
+  assert.throws(() => extractCritique(result), /no text in any part/);
 });

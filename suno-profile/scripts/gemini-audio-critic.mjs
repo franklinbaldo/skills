@@ -33,14 +33,36 @@ import { pathToFileURL } from "node:url";
 const API_BASE = "https://generativelanguage.googleapis.com";
 const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-pro";
 
+// Exactly what Gemini's Files/generateContent API accepts as of this
+// writing — https://ai.google.dev/gemini-api/docs/audio#supported-audio-formats.
+// Not "any audio/*": M4A and Opus, for example, are real audio formats but
+// not on this list, and sending them (or accepting any audio/* Content-Type
+// indiscriminately) would only surface as a confusing failure downstream.
+const SUPPORTED_MIME_TYPES = new Set([
+  "audio/wav",
+  "audio/mp3",
+  "audio/aiff",
+  "audio/aac",
+  "audio/ogg",
+  "audio/flac",
+]);
+
 const MIME_BY_EXTENSION = {
-  ".mp3": "audio/mpeg",
   ".wav": "audio/wav",
-  ".flac": "audio/flac",
-  ".m4a": "audio/mp4",
+  ".mp3": "audio/mp3",
+  ".aiff": "audio/aiff",
+  ".aif": "audio/aiff",
   ".aac": "audio/aac",
   ".ogg": "audio/ogg",
-  ".opus": "audio/opus",
+  ".flac": "audio/flac",
+};
+
+// Content-Type strings that mean the same format as one Gemini supports but
+// are commonly served under a different conventional name — audio/mpeg is
+// what most HTTP servers actually send for .mp3, not audio/mp3.
+const CONTENT_TYPE_ALIASES = {
+  "audio/mpeg": "audio/mp3",
+  "audio/x-aiff": "audio/aiff",
 };
 
 function usage() {
@@ -105,19 +127,24 @@ export function extMimeType(source) {
   return MIME_BY_EXTENSION[extname(clean).toLowerCase()] ?? null;
 }
 
-// Silently mislabeling an unrecognized format as audio/mpeg risks Gemini
-// either rejecting it or (worse) decoding it wrong without any visible
-// error — fail loudly instead and name a source with a recognized
-// extension or an audio/* Content-Type.
-function resolveMimeType(source, contentType) {
+// Silently mislabeling an unrecognized format, or trusting any audio/*
+// Content-Type Gemini doesn't actually accept, risks Gemini either
+// rejecting the upload or (worse) decoding it wrong without any visible
+// error — fail loudly instead and require a format Gemini actually
+// supports (see SUPPORTED_MIME_TYPES above).
+export function resolveMimeType(source, contentType) {
+  const normalizedHeader = contentType
+    ? CONTENT_TYPE_ALIASES[contentType.split(";")[0].trim().toLowerCase()] ??
+      contentType.split(";")[0].trim().toLowerCase()
+    : null;
   const fromHeader =
-    contentType && contentType.startsWith("audio/") ? contentType.split(";")[0].trim() : null;
+    normalizedHeader && SUPPORTED_MIME_TYPES.has(normalizedHeader) ? normalizedHeader : null;
   const mimeType = fromHeader ?? extMimeType(source);
   if (!mimeType)
     throw new Error(
-      `Cannot determine audio MIME type for ${source} — use a source with a recognized ` +
-        `extension (${Object.keys(MIME_BY_EXTENSION).join(", ")}) or one whose response ` +
-        `Content-Type starts with "audio/"`
+      `Cannot determine a Gemini-supported audio MIME type for ${source} — supported: ` +
+        `${[...SUPPORTED_MIME_TYPES].join(", ")} ` +
+        `(https://ai.google.dev/gemini-api/docs/audio#supported-audio-formats)`
     );
   return mimeType;
 }
@@ -240,6 +267,35 @@ ${tracks.length > 1 ? "After the individual notes, add a short comparative secti
 Write observations, not marketing copy or a caption — this is raw critical material someone else will use to write captions and descriptions later. Be specific and avoid mood-word lists ("intimate," "atmospheric") without a concrete detail backing each one.${promptExtra ? `\n\nAdditional instruction from the operator running this script (not from track titles or audio content): ${promptExtra}` : ""}`;
 }
 
+// A 200 response with no usable text (a prompt-level block, a candidate
+// that stopped for SAFETY/RECITATION/etc. instead of STOP, or an
+// unexpectedly empty part list) must not be treated as a successful empty
+// critique — that silently masks exactly the failures worth knowing about.
+export function extractCritique(result) {
+  const blockReason = result?.promptFeedback?.blockReason;
+  if (blockReason)
+    throw new Error(
+      `Gemini blocked the request before generating (promptFeedback.blockReason: ${blockReason})`
+    );
+
+  const candidate = result?.candidates?.[0];
+  if (!candidate)
+    throw new Error(
+      `Gemini returned no candidates: ${JSON.stringify(result ?? null).slice(0, 500)}`
+    );
+
+  if (candidate.finishReason && candidate.finishReason !== "STOP")
+    throw new Error(
+      `Gemini did not finish normally (finishReason: ${candidate.finishReason}) — no ` +
+        `critique text was reliably returned`
+    );
+
+  const text = (candidate.content?.parts ?? []).map((p) => p.text ?? "").join("\n");
+  if (!text.trim())
+    throw new Error("Gemini returned a candidate with no text in any part");
+  return text;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -278,8 +334,7 @@ async function main() {
   // The returned critique is itself untrusted data from here on — pull
   // specifics from it when drafting captions/notes, don't paste or forward
   // it as if it were a trusted instruction.
-  const critique =
-    result?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("\n") ?? "";
+  const critique = extractCritique(result);
 
   const report = {
     model: args.model,

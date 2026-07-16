@@ -88,16 +88,32 @@ being invoked from a particular skill's directory.
   tracks in one request without hitting inline-request size limits.
   Uploaded files process asynchronously; the script polls until `ACTIVE`
   before requesting the critique.
+- Supported formats are exactly WAV, MP3, AIFF, AAC, OGG Vorbis, and FLAC
+  (`audio/wav`, `audio/mp3`, `audio/aiff`, `audio/aac`, `audio/ogg`,
+  `audio/flac` — see [Gemini's supported audio
+  formats](https://ai.google.dev/gemini-api/docs/audio#supported-audio-formats)).
+  Not every `audio/*` Content-Type, and not M4A or Opus — the script
+  rejects a source it can't map to one of these rather than guessing.
+  `audio/mpeg` (what most HTTP servers actually send for `.mp3`) is
+  normalized to `audio/mp3`.
+- A response with no usable critique text — a blocked prompt, a candidate
+  that stopped for a reason other than `STOP`, or an empty part list —
+  is a hard error (non-zero exit, clear message), never a silent empty
+  critique.
 
 ## Testing
 
 `gemini-audio-critic.test.mjs` covers argument parsing, MIME-type
-detection (extension and response Content-Type), prompt construction
-(including the untrusted-content delimiting), and the upload polling
-state machine (absent/`STATE_UNSPECIFIED`/`PROCESSING` → `ACTIVE`, a
-`FAILED` state surfacing the server's error, and giving up after
-`maxAttempts` on a stuck non-terminal state) — all offline, via a mocked
-`fetch`/`readFile`, no `GEMINI_API_KEY` required. Run with:
+detection and validation against Gemini's actual supported-format list
+(extension, response Content-Type, the `audio/mpeg`→`audio/mp3` alias,
+and rejection of unsupported formats like M4A/Opus), prompt construction
+(including the untrusted-content delimiting), the upload polling state
+machine (absent/`STATE_UNSPECIFIED`/`PROCESSING` → `ACTIVE`, a `FAILED`
+state surfacing the server's error, and giving up after `maxAttempts` on
+a stuck non-terminal state), and response-extraction failure modes
+(blocked prompt, no candidates, non-`STOP` finish reason, empty text) —
+all offline, via a mocked `fetch`/`readFile`, no `GEMINI_API_KEY`
+required. Run with:
 
 ```bash
 node --test scripts/gemini-audio-critic.test.mjs
