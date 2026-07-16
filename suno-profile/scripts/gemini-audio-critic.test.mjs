@@ -9,10 +9,8 @@ import {
   waitUntilActive,
   loadAudio,
   portkeyModel,
-  buildPortkeyRequestBody,
+  buildRequestBody,
   chooseRoute,
-  portkeyOpenrouterModel,
-  buildOpenRouterRequestBody,
 } from "./gemini-audio-critic.mjs";
 
 test("parseArgs: parses one or more --track flags", () => {
@@ -51,14 +49,14 @@ test("parseArgs: rejects an unknown format", () => {
 
 test("parseArgs: defaults --route to auto and accepts an explicit override", () => {
   assert.equal(parseArgs(["--track", "T=x"]).route, "auto");
-  assert.equal(parseArgs(["--track", "T=x", "--route", "openrouter"]).route, "openrouter");
-  assert.equal(parseArgs(["--track", "T=x", "--route", "portkey"]).route, "portkey");
+  assert.equal(parseArgs(["--track", "T=x", "--route", "inline"]).route, "inline");
+  assert.equal(parseArgs(["--track", "T=x", "--route", "files"]).route, "files");
 });
 
 test("parseArgs: rejects an unknown --route value", () => {
   assert.throws(
     () => parseArgs(["--track", "T=x", "--route", "carrier-pigeon"]),
-    /--route must be auto, openrouter, or portkey/
+    /--route must be auto, inline, or files/
   );
 });
 
@@ -190,59 +188,18 @@ test("waitUntilActive: gives up after maxAttempts on a stuck non-terminal state"
 });
 
 test("chooseRoute: an explicit override always wins regardless of size", () => {
-  assert.equal(chooseRoute(1, "portkey"), "portkey");
-  assert.equal(chooseRoute(999_999_999, "openrouter"), "openrouter");
+  assert.equal(chooseRoute(1, "files"), "files");
+  assert.equal(chooseRoute(999_999_999, "inline"), "inline");
 });
 
 test("chooseRoute: auto picks by total size against the threshold", () => {
-  assert.equal(chooseRoute(1024, "auto"), "openrouter");
-  assert.equal(chooseRoute(15 * 1024 * 1024, "auto"), "openrouter"); // at threshold, inclusive
-  assert.equal(chooseRoute(15 * 1024 * 1024 + 1, "auto"), "portkey"); // just over
+  assert.equal(chooseRoute(1024, "auto"), "inline");
+  assert.equal(chooseRoute(15 * 1024 * 1024, "auto"), "inline"); // at threshold, inclusive
+  assert.equal(chooseRoute(15 * 1024 * 1024 + 1, "auto"), "files"); // just over
 });
 
 test("chooseRoute: rejects an unrecognized override value", () => {
   assert.throws(() => chooseRoute(1024, "carrier-pigeon"), /Unknown --route value/);
-});
-
-test("portkeyOpenrouterModel: prefixes a bare model name with @openrouter/google/", () => {
-  assert.equal(portkeyOpenrouterModel("gemini-2.5-flash"), "@openrouter/google/gemini-2.5-flash");
-});
-
-test("portkeyOpenrouterModel: normalizes a Portkey-direct-style @google/... model name", () => {
-  assert.equal(
-    portkeyOpenrouterModel("@google/gemini-2.5-flash"),
-    "@openrouter/google/gemini-2.5-flash"
-  );
-});
-
-test("portkeyOpenrouterModel: leaves an already-fully-qualified model name alone", () => {
-  assert.equal(
-    portkeyOpenrouterModel("@openrouter/google/gemini-2.5-flash"),
-    "@openrouter/google/gemini-2.5-flash"
-  );
-});
-
-test("buildOpenRouterRequestBody: base64-encodes tracks as input_audio, then the prompt text, addressed to Portkey's OpenRouter slug", () => {
-  const body = buildOpenRouterRequestBody(
-    "gemini-2.5-flash",
-    [
-      { bytes: Buffer.from("track-a-bytes"), mimeType: "audio/mp3" },
-      { bytes: Buffer.from("track-b-bytes"), mimeType: "audio/wav" },
-    ],
-    "compare these"
-  );
-  assert.equal(body.model, "@openrouter/google/gemini-2.5-flash");
-  assert.deepEqual(body.messages[0].content, [
-    {
-      type: "input_audio",
-      input_audio: { data: Buffer.from("track-a-bytes").toString("base64"), format: "mp3" },
-    },
-    {
-      type: "input_audio",
-      input_audio: { data: Buffer.from("track-b-bytes").toString("base64"), format: "wav" },
-    },
-    { type: "text", text: "compare these" },
-  ]);
 });
 
 test("portkeyModel: prefixes a bare model name with the @google provider slug", () => {
@@ -254,18 +211,19 @@ test("portkeyModel: leaves an already-prefixed model name alone", () => {
   assert.equal(portkeyModel("@my-custom-provider/gemini-2.5-flash"), "@my-custom-provider/gemini-2.5-flash");
 });
 
-test("buildPortkeyRequestBody: files first as image_url items, then the prompt text", () => {
-  const body = buildPortkeyRequestBody(
+test("buildRequestBody: media URLs first as image_url items, then the prompt text — same shape for inline data URIs and Files API URIs", () => {
+  const dataUri = `data:audio/mp3;base64,${Buffer.from("track-a-bytes").toString("base64")}`;
+  const body = buildRequestBody(
     "gemini-2.5-flash",
-    [{ uri: "https://generativelanguage.googleapis.com/v1beta/files/abc" }, { uri: "files/def" }],
+    [dataUri, "https://generativelanguage.googleapis.com/v1beta/files/abc"],
     "critique this"
   );
   assert.equal(body.model, "@google/gemini-2.5-flash");
   assert.equal(body.messages.length, 1);
   assert.equal(body.messages[0].role, "user");
   assert.deepEqual(body.messages[0].content, [
+    { type: "image_url", image_url: { url: dataUri } },
     { type: "image_url", image_url: { url: "https://generativelanguage.googleapis.com/v1beta/files/abc" } },
-    { type: "image_url", image_url: { url: "files/def" } },
     { type: "text", text: "critique this" },
   ]);
 });

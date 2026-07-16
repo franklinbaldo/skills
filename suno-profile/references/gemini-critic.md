@@ -9,26 +9,31 @@ AI-generated style prompt (`metadata.tags`), which describes what Suno
 *intended* to generate, not necessarily what's actually audible in the
 render.
 
-**Gated on availability**: `PORTKEY_API_KEY` is always required; `route:
-portkey` (large tracks, below) also needs `GEMINI_API_KEY`. When what's
-needed for the chosen route isn't set, skip this step and fall back to
-lyrics/style-prompt-only drafting — don't block other work on it.
+**Gated on availability**: both `PORTKEY_API_KEY` and `GEMINI_API_KEY`
+are required, regardless of route. When either isn't set, skip this step
+and fall back to lyrics/style-prompt-only drafting — don't block other
+work on it.
 
-**Two routes, both through Portkey, chosen automatically by combined
-track size** (override with `--route`):
+**Two transports, both through Portkey's `@google` provider, same
+request shape, chosen automatically by combined track size** (override
+with `--route`):
 
-- `openrouter` (small tracks, under `ROUTE_SIZE_THRESHOLD_BYTES` — 15MiB
-  raw, ~20MiB base64'd): audio goes inline as base64 in one request, no
-  upload step. Reaches Gemini via Portkey's OpenRouter Model Catalog
-  integration (model slug `@openrouter/google/<model>`) — the OpenRouter
-  key itself lives in Portkey's dashboard, not in this script's
-  environment. Only `PORTKEY_API_KEY` is needed.
-- `portkey` (large tracks, the original design): audio uploads directly
-  to Google's Files API (Portkey doesn't proxy the upload/poll lifecycle)
-  — only the resulting file reference and the prompt go through Portkey
-  for the inference call itself, using a raw `GEMINI_API_KEY` passed
-  through the `Authorization` header. Needs both `GEMINI_API_KEY` and
-  `PORTKEY_API_KEY`.
+- `inline` (small/medium tracks, under `ROUTE_SIZE_THRESHOLD_BYTES` —
+  15MiB raw, ~20MiB base64'd): audio goes as a base64 data URI directly
+  in the chat-completions request body, via Portkey's unified
+  `image_url` content type (Portkey translates this to Gemini's native
+  audio format regardless of media type) — one request, no upload step.
+  Portkey's own docs don't state an inline size limit; the threshold is
+  a conservative heuristic, not a verified cap.
+- `files` (large tracks): audio uploads directly to Google's Files API
+  first (Portkey doesn't proxy the upload/poll lifecycle) — only the
+  resulting file URI then goes through Portkey, as the same `image_url`
+  content type pointing at the file reference instead of a data URI.
+
+Both transports authenticate identically: a raw `GEMINI_API_KEY` passed
+through the `Authorization` header (Portkey's documented passthrough
+form for the `@google` provider — no Portkey-dashboard-side key
+configuration needed), plus `PORTKEY_API_KEY` to reach Portkey itself.
 
 ## Why everything goes through Portkey
 
@@ -36,30 +41,18 @@ Calling Gemini directly would have been simpler for this script's actual
 (single-user, occasional) usage — one fewer account/secret/third party in
 the path. Portkey was added on request anyway, trading that simplicity
 for cross-model/cross-key fallback, circuit breaking, and centralized
-observability. Once Portkey was in place, routing the small-track path
-through it too (rather than calling OpenRouter directly) was a further,
-explicit choice: it keeps every call — regardless of route — visible in
-one place, at the cost of an extra hop's privacy surface for the
-small-track path versus going straight to OpenRouter. Both tradeoffs were
-made deliberately, not defaulted into; see the PR history for the actual
-back-and-forth if the reasoning ever needs revisiting.
+observability.
 
-**One-time manual setup this script cannot do for you:** the
-`openrouter` route only works once an OpenRouter API key is registered
-in Portkey's own dashboard (Model Catalog → add integration → slug
-`@openrouter`) — that's a web UI action, not something achievable via
-`PORTKEY_API_KEY` alone. Until that's done, use `--route portkey` (or let
-`auto` fall through to it for large-enough tracks) as the working path.
-
-**If Portkey mis-transforms `input_audio`:** not yet hit, but Portkey's
-raw-proxy passthrough (`POST /v1/proxy/chat/completions` with
-`x-portkey-provider: openai`, `x-portkey-custom-host:
-https://openrouter.ai/api/v1`, and a real `Authorization: Bearer
-<OPENROUTER_API_KEY>`) is a documented fallback that sends the request
-unmodified straight to OpenRouter through Portkey's proxy rather than its
-normal request-translation path. Not implemented here — would need its
-own `OPENROUTER_API_KEY` env var and a separate code path if the
-Model-Catalog route turns out to be unreliable for audio specifically.
+An earlier version of this script also routed small tracks through
+Portkey's OpenRouter Model Catalog integration (`@openrouter/google/...`,
+requiring a separate one-time OpenRouter-key registration in Portkey's
+dashboard) rather than Portkey's direct `@google` provider. That's gone:
+Portkey documents native audio support for its `@google` provider via
+the same `image_url`/base64-data-URI content type this script now uses
+for both transports, so the OpenRouter hop added an extra
+account-dependency and a second request shape for no remaining benefit.
+See the PR history if the OpenRouter-routing reasoning ever needs
+revisiting.
 
 ## Why audio, not just metadata
 
@@ -123,36 +116,31 @@ being invoked from a particular skill's directory.
 
 - `PORTKEY_API_KEY` — always required. Authenticates to Portkey's gateway
   (`x-portkey-api-key` header) for the `/v1/chat/completions` call, on
-  both routes. [portkey.ai](https://portkey.ai) issues these.
-- OpenRouter integration registered in Portkey's dashboard (Model
-  Catalog → `@openrouter` slug) — required for `route: openrouter` only,
-  and it's a one-time web UI step, not an env var this script reads. See
-  "Why everything goes through Portkey" above.
-- `GEMINI_API_KEY` — required for `route: portkey` (large tracks) only.
-  Used two ways: as the Google Files API upload/poll credential (direct
-  to Google), and as the raw `Authorization` header value Portkey
-  forwards to Gemini for the inference call. Not needed for `route:
-  openrouter`.
+  both transports. [portkey.ai](https://portkey.ai) issues these.
+- `GEMINI_API_KEY` — always required. Used two ways: as the raw
+  `Authorization` header value Portkey forwards to Gemini for every
+  inference call (both transports), and, for the `files` transport only,
+  as the Google Files API upload/poll credential (direct to Google, not
+  through Portkey).
 - `GEMINI_MODEL` — optional override (default `gemini-2.5-pro`), passed
-  through whichever route's provider-slug convention applies
-  (`portkeyModel()` for `route: portkey`, `portkeyOpenrouterModel()` for
-  `route: openrouter` — both idempotent, so a bare model name or an
-  already-prefixed one both work). Gemini's available models change over
-  time; if the default errors, check current model availability rather
-  than assuming the script is broken.
-- `--route auto|openrouter|portkey` — `auto` (default) picks by combined
-  track size against `ROUTE_SIZE_THRESHOLD_BYTES` (15MiB raw); an
-  explicit value always wins regardless of size.
+  through `portkeyModel()`'s `@google/<model>` slug convention (
+  idempotent, so a bare model name or an already-prefixed one both
+  work). Gemini's available models change over time; if the default
+  errors, check current model availability rather than assuming the
+  script is broken.
+- `--route auto|inline|files` — `auto` (default) picks by combined track
+  size against `ROUTE_SIZE_THRESHOLD_BYTES` (15MiB raw); an explicit
+  value always wins regardless of size.
 - No npm dependencies — the script talks to Google's Files API and
   Portkey's gateway directly via `fetch`, matching the zero-dependency
   style of this skill set's other scripts (e.g.
   `suno-curator/scripts/audit-catalog.mjs`).
-- `route: portkey` uploads via Gemini's Files API (resumable upload) —
-  necessary for audio generally and for sending several tracks in one
-  request without hitting inline-request size limits. Uploaded files
-  process asynchronously; the script polls until `ACTIVE` before
-  requesting the critique. `route: openrouter` skips this entirely —
-  audio goes inline as base64 in the same request as the prompt.
+- `files` uploads via Gemini's Files API (resumable upload) — necessary
+  above the inline-size heuristic and for sending several large tracks
+  in one request without hitting inline-request size limits. Uploaded
+  files process asynchronously; the script polls until `ACTIVE` before
+  requesting the critique. `inline` skips this entirely — audio goes as
+  a base64 data URI in the same request as the prompt.
 - Supported formats are exactly WAV, MP3, AIFF, AAC, OGG Vorbis, and FLAC
   (`audio/wav`, `audio/mp3`, `audio/aiff`, `audio/aac`, `audio/ogg`,
   `audio/flac` — see [Gemini's supported audio
@@ -160,14 +148,13 @@ being invoked from a particular skill's directory.
   Not every `audio/*` Content-Type, and not M4A or Opus — the script
   rejects a source it can't map to one of these rather than guessing.
   `audio/mpeg` (what most HTTP servers actually send for `.mp3`) is
-  normalized to `audio/mp3`. Same allowlist and validation on both
-  routes — `FORMAT_BY_MIME` maps this same set to OpenRouter's short
-  format strings (`mp3`, `wav`, etc.) for the inline-base64 path.
+  normalized to `audio/mp3`. Same allowlist and validation regardless of
+  transport.
 - A response with no usable critique text — an error response, a choice
   that finished for a reason other than `stop`, or an empty/missing
   message — is a hard error (non-zero exit, clear message), never a
   silent empty critique. Shared logic (`extractCritique`) across both
-  routes, since both answer through the same OpenAI-compatible shape.
+  transports, since both answer through the same OpenAI-compatible shape.
 
 ## Testing
 
@@ -181,13 +168,13 @@ polling state machine (absent/`STATE_UNSPECIFIED`/`PROCESSING` →
 `ACTIVE`, a `FAILED` state surfacing the server's error, and giving up
 after `maxAttempts` on a stuck non-terminal state), route selection
 (`chooseRoute`'s size-threshold logic and explicit-override precedence),
-both request shapes (`portkeyModel`/`portkeyOpenrouterModel`'s slug
-prefixing, `buildPortkeyRequestBody`'s file-then-text `image_url`
-ordering, `buildOpenRouterRequestBody`'s base64 `input_audio` ordering),
-and `extractCritique` failing loudly on a response with no usable text
-(error response, non-`stop` finish reason, no choices, empty content)
-instead of printing an empty report — all offline, via a mocked
-`fetch`/`readFile`, no live keys required. Run with:
+the shared request shape (`portkeyModel`'s slug prefixing,
+`buildRequestBody`'s media-then-text `image_url` ordering for both a
+data URI and a Files API URI), and `extractCritique` failing loudly on a
+response with no usable text (error response, non-`stop` finish reason,
+no choices, empty content) instead of printing an empty report — all
+offline, via a mocked `fetch`/`readFile`, no live keys required. Run
+with:
 
 ```bash
 node --test scripts/gemini-audio-critic.test.mjs
@@ -195,35 +182,32 @@ node --test scripts/gemini-audio-critic.test.mjs
 
 ## Verified live
 
-**Predates both the Portkey switch and the OpenRouter-routing addition —
-needs re-verification on both routes.** The `route: portkey` upload/poll
-half of the flow (Google Files API) is unchanged and was confirmed
-2026-07-16 against two real, full-length (5-7 min) public Suno tracks in
-one call (`> be me Borges`, `Fourteen Words`), `.mp3` via `audio_url`:
-upload, polling through non-terminal states, and `audio/mp3` file parts
-all worked as designed. The inference call itself was, at that time,
-direct to Gemini's native `generateContent`, not through Portkey at all
-— neither `route: portkey`'s current `/v1/chat/completions` call
-(`image_url`-wrapped file references) nor `route: openrouter`'s
-(`input_audio`-wrapped base64, `@openrouter/google/<model>` slug) has
-been exercised against a live Portkey account yet, and the OpenRouter
-Model Catalog integration itself hasn't been set up. Before relying on
-this in a real session: register the `@openrouter` integration in
-Portkey's dashboard first, then run one real `--track` call through each
-route (`--route openrouter` and `--route portkey`) and confirm the
-critique comes back on both — don't assume the offline
+**Predates the Portkey `image_url`-for-audio design (the OpenRouter
+Model Catalog route it replaced was never exercised live either) — needs
+verification against a live Portkey account on both transports.** The
+`files` transport's upload/poll half of the flow (Google Files API) is
+unchanged and was confirmed 2026-07-16 against two real, full-length
+(5-7 min) public Suno tracks in one call (`> be me Borges`, `Fourteen
+Words`), `.mp3` via `audio_url`: upload, polling through non-terminal
+states, and `audio/mp3` file parts all worked as designed. The inference
+call itself was, at that time, direct to Gemini's native
+`generateContent`, not through Portkey at all — neither transport's
+current `/v1/chat/completions` call (`image_url`-wrapped data URI or
+file reference, `@google/<model>` slug, raw-key `Authorization`
+passthrough) has been exercised against a live Portkey account yet.
+Before relying on this in a real session: run one real `--track` call
+through each transport (`--route inline` and `--route files`) and
+confirm the critique comes back on both — don't assume the offline
 request/response-shape tests are a substitute for a live round trip
-through the actual gateway, especially for `route: openrouter`'s
-not-yet-confirmed `input_audio` handling (see "If Portkey mis-transforms
-`input_audio`" above).
+through the actual gateway.
 
 One operational finding from the original pre-Portkey verification,
-likely still relevant to `route: portkey` since it's a Gemini-side quota,
-not a Portkey-side one: **`gemini-2.5-pro` had zero free-tier quota**
-(`429`, `limit: 0` for `generate_content_free_tier_requests`) on the key
-tested — `gemini-2.5-flash` worked immediately with the same request. If
-the default model errors, try `--model gemini-2.5-flash` before assuming
-the script is broken.
+likely still relevant since it's a Gemini-side quota, not a Portkey-side
+one: **`gemini-2.5-pro` had zero free-tier quota** (`429`, `limit: 0`
+for `generate_content_free_tier_requests`) on the key tested —
+`gemini-2.5-flash` worked immediately with the same request. If the
+default model errors, try `--model gemini-2.5-flash` before assuming the
+script is broken.
 
 Still not verified: behavior with more than two tracks in one call, or
 with much longer/heavier audio — context/token limits may cap how many
