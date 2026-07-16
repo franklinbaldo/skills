@@ -82,6 +82,35 @@ is not directly settable this way).
 }
 ```
 
+## Pinning a song to the profile
+
+`POST /api/profiles/pin-clip/{clip_id}`
+
+```json
+{"submit_to_contest": false, "max_pins": 5}
+```
+
+`max_pins` in the captured request was `5`, not Suno's actual 10-pin UI
+limit — meaning unrelated to the true cap, or a stale/plan-specific value.
+**Do not trust it as documentation of the real limit; treat 10 as the
+UI-stated cap until this is understood better.**
+
+Read back the current pinned set via `GET /api/profiles/v2/{handle}`,
+finding the `feed` entry with `feed_id: "user_pinned_songs"` — not a
+simple boolean on the clip object (`GET /api/clip/{id}/` doesn't reliably
+include `is_pinned`; only the `pin-clip` response itself does, for the
+clip just pinned).
+
+**Known bug, observed directly, twice:** pinning a new clip evicted an
+*already-pinned, unrelated* clip from the set — with only 3-4 total pins
+active, nowhere near the stated `max_pins: 5` or the UI's 10-slot cap.
+Verify the full pinned set after every pin/unpin, not just the clip you
+touched. Separately, an evicted-then-re-pinned clip **lost its pin
+caption** (reverted to none) even though the clip itself came back —
+re-apply the caption after any unpin/re-pin cycle, don't assume it
+survived. No corresponding `unpin-clip`-style endpoint has been captured
+yet; presumably exists but unmapped.
+
 ## Pinned-song caption (profile page)
 
 `PUT /api/profiles/pin-caption/{clip_id}`
@@ -95,7 +124,8 @@ section**, not the song's own `caption` field (that one lives on
 `set_metadata` and shows on the song's own page). Distinct field, distinct
 endpoint, distinct storage: read back via `GET /api/profiles/v2/{handle}`'s
 top-level `pin_captions` array (`[{"clip_id", "caption"}, ...]`), not from
-the clip object itself.
+the clip object itself. Cleared by the eviction bug above — see "Pinning
+a song to the profile."
 
 ## Song visibility (publish/unpublish)
 
