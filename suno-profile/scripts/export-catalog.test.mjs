@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseArgs, buildMarkdown } from "./export-catalog.mjs";
 
-test("parseArgs: defaults handle and out, accepts overrides", () => {
-  assert.deepEqual(parseArgs([]), { out: null, handle: "franklinbaldo" });
+test("parseArgs: defaults handle, out, includePrivate, accepts overrides", () => {
+  assert.deepEqual(parseArgs([]), { out: null, handle: "franklinbaldo", includePrivate: false });
   assert.deepEqual(parseArgs(["--out", "x.md", "--handle", "someoneelse"]), {
     out: "x.md",
     handle: "someoneelse",
+    includePrivate: false,
   });
+  assert.equal(parseArgs(["--include-private"]).includePrivate, true);
 });
 
 test("parseArgs: rejects an unknown argument", () => {
@@ -42,6 +44,7 @@ const FIXTURE = {
       caption: "Chess as ritual.",
       lyrics: "Em seu canto grave",
       play_count: 7,
+      is_public: true,
     },
     {
       id: "clip-2",
@@ -51,6 +54,7 @@ const FIXTURE = {
       caption: "",
       lyrics: "On the scorching February morning",
       play_count: 23,
+      is_public: false,
     },
   ],
   playlists: [
@@ -67,9 +71,15 @@ test("buildMarkdown: includes profile, pinned songs, playlists, and every song",
   assert.match(md, /### Aleph caipira/);
   assert.match(md, /Borges' El Aleph, caipira style\./);
   assert.match(md, /Tracks: A, B/);
-  assert.match(md, /### Beatriz/);
-  assert.match(md, /### Xadrez/);
+  assert.match(md, /### Beatriz \(private\/unpublished\)/);
+  assert.match(md, /### Xadrez\n/);
   assert.match(md, /On the scorching February morning/);
+});
+
+test("buildMarkdown: labels a private/unpublished clip explicitly, doesn't label a public one", () => {
+  const md = buildMarkdown(FIXTURE);
+  assert.match(md, /### Xadrez\n/); // public — no suffix
+  assert.match(md, /### Beatriz \(private\/unpublished\)\n/);
 });
 
 test("buildMarkdown: sorts songs by play_count descending", () => {

@@ -155,6 +155,33 @@ top-level `display_tags` field on `GET /api/clip/{clip_id}/` (not
 `metadata.tags`, which holds a different, longer AI-style description and
 is not directly settable this way).
 
+## Trashing a song (clip)
+
+`POST /api/gen/trash`
+
+```json
+{"trash": true, "clip_ids": ["<clip_id>", "..."]}
+```
+
+Captured live 2026-07-16, both directions: `{"trash": true, ...}` then
+`{"trash": false, ...}` against the same `clip_id` — confirms this is a
+toggle (trash/restore), not literally the client always sending `true`. Not
+yet confirmed whether it's genuinely reversible indefinitely or only within
+some retention window before permanent deletion — treat a trash as a real
+action needing the same read-back verification discipline as any other
+write, not as a risk-free no-op just because `false` exists. Takes a batch
+(`clip_ids` is a list, not a single id). This is the real "delete a song"
+action —
+`DELETE` as an HTTP method is still unsupported everywhere in this API (see
+"Base" above); Suno's own client uses this POST endpoint instead, the same
+shape playlists' own `trash` endpoint uses.
+
+Per `SKILL.md`'s non-negotiable boundaries, this is the one action in this
+reference that most needs per-clip explicit authorization before sending —
+verify the exact clip_id(s) with Franklin immediately before the call, not
+from a stale list, since a batch call trashes everything in `clip_ids` in
+one shot with no per-item confirmation from the API itself.
+
 ## Cover image generation (AI)
 
 `POST /api/gen/prompt_image/`

@@ -12,6 +12,8 @@
 //
 // Usage:
 //   node export-catalog.mjs [--out <path>] [--handle franklinbaldo]
+//   node export-catalog.mjs --include-private   # also private/unpublished
+//                                                  songs, via feed/v3
 
 import { writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -23,11 +25,12 @@ const CONCURRENCY = 5;
 const STAGGER_MS = 150;
 
 export function parseArgs(argv) {
-  const args = { out: null, handle: DEFAULT_HANDLE };
+  const args = { out: null, handle: DEFAULT_HANDLE, includePrivate: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--out") args.out = argv[++i];
     else if (arg === "--handle") args.handle = argv[++i];
+    else if (arg === "--include-private") args.includePrivate = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
   return args;
@@ -94,6 +97,64 @@ async function fetchAllClips(handle, jwt) {
   return { clips, playlistRefs };
 }
 
+// The public profile endpoint above never returns private/unpublished
+// clips, even authenticated as the owner — it's the same data a visitor
+// sees. /api/feed/v3 (cursor-paginated, POST) is the real "my library"
+// feed, returning every generation regardless of visibility. Its
+// list-level is_public has been observed to disagree with the per-clip
+// detail endpoint's — fetchClipDetail's value (fetched for every clip
+// regardless of route) is treated as authoritative, this is only used to
+// build the id list.
+//
+// Confirmed live 2026-07-16: this endpoint silently truncates under rapid
+// pagination — a burst of calls with no delay produced a 200 OK with an
+// empty clips array and no has_more/next_cursor on what should have been
+// a mid-feed page (not a 429, so withRetry's error-status retry never
+// sees it). Two consecutive full paginations with only a 150ms stagger
+// returned 420 and then 320 results from the same underlying account
+// state; with a 400ms stagger both runs agreed (the shorter was a strict
+// subset of the longer — truncation, not a shifting dataset). Fixed two
+// ways: a longer stagger, and retrying a suspiciously-empty non-first
+// page a few times before accepting it as genuinely the end of the feed.
+async function fetchAllClipsIncludingPrivate(jwt) {
+  const auth = { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" };
+  const clips = new Map();
+  let cursor = null;
+  let page = 0;
+  while (true) {
+    page++;
+    const body = cursor ? { cursor } : {};
+    let next;
+    for (let attempt = 0; ; attempt++) {
+      next = await fetchJsonWithBody(`${API_BASE}/api/feed/v3`, jwt, body);
+      const looksTruncated = page > 1 && (next.clips ?? []).length === 0 && attempt < 3;
+      if (!looksTruncated) break;
+      console.error(`  page ${page}: suspiciously empty response, retry ${attempt + 1}/4...`);
+      await sleep(1000 * 2 ** attempt);
+    }
+    for (const c of next.clips ?? []) {
+      if (!clips.has(c.id)) clips.set(c.id, { id: c.id, title: c.title, play_count: c.play_count ?? 0 });
+    }
+    if (!next.has_more || !next.next_cursor || page > 150) break;
+    cursor = next.next_cursor;
+    await sleep(Math.max(STAGGER_MS, 400));
+  }
+  return clips;
+}
+
+async function fetchJsonWithBody(url, jwt, body) {
+  const res = await withRetry(
+    () =>
+      fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    url
+  );
+  return res.json();
+}
+
 async function fetchClipDetail(id, jwt) {
   const body = await fetchJson(`${API_BASE}/api/clip/${id}/`, jwt);
   return {
@@ -104,6 +165,7 @@ async function fetchClipDetail(id, jwt) {
     caption: body.metadata?.caption ?? body.caption ?? "",
     lyrics: body.metadata?.prompt ?? "",
     play_count: body.play_count ?? 0,
+    is_public: body.is_public === true,
   };
 }
 
@@ -219,7 +281,7 @@ export function buildMarkdown({ handle, profile, clipDetails, playlists }) {
   lines.push("");
   const sorted = [...clipDetails].sort((a, b) => b.play_count - a.play_count);
   for (const clip of sorted) {
-    lines.push(`### ${clip.title}`);
+    lines.push(`### ${clip.title}${clip.is_public ? "" : " (private/unpublished)"}`);
     lines.push("");
     lines.push(`- ID: ${clip.id}`);
     lines.push(`- Play count: ${clip.play_count}`);
@@ -243,9 +305,18 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const jwt = await mintBearerToken();
 
-  console.error(`Fetching clip list for ${args.handle}...`);
-  const { clips, playlistRefs } = await fetchAllClips(args.handle, jwt);
-  console.error(`Found ${clips.size} public clips, ${playlistRefs.length} playlists. Fetching details...`);
+  let clips, playlistRefs;
+  if (args.includePrivate) {
+    console.error(`Fetching FULL clip list (public + private) for ${args.handle}...`);
+    clips = await fetchAllClipsIncludingPrivate(jwt);
+    // feed/v3 doesn't carry playlist refs — reuse the public endpoint's
+    // page-1 response for those regardless of --include-private.
+    ({ playlistRefs } = await fetchAllClips(args.handle, jwt));
+  } else {
+    console.error(`Fetching public clip list for ${args.handle}...`);
+    ({ clips, playlistRefs } = await fetchAllClips(args.handle, jwt));
+  }
+  console.error(`Found ${clips.size} clips, ${playlistRefs.length} playlists. Fetching details...`);
 
   const [{ details: clipDetails, failures: clipFailures }, { playlists, failures: playlistFailures }, profile] =
     await Promise.all([
