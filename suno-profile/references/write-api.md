@@ -287,6 +287,27 @@ field is a real gap, not just a style choice:
   `pin-caption`'s note above on where `is_pinned` shows up). This is the
   endpoint for bio/genre/pin-caption work and for `curation-plan.md`'s
   self-critique, which reads live profile state before proposing changes.
+- `POST /api/feed/v3` (cursor-paginated: `{"cursor": "..."}` after the
+  first call, response carries `clips`, `has_more`, `next_cursor`) — the
+  only endpoint that returns **every** clip regardless of visibility,
+  public or private/unpublished. Neither endpoint above ever returns a
+  private clip, even authenticated as the owner. Used by
+  `scripts/export-catalog.mjs --include-private` and
+  `quality-review.md`'s candidate-gathering step.
+
+  **Confirmed live 2026-07-16: silently truncates under rapid
+  pagination.** A burst of calls with only a ~150ms stagger produced a
+  `200 OK` with an empty `clips` array and no `has_more`/`next_cursor` on
+  what should have been a mid-feed page — not a `429` any retry-on-error
+  logic would catch. Two consecutive full paginations with that short a
+  stagger returned inconsistent totals (420, then 320) from the same
+  account state; a 400ms+ stagger made consecutive runs agree (the
+  shorter was a strict subset of the longer — truncation, not a shifting
+  dataset). `export-catalog.mjs` and the blog repo's
+  `generate-music-posts.mjs` both apply a 400ms+ stagger plus a retry on
+  a suspiciously-empty non-first page before accepting it as the real end
+  of the feed — treat a script without that fix as unreliable for
+  anything that needs a complete count.
 
 ## Profile (bio, genres, social links)
 

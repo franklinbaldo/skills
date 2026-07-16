@@ -41,6 +41,11 @@ itself says or shows, use this one.
   real song instead of a test one), say so immediately and revert before
   doing anything else. Don't let a slip pass silently because the visible
   symptom looks minor.
+- Trashing a song is the single highest-consequence write this skill can
+  make — this boundary applies to it with no exception, and it's the
+  write most likely to need the reminder. See
+  `references/quality-review.md` for the full process (never
+  autonomous; propose candidates, get explicit authorization first).
 - A full-object endpoint (e.g. the profile `PATCH`) must be sent with every
   field, not just the one being changed — fetch current state first. This
   skill exists partly because that exact mistake once overwrote a live
@@ -100,6 +105,15 @@ For the profile's overall identity — not one field, the whole thing — use
 - the review cadence, including a **mandatory self-critique** at the start
   of any session where the plan is missing or its `Last reviewed` date is
   more than a week old — run it before other work, don't wait to be asked.
+
+## Quality review (finding and trashing low-quality songs)
+
+[`references/quality-review.md`](references/quality-review.md) — periodic,
+not a one-off: use `export-catalog.mjs --include-private` + `ask-gemini.mjs`
+to surface candidates (garbled/placeholder titles, near-zero engagement,
+redundant alternate takes), present them grouped by reason, and only trash
+what Franklin explicitly authorizes — never autonomously, per the boundary
+above.
 
 ## Session flow
 
