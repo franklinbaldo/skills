@@ -111,8 +111,11 @@ per song. For a catalog-sized audit (dozens to ~100 songs):
   a bigger gap than an obscure one).
 - While reading captions that do exist, watch for the corrupted-old-data
   pattern in `write-api.md` (accented characters replaced by plain
-  spaces) — worth a quick rewrite-with-correct-text fix on sight, not a
-  separate investigation each time.
+  spaces) — recognizable on sight, so no separate investigation is needed
+  each time, but recognizing the pattern is not authorization to fix it:
+  flag it, propose the corrected text, and wait for Franklin's go-ahead on
+  that specific write like any other caption change, even though this is
+  a read-only audit pass.
 - Report the completeness percentage and a prioritized list; don't draft
   the missing captions in the same breath — that's the next, separate,
   Franklin-reviewed step (see "Song descriptions" in the template above).

@@ -277,15 +277,22 @@ Write observations, not marketing copy or a caption — this is raw critical mat
 // empty-but-valid-looking report with exit code 0.
 export function extractCritique(result) {
   const candidate = result?.candidates?.[0];
+  const finishReason = candidate?.finishReason ?? null;
   const critique = (candidate?.content?.parts ?? [])
     .map((part) => part.text ?? "")
     .join("\n")
     .trim();
-  if (critique) return critique;
   const context = JSON.stringify({
-    finishReason: candidate?.finishReason ?? null,
+    finishReason,
     promptFeedback: result?.promptFeedback ?? null,
   }).slice(0, 500);
+  // A non-STOP finish reason (e.g. MAX_TOKENS) can still carry partial
+  // text in `parts` — that's not a usable critique, it's a truncated one,
+  // so it's an error the same as no text at all, not a lesser case.
+  if (finishReason && finishReason !== "STOP") {
+    throw new Error(`generateContent did not finish cleanly: ${context}`);
+  }
+  if (critique) return critique;
   throw new Error(`generateContent returned no critique text: ${context}`);
 }
 

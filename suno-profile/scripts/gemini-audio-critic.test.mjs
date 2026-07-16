@@ -191,7 +191,7 @@ test("extractCritique: a response without text fails loudly with the block conte
       extractCritique({
         candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [] } }],
       }),
-    /no critique text.*MAX_TOKENS/s
+    /did not finish cleanly.*MAX_TOKENS/s
   );
   assert.throws(
     () => extractCritique({ candidates: [{ content: { parts: [{ text: "   " }] } }] }),
@@ -201,4 +201,19 @@ test("extractCritique: a response without text fails loudly with the block conte
   // same way, not throw a TypeError from reading into an undefined result.
   assert.throws(() => extractCritique({}), /no critique text/);
   assert.throws(() => extractCritique({ candidates: [] }), /no critique text/);
+});
+
+test("extractCritique: a non-STOP finish reason is an error even with partial text", () => {
+  // Reproduces the exact case from PR #12 review 4715407460: a truncated
+  // response can still carry text in `parts` — that's a partial critique,
+  // not a usable one, and must not be returned as if it were complete.
+  assert.throws(
+    () =>
+      extractCritique({
+        candidates: [
+          { finishReason: "MAX_TOKENS", content: { parts: [{ text: "partial output" }] } },
+        ],
+      }),
+    /did not finish cleanly.*MAX_TOKENS/s
+  );
 });
