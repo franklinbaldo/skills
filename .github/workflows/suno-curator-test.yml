@@ -1,14 +1,16 @@
-name: Suno Curator Tests
+name: Suno Skills Tests
 
 on:
   push:
     branches: [ main ]
     paths:
       - "suno-curator/**"
+      - "suno-profile/**"
   pull_request:
     branches: [ main ]
     paths:
       - "suno-curator/**"
+      - "suno-profile/**"
 
 jobs:
   test:
@@ -21,5 +23,11 @@ jobs:
       with:
         node-version: 24
 
-    - name: Run offline audit fixtures
+    - name: Run suno-curator offline audit fixtures
       run: node --test suno-curator/scripts/audit-catalog.test.mjs
+
+    - name: Type-check suno-profile scripts
+      run: node --check suno-profile/scripts/gemini-audio-critic.mjs
+
+    - name: Run suno-profile offline fixtures
+      run: node --test suno-profile/scripts/gemini-audio-critic.test.mjs

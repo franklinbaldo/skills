@@ -87,16 +87,17 @@ flagging something feels off).
 
 ## Applying the plan
 
-- This skill never applies the plan to Suno. Each piece (the bio, one
-  pinned caption, one playlist) becomes a scoped, copy-pasteable
-  recommendation — final wording included — that Franklin applies himself
-  on the Suno side.
-- Recommend one scoped piece at a time, not the whole plan at once: it
-  keeps each change reviewable and the plan/profile diff legible.
-- After Franklin reports a piece applied, re-read the public profile and
-  update the plan document to reflect what's now live, so the plan never
-  silently drifts out of sync with the real profile the way the bio and
-  pinned captions did before this mode existed.
+- Never apply the whole plan in one session. Each piece (the bio, one
+  pinned caption, one playlist) is drafted, brought to Franklin, and only
+  sent — via `write-api.md` — once he explicitly authorizes that specific
+  change. Having a plan is not standing authorization.
+- Propose one scoped piece at a time, not the whole plan at once: it keeps
+  each change reviewable and the plan/profile diff legible.
+- After a piece is applied (and its read-back verified, per
+  `write-api.md`'s propagation-delay note), update the plan document to
+  reflect what's now live, so the plan never silently drifts out of sync
+  with the real profile the way the bio and pinned captions did before
+  this mode existed.
 - Treat "the plan says X but the profile still shows Y" as a normal,
   expected state between sessions — it's a to-do list, not a bug, as long
   as the plan document says so explicitly (e.g. a checklist or status per
@@ -109,7 +110,7 @@ Two kinds of trigger, either one is sufficient:
 - **Event-based**: a new song opens a potential new thread, a pinned song
   stops representing its thread well, or Franklin says something feels
   off.
-- **Time-based**: at the start of any suno-curator session, check the
+- **Time-based**: at the start of any suno-profile session, check the
   plan's `Last reviewed` date. If it's been more than a week (or the plan
   has no date, meaning it's never been reviewed), run the self-critique
   below before doing anything else that session — don't wait for Franklin
@@ -123,8 +124,8 @@ proposing new changes.
 
 The actual content of a time-triggered review. Go through the live
 profile — not the plan document, the real bio/tags/pinned songs/playlists
-via the public profile API (see `blog-contract.md`) — and answer each
-honestly, citing specifics rather than a vague pass/fail:
+via the profile API (see `write-api.md`'s "Reading the profile") — and
+answer each honestly, citing specifics rather than a vague pass/fail:
 
 - **Taste**: Does the pinned-song slate still read as a coherent set (see
   `curation-plan.md`'s "Pinned songs" section and `seo-and-taste.md`'s
@@ -146,5 +147,5 @@ Report the findings to Franklin as a short list — what still holds, what's
 drifted, and what you'd propose changing — then update the plan's
 `Last reviewed` date once the review itself (not necessarily every
 resulting change) is done. Changes proposed by a self-critique follow the
-same rule as everything else in this skill: recommendations for Franklin,
-never writes performed by the agent.
+same rule as any other write in this skill: draft it, get Franklin's
+explicit authorization for that specific change, only then send it.

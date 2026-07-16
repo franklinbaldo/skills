@@ -85,12 +85,27 @@ being invoked from a particular skill's directory.
   Uploaded files process asynchronously; the script polls until `ACTIVE`
   before requesting the critique.
 
+## Testing
+
+`gemini-audio-critic.test.mjs` covers argument parsing, MIME-type
+detection (extension and response Content-Type), prompt construction
+(including the untrusted-content delimiting), and the upload polling
+state machine (absent/`STATE_UNSPECIFIED`/`PROCESSING` → `ACTIVE`, a
+`FAILED` state surfacing the server's error, and giving up after
+`maxAttempts` on a stuck non-terminal state) — all offline, via a mocked
+`fetch`/`readFile`, no `GEMINI_API_KEY` required. Run with:
+
+```bash
+node --test scripts/gemini-audio-critic.test.mjs
+```
+
 ## Not yet verified
 
 This script was written without a live `GEMINI_API_KEY` available to test
-against. Before relying on it: confirm the upload/poll flow against a real
-key, confirm `gemini-2.5-pro` (or whatever's current) actually accepts
-`audio/mpeg` file parts, and confirm multi-file requests behave as
-expected with several full-length songs (context/token limits may cap how
-many tracks fit in one call — if so, batch smaller groups rather than
-assuming unlimited).
+against, so the tests above cover the script's own logic, not Gemini's
+actual behavior. Before relying on it: confirm the upload/poll flow
+against a real key, confirm `gemini-2.5-pro` (or whatever's current)
+actually accepts audio file parts with the MIME types this script sends,
+and confirm multi-file requests behave as expected with several
+full-length songs (context/token limits may cap how many tracks fit in
+one call — if so, batch smaller groups rather than assuming unlimited).
