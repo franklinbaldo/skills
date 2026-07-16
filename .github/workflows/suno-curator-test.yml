@@ -27,7 +27,11 @@ jobs:
       run: node --test suno-curator/scripts/audit-catalog.test.mjs
 
     - name: Type-check suno-profile scripts
-      run: node --check suno-profile/scripts/gemini-audio-critic.mjs
+      run: |
+        node --check suno-profile/scripts/gemini-audio-critic.mjs
+        node --check suno-profile/scripts/keyring.mjs
+        node --check suno-profile/scripts/mint-bearer-token.mjs
+        node --check suno-profile/scripts/login-and-capture.mjs
 
     - name: Run suno-profile offline fixtures
       run: node --test suno-profile/scripts/gemini-audio-critic.test.mjs

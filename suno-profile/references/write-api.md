@@ -15,10 +15,81 @@ documentation — Suno does not publish a write API.
 ## Base
 
 - Host: `https://studio-api-prod.suno.com`
-- Auth: `Authorization: Bearer <Clerk JWT>` header, captured from a live
-  browser session (no public way to mint one headlessly). Tokens are
-  short-lived (`exp` claim, roughly 1 hour) and session-bound — do not persist
-  them in the repo or in skill files.
+- Auth: `Authorization: Bearer <Clerk JWT>` header. Tokens are short-lived
+  (`exp` claim, roughly 1 hour) and session-bound.
+
+### Two-tier auth: ephemeral Bearer vs. durable Clerk cookie
+
+Suno uses Clerk for auth. Two distinct secrets exist, with very different
+risk profiles:
+
+| Secret | Lifetime | Renewable without the user? | Risk if leaked |
+| --- | --- | --- | --- |
+| Bearer JWT (`Authorization` header) | ~1 hour | No — expires on its own | Low — short window, dies unattended |
+| Clerk `__client` session cookie (`auth.suno.com`, httpOnly) | Long-lived, renewable | Yes | **High — equivalent to the account password** |
+
+The axis that matters isn't read-vs-write, it's **interactive-vs-autonomous**.
+Interactive write sessions (Franklin present) only ever need a fresh Bearer.
+Autonomous/scheduled writes would need the durable cookie — which is why
+storing it at all is a deliberate, explicit decision, not a convenience
+default.
+
+**Minting a fresh Bearer from the cookie:**
+`GET https://auth.suno.com/v1/client?__clerk_api_version=<ver>&_clerk_js_version=<ver>`,
+sent with the `__client` cookie attached, returns the current Clerk client
+object; `response.sessions[0].last_active_token.jwt` is a fresh Bearer JWT.
+This is exactly what `clerk-js` calls in the background on every page load —
+confirmed live via Chrome DevTools Protocol (`Network.getCookies` to read the
+httpOnly cookie value directly from the browser's cookie jar, since it's
+unreadable from page JS; `Network.requestWillBeSent`/`responseReceived` to
+observe the call). Scripted end-to-end in this skill:
+
+- `scripts/login-and-capture.mjs` — launches a plain, non-automated
+  `chrome.exe` process (not Playwright's own launcher, which flips
+  `navigator.webdriver` and trips Google's "this browser may not be secure"
+  OAuth block — a fingerprinting check, unrelated to which Chrome profile is
+  used) on a fresh, isolated `--user-data-dir` (the true default profile
+  still refuses remote debugging outright — a separate, hard restriction),
+  then attaches Playwright to it via `chromium.connectOverCDP`. Franklin
+  logs in himself in that window; the script only polls
+  `auth.suno.com/v1/client` (reusing the browser's cookies automatically)
+  until it reports an `active` session with a signed-in user — the mere
+  presence of a `__client` cookie is **not** sufficient, Clerk sets one for
+  anonymous visitors too. Once confirmed, the cookie is stored in
+  **Windows Credential Manager** via `scripts/credmgr.ps1` (P/Invoke to
+  `advapi32.dll`'s `CredWrite`/`CredRead`/`CredDelete` — the actual OS
+  keyring on Windows, equivalent to what `python-keyring`'s `wincred`
+  backend would use; reached this way since no Python runtime is installed
+  in this environment). The cookie value is never printed or written to a
+  plaintext file — piped via stdin into the credential store. The browser
+  and its temporary profile are torn down afterward (`taskkill /T` for the
+  whole process tree, since a CDP-attached-not-launched browser survives a
+  plain Playwright `close()`).
+- `scripts/mint-bearer-token.mjs` — reads the stored cookie back and calls
+  the Clerk endpoint above to mint a fresh Bearer on demand. Verified live:
+  cookie → minted Bearer → `200` from `studio-api-prod.suno.com/api/session/`.
+
+**What this skill still won't do:** touch the cookie or credential store
+without Franklin present to log in and trigger the capture, or use a minted
+Bearer for anything beyond the single authorized action of that moment —
+storing the cookie removes the *re-paste-every-hour* friction, it does not
+by itself authorize unattended writes. An autonomous/scheduled write mode
+(e.g. a GitHub Actions secret holding this same cookie) is a further,
+separate decision — not yet made — because it changes the blast radius of a
+leak from "this machine, this Windows user" to "anyone with access to that
+secret store."
+
+Back to the basics that apply regardless of which auth path minted the
+Bearer:
+
+- Most write calls are `POST` with a trailing slash; a couple of exceptions
+  are noted below. `DELETE` is **not** supported anywhere in this API
+  (confirmed: `405 Method not allowed`) — don't reuse REST conventions from
+  unrelated APIs without testing them first.
+- Success does not always mean the change is visible on the very next `GET`
+  — there is a short read-after-write propagation delay (observed up to
+  ~10s) on several endpoints. Don't conclude a write failed from one stale
+  read; re-check after a few seconds.
 - Most write calls are `POST` with a trailing slash; a couple of exceptions
   are noted below. `DELETE` is **not** supported anywhere in this API
   (confirmed: `405 Method not allowed`) — don't reuse REST conventions from
@@ -118,15 +189,24 @@ simple boolean on the clip object (`GET /api/clip/{id}/` doesn't reliably
 include `is_pinned`; only the `pin-clip` response itself does, for the
 clip just pinned).
 
-**Known bug, observed directly, twice:** pinning a new clip evicted an
-*already-pinned, unrelated* clip from the set — with only 3-4 total pins
-active, nowhere near the stated `max_pins: 5` or the UI's 10-slot cap.
-Verify the full pinned set after every pin/unpin, not just the clip you
-touched. Separately, an evicted-then-re-pinned clip **lost its pin
-caption** (reverted to none) even though the clip itself came back —
-re-apply the caption after any unpin/re-pin cycle, don't assume it
-survived. No corresponding `unpin-clip`-style endpoint has been captured
-yet; presumably exists but unmapped.
+**Correction (2026-07-16):** an earlier version of this section claimed
+pinning a new clip could evict an unrelated already-pinned clip, based on
+a pinned song disappearing during a live session. That was a wrong causal
+inference — the disappearance was Franklin manually unpinning a clip
+himself in the same window, not an effect of this endpoint. Confirmed
+independently the same day: pinning a 5th clip (`Beatriz`) onto an
+existing 4-clip pinned set left all 4 prior clips **and** their pin
+captions intact, verified via a fresh `GET
+/api/profiles/v2/{handle}` immediately after. Treat `pin-clip` as additive
+and non-destructive to the rest of the pinned set unless a future
+observation reproduces otherwise. It remains possible that a clip
+**manually** unpinned (by whatever means) and later re-pinned loses its
+pin caption — that specific sequence hasn't been cleanly isolated from
+the API's own behavior, so don't assume it either way; just re-verify the
+full pinned set and captions after any pin/unpin/re-pin sequence, same
+general discipline as the propagation-delay note above, not because of a
+confirmed bug. No corresponding `unpin-clip`-style endpoint has been
+captured yet; presumably exists but unmapped.
 
 ## Pinned-song caption (profile page)
 

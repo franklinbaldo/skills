@@ -45,6 +45,21 @@ itself says or shows, use this one.
   field, not just the one being changed — fetch current state first. This
   skill exists partly because that exact mistake once overwrote a live
   bio with placeholder text; don't repeat it.
+- The Clerk session cookie (`scripts/login-and-capture.mjs`,
+  `references/write-api.md`'s "Two-tier auth") is durable and equivalent to
+  the account password — storing it removes the need to re-paste a Bearer
+  token every ~hour, it does **not** by itself authorize writing without
+  Franklin present. Every write still needs per-action authorization in that
+  session, exactly as if the token had been pasted manually.
+
+## Getting a session token
+
+- [`references/write-api.md`](references/write-api.md#two-tier-auth-ephemeral-bearer-vs-durable-clerk-cookie) —
+  the two auth paths: pasting a fresh Bearer JWT captured from DevTools
+  (works for a single ~1-hour window), or logging in once via
+  `scripts/login-and-capture.mjs` (stores the Clerk cookie in Windows
+  Credential Manager) and minting fresh Bearers from it on demand
+  (`scripts/mint-bearer-token.mjs`) for the rest of the session.
 
 ## Reading the API and how to word things
 

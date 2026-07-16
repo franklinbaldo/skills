@@ -1,0 +1,8 @@
+{
+  "name": "suno-profile-scripts",
+  "private": true,
+  "description": "Local-only dependencies for suno-profile's browser-login capture step. Not used by CI (offline checks only) or by any other script in this skill set, which stay zero-dependency.",
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}
