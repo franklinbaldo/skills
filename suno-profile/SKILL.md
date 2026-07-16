@@ -71,13 +71,22 @@ itself says or shows, use this one.
   *word* a bio, genre tags, and playlist titles/descriptions well, adapted
   from general streaming-platform SEO practice plus Suno's own field limits.
 - [`references/gemini-critic.md`](references/gemini-critic.md) — when
-  both `PORTKEY_API_KEY` and `GEMINI_API_KEY` are available, send actual
-  song audio to Gemini via Portkey's gateway for a listening critique
-  (rhythm, mood, production texture, vocal delivery) to ground
-  captions/descriptions in what a track actually sounds like, not just
-  its lyrics or Suno's own style prompt. Optional; skip when either key
-  is missing.
+  `PORTKEY_API_KEY` is available (plus `GEMINI_API_KEY` for large tracks
+  specifically), send actual song audio to Gemini, via Portkey either
+  way, for a listening critique (rhythm, mood, production texture, vocal
+  delivery) to ground captions/descriptions in what a track actually
+  sounds like, not just its lyrics or Suno's own style prompt. Optional;
+  skip when the keys the chosen route needs aren't set.
   Read before drafting text, not just before sending it.
+- `scripts/export-catalog.mjs` + `scripts/ask-gemini.mjs` — for
+  catalog-wide questions (recurring themes, how many versions of a song
+  exist, which works a series adapts) rather than one song's sound.
+  Exports every song's full metadata (lyrics, tags, caption, play count),
+  every playlist, and the profile itself into one markdown file, then
+  asks Gemini a question against it as plain text — no audio, much
+  cheaper and faster than the audio critique path above. Requires only
+  `PORTKEY_API_KEY`. Read-only; the export is raw data, not something to
+  publish as-is.
 
 ## Curation planning
 
