@@ -73,7 +73,7 @@ genre:
   assert.deepEqual(report.missingFromBlog, [{ id: "clip-2", title: "Two" }]);
 });
 
-test("does not flag a clip already aggregated via tracks[] as missing", async () => {
+test("indexes tracks[] renditions and normalizes title whitespace", async () => {
   const root = await mkdtemp(join(tmpdir(), "suno-curator-"));
   const blog = join(root, "src", "content", "blog");
   await mkdir(blog, { recursive: true });
@@ -83,24 +83,44 @@ test("does not flag a clip already aggregated via tracks[] as missing", async ()
   );
 
   await writeFile(
-    join(blog, "aggregate.mdx"),
+    join(blog, "borges.mdx"),
     `---
 type: Music Post
 postType: music
-title: Primary
+title: Borges e eu
+sunoId: clip-main
+sunoImageUrl: "https://example.com/borges.jpg"
+duration: 177
 lang: pt
-sunoId: clip-primary
-sunoImageUrl: "https://example.com/cover.jpg"
-duration: 120
-translationKey: music-aggregate
+translationKey: music-borges
 genre:
-  - indie
+  - spoken word
 tracks:
-  - label: "Alt version"
-    sunoId: clip-track
-    duration: 90
-    genre:
-      - indie
+  - label: "greentext version"
+    sunoId: clip-track-1
+    sunoStyle: |-
+      block scalar that must not leak keys
+      sunoId: not-a-real-id
+  - label: "glitch rap version"
+    sunoId: clip-track-2
+---
+
+## Letra
+`
+  );
+  await writeFile(
+    join(blog, "tempo.mdx"),
+    `---
+type: Music Post
+postType: music
+title: O Tempo
+sunoId: clip-tempo
+sunoImageUrl: "https://example.com/tempo.jpg"
+duration: 90
+lang: pt
+translationKey: music-tempo
+genre:
+  - ambient
 ---
 
 ## Letra
@@ -111,17 +131,19 @@ tracks:
   await writeFile(
     profile,
     JSON.stringify({
-      num_total_clips: 2,
+      num_total_clips: 4,
       clips: [
         {
-          id: "clip-primary",
-          title: "Primary",
+          id: "clip-main",
+          title: "Borges e eu ",
           is_public: true,
-          metadata: { duration: 120 },
+          metadata: { duration: 177 },
         },
+        { id: "clip-track-1", title: "greentext", is_public: true, metadata: {} },
+        { id: "clip-track-2", title: "glitch", is_public: true, metadata: {} },
         {
-          id: "clip-track",
-          title: "Alt version",
+          id: "clip-tempo",
+          title: "O  Tempo",
           is_public: true,
           metadata: { duration: 90 },
         },
@@ -139,63 +161,14 @@ tracks:
     "json",
   ]);
   const report = JSON.parse(stdout);
-  assert.equal(report.summary.mirroredIds, 2);
+  // Track renditions are mirrored by the post that carries them, never
+  // reported as missing, and never recreated by a sync.
+  assert.equal(report.summary.publicClips, 4);
+  assert.equal(report.summary.mirroredIds, 4);
   assert.deepEqual(report.missingFromBlog, []);
-});
-
-test("treats source title whitespace as noise, not real title drift", async () => {
-  const root = await mkdtemp(join(tmpdir(), "suno-curator-"));
-  const blog = join(root, "src", "content", "blog");
-  await mkdir(blog, { recursive: true });
-  await writeFile(
-    join(root, "package.json"),
-    JSON.stringify({ name: "franklinbaldo-pico" })
-  );
-
-  await writeFile(
-    join(blog, "whitespace.mdx"),
-    `---
-type: Music Post
-postType: music
-title: Portas Infinitas
-lang: pt
-sunoId: clip-1
-sunoImageUrl: "https://example.com/cover.jpg"
-duration: 120
-translationKey: music-whitespace
-genre:
-  - indie
----
-
-## Letra
-`
-  );
-
-  const profile = join(root, "profile.json");
-  await writeFile(
-    profile,
-    JSON.stringify({
-      num_total_clips: 1,
-      clips: [
-        {
-          id: "clip-1",
-          title: "Portas Infinitas ",
-          is_public: true,
-          metadata: { duration: 120 },
-        },
-      ],
-    })
-  );
-
-  const { stdout } = await execFileAsync(process.execPath, [
-    script,
-    "--repo",
-    root,
-    "--profile-json",
-    profile,
-    "--format",
-    "json",
-  ]);
-  const report = JSON.parse(stdout);
-  assert.deepEqual(report.titleDrift, []);
+  assert.equal(report.summary.sameLanguageDuplicates, 0);
+  // Trailing whitespace from Suno is noise; internal differences still drift.
+  assert.equal(report.titleDrift.length, 1);
+  assert.equal(report.titleDrift[0].path, "src/content/blog/tempo.mdx");
+  assert.equal(report.titleDrift[0].source, "O  Tempo");
 });
