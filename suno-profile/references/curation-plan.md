@@ -124,8 +124,9 @@ proposing new changes.
 
 The actual content of a time-triggered review. Go through the live
 profile — not the plan document, the real bio/tags/pinned songs/playlists
-via the profile API (see `write-api.md`'s "Reading the profile") — and
-answer each honestly, citing specifics rather than a vague pass/fail:
+via `GET /api/profiles/v2/{handle}` (see `write-api.md`'s "Reading the
+profile") — and answer each honestly, citing specifics rather than a vague
+pass/fail:
 
 - **Taste**: Does the pinned-song slate still read as a coherent set (see
   `curation-plan.md`'s "Pinned songs" section and `seo-and-taste.md`'s

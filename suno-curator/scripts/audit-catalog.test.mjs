@@ -102,6 +102,9 @@ tracks:
       block scalar that must not leak keys
       sunoId: not-a-real-id
   - label: "glitch rap version"
+    genre:
+      - glitch
+      - hip-hop
     sunoId: clip-track-2
 ---
 

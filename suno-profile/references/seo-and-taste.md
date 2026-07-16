@@ -2,8 +2,9 @@
 
 Guidance for *how to word* a Suno profile bio, song descriptions, and
 playlist titles/descriptions well. Everything here is subject to this
-skill's non-negotiable boundaries: these are recommendations to draft and
-hand to Franklin, not things this skill applies to Suno on its own.
+skill's non-negotiable boundaries: draft and workshop the wording with
+Franklin, and apply it to Suno only with his explicit per-action
+authorization (see `SKILL.md` and `write-api.md`).
 
 Synthesized 2026-07-16 from general music-streaming SEO practice (Spotify,
 Apple Music, etc. — Suno doesn't publish its own SEO guidance) plus
