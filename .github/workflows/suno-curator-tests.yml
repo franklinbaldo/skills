@@ -1,0 +1,27 @@
+name: suno-curator tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'suno-curator/scripts/**'
+      - '.github/workflows/suno-curator-tests.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'suno-curator/scripts/**'
+      - '.github/workflows/suno-curator-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Run audit-catalog tests
+        run: node --test suno-curator/scripts/audit-catalog.test.mjs
