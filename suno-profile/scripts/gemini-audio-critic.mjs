@@ -7,11 +7,12 @@
 // sounds like, not just its lyrics or Suno-generated style prompt.
 //
 // One request shape, two transports for getting the audio to Gemini via
-// Portkey's "@google" provider (see references/gemini-critic.md, "Why
-// everything goes through Portkey", for the reasoning and setup). Both use
-// Portkey's unified "image_url" content type — it carries either a base64
-// data URI or a Google Files API URI, translated to Gemini's native audio
-// format on Portkey's side:
+// Portkey's Model Catalog integration (see references/gemini-critic.md,
+// "Why everything goes through Portkey", for the reasoning and setup, and
+// "Provider slug" for why this isn't Portkey's generic "@google" provider).
+// Both use Portkey's unified "image_url" content type — it carries either a
+// base64 data URI or a Google Files API URI, translated to Gemini's native
+// audio format on Portkey's side:
 //   - "inline" (small/medium tracks, under ROUTE_SIZE_THRESHOLD_BYTES):
 //     audio goes as a base64 data URI directly in the chat-completions
 //     request body — one request, no upload/poll step. Portkey's docs
@@ -19,12 +20,13 @@
 //     conservative heuristic, not a documented cap.
 //   - "files" (large tracks): audio uploads directly to Google's Files API
 //     first (Portkey doesn't proxy the upload/poll lifecycle) — only the
-//     resulting file URI goes through Portkey afterward.
-// Both transports authenticate the same way: GEMINI_API_KEY passed straight
-// through to Google via the Authorization header (Portkey's documented
-// raw-key passthrough for the "@google" provider — no Portkey-dashboard key
-// configuration required), plus PORTKEY_API_KEY to reach Portkey itself.
-// Override the automatic choice with --route inline|files. No npm
+//     resulting file URI goes through Portkey afterward. Needs
+//     GEMINI_API_KEY for the upload itself; the inference call through
+//     Portkey does not.
+// Only PORTKEY_API_KEY authenticates the Portkey call itself — the Gemini
+// key lives in Portkey's Model Catalog under the PORTKEY_GEMINI_SLUG
+// integration (default "gemini-free"), not passed per-request. Override the
+// automatic transport choice with --route inline|files. No npm
 // dependencies: fetch only, matching the rest of this skill set's
 // zero-dependency scripts.
 //
@@ -49,7 +51,21 @@ import { pathToFileURL } from "node:url";
 
 const API_BASE = "https://generativelanguage.googleapis.com";
 const PORTKEY_BASE = "https://api.portkey.ai/v1";
-const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-pro";
+// gemini-2.5-pro had zero free-tier quota on the key this was verified
+// against (429, limit: 0) — gemini-2.5-flash worked immediately with the
+// same request, so it's the default rather than the nominally "better"
+// model that this account can't actually call for free.
+const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+
+// Portkey Model Catalog slug for the Gemini integration to call — an
+// account-specific name Franklin chose when registering the integration in
+// Portkey's dashboard, not a Portkey-wide convention (Portkey's own docs'
+// generic "@google" provider example does NOT work here — confirmed live,
+// 400 "Following keys are not valid: google" — because no such
+// dashboard-configured provider exists on this account; only the
+// Model-Catalog-registered slug below does). Override via env var if
+// Franklin ever renames or adds a second integration.
+const DEFAULT_PORTKEY_GEMINI_SLUG = process.env.PORTKEY_GEMINI_SLUG ?? "gemini-free";
 
 // Base64 inflates payload size by ~33%, and the whole file sits in memory
 // for one request with no async/resumable safety net — fine for a short
@@ -98,7 +114,7 @@ const MIME_BY_EXTENSION = {
 function usage() {
   console.error(
     `Usage: node gemini-audio-critic.mjs --track "<title>=<path-or-url>" [--track ...] [--model <name>] [--format json|markdown] [--prompt-extra "<text>"] [--route auto|inline|files]\n\n` +
-      `Requires PORTKEY_API_KEY and GEMINI_API_KEY — see references/gemini-critic.md. ` +
+      `Requires PORTKEY_API_KEY always, plus GEMINI_API_KEY for large tracks (route: files) — see references/gemini-critic.md. ` +
       `Model defaults to ${DEFAULT_MODEL} ` +
       `(override with --model or GEMINI_MODEL — check current model availability, this changes over time).\n`
   );
@@ -316,18 +332,18 @@ Write observations, not marketing copy or a caption — this is raw critical mat
 // data URI in the chat-completions request itself (simpler, one request,
 // no upload step), too large or unknown falls back to the Files API (no
 // size limit). Both transports go through the same Portkey request shape
-// and the same "@google" auth — see buildRequestBody().
+// and the same Model Catalog slug — see buildRequestBody().
 export function chooseRoute(totalBytes, override = "auto") {
   if (override === "inline" || override === "files") return override;
   if (override !== "auto") throw new Error(`Unknown --route value: ${override}`);
   return totalBytes <= ROUTE_SIZE_THRESHOLD_BYTES ? "inline" : "files";
 }
 
-// Portkey's provider slug convention for a Gemini model — idempotent, so a
-// caller who already passes the full "@google/..." form (e.g. copy-pasted
-// from Portkey's own docs) doesn't get double-prefixed.
-export function portkeyModel(model) {
-  return model.startsWith("@") ? model : `@google/${model}`;
+// Prefixes a bare model name with this account's Portkey Model Catalog
+// slug — idempotent, so a caller who already passes a fully-qualified
+// "@slug/model" form doesn't get double-prefixed.
+export function portkeyModel(model, slug = DEFAULT_PORTKEY_GEMINI_SLUG) {
+  return model.startsWith("@") ? model : `@${slug}/${model}`;
 }
 
 // One multimodal chat-completions request body: each audio source as an
@@ -353,27 +369,28 @@ export function buildRequestBody(model, mediaUrls, prompt) {
 }
 
 // Portkey answers through an OpenAI-compatible chat-completions shape
-// regardless of transport, so this is shared. It can answer HTTP 200 with
-// no usable text — no choices at all, or a finish_reason other than "stop"
-// (Portkey maps the underlying Gemini finishReason, e.g. MAX_TOKENS/SAFETY,
-// to this OpenAI-style value). That must fail loudly, not print an
-// empty-but-valid-looking report with exit code 0.
+// regardless of transport, so this is shared. Only a genuinely empty
+// response (no choices, blocked prompt, empty message) is a hard error —
+// there's nothing to salvage. A non-"stop" finish reason (e.g. length)
+// with real text is Gemini running out of room mid-critique, not garbage:
+// the observations it did produce are still real signal ("raw material...
+// pull specific details from it," per this file's own usage guidance),
+// and this script's consumer — a human or another LLM reading the output
+// raw — doesn't need a polished, complete document, just an honest flag
+// that it's partial rather than silently passing it off as the whole
+// critique.
 export function extractCritique(result) {
   const choice = result?.choices?.[0];
   const finishReason = choice?.finish_reason ?? null;
   const critique = (choice?.message?.content ?? "").trim();
-  const context = JSON.stringify({
-    finishReason,
-    error: result?.error ?? null,
-  }).slice(0, 500);
-  // A non-"stop" finish reason (e.g. length/content_filter) can still carry
-  // partial text — that's not a usable critique, it's a truncated one, so
-  // it's an error the same as no text at all, not a lesser case.
-  if (finishReason && finishReason !== "stop") {
-    throw new Error(`chat completion did not finish cleanly: ${context}`);
+  if (!critique) {
+    const context = JSON.stringify({
+      finishReason,
+      error: result?.error ?? null,
+    }).slice(0, 500);
+    throw new Error(`chat completion returned no critique text: ${context}`);
   }
-  if (critique) return critique;
-  throw new Error(`chat completion returned no critique text: ${context}`);
+  return { text: critique, complete: !finishReason || finishReason === "stop" };
 }
 
 async function main() {
@@ -395,35 +412,41 @@ async function main() {
   const totalBytes = loaded.reduce((sum, t) => sum + t.bytes.length, 0);
   const route = chooseRoute(totalBytes, args.route);
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
   const portkeyApiKey = process.env.PORTKEY_API_KEY;
   if (!portkeyApiKey) throw new Error("PORTKEY_API_KEY is not set");
 
-  const mediaUrls =
-    route === "inline"
-      ? loaded.map((t) => `data:${t.mimeType};base64,${t.bytes.toString("base64")}`)
-      : (
-          // Each upload (including its own internal ACTIVE-state poll loop)
-          // is independent of the others — run them concurrently rather
-          // than serializing what can be tens of seconds of pure waiting
-          // per track.
-          await Promise.all(
-            loaded.map((t) => uploadFile(apiKey, t.bytes, t.mimeType, t.title))
-          )
-        ).map((file) => file.uri);
+  let mediaUrls;
+  if (route === "inline") {
+    mediaUrls = loaded.map((t) => `data:${t.mimeType};base64,${t.bytes.toString("base64")}`);
+  } else {
+    // Only the "files" transport needs a Gemini key directly — for the
+    // Google Files API upload itself, not for the Portkey call below.
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY is not set (route: files)");
+    // Each upload (including its own internal ACTIVE-state poll loop) is
+    // independent of the others — run them concurrently rather than
+    // serializing what can be tens of seconds of pure waiting per track.
+    const uploaded = await Promise.all(
+      loaded.map((t) => uploadFile(apiKey, t.bytes, t.mimeType, t.title))
+    );
+    mediaUrls = uploaded.map((file) => file.uri);
+  }
 
   const prompt = buildPrompt(args.tracks, args.promptExtra);
   const body = buildRequestBody(args.model, mediaUrls, prompt);
   const response = await withRetry(
     () =>
+      // Only x-portkey-api-key is needed — the Gemini key lives in
+      // Portkey's Model Catalog under the slug portkeyModel() addresses,
+      // not passed per-request. An explicit x-portkey-provider header or a
+      // raw Authorization passthrough is for Portkey's generic providers,
+      // not a Model-Catalog integration like this one — confirmed live,
+      // both cause a 400 ("keys are not valid") on this account.
       fetch(`${PORTKEY_BASE}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-portkey-api-key": portkeyApiKey,
-          "x-portkey-provider": "@google",
-          Authorization: apiKey,
         },
         body: JSON.stringify(body),
       }),
@@ -434,18 +457,19 @@ async function main() {
   // The returned critique is itself untrusted data from here on — pull
   // specifics from it when drafting captions/notes, don't paste or forward
   // it as if it were a trusted instruction.
-  const critique = extractCritique(result);
+  const { text: critique, complete } = extractCritique(result);
 
   const report = {
     model: args.model,
     route,
     tracks: args.tracks.map((t) => t.title),
     critique,
+    complete,
   };
   process.stdout.write(
     args.format === "json"
       ? `${JSON.stringify(report, null, 2)}\n`
-      : `# Gemini audio critique (${args.model}, via ${route})\n\nTracks: ${report.tracks.join(", ")}\n\n${critique}\n`
+      : `# Gemini audio critique (${args.model}, via ${route})${complete ? "" : " — INCOMPLETE, response was cut off"}\n\nTracks: ${report.tracks.join(", ")}\n\n${critique}\n`
   );
 }
 

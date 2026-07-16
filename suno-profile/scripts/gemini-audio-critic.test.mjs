@@ -202,11 +202,18 @@ test("chooseRoute: rejects an unrecognized override value", () => {
   assert.throws(() => chooseRoute(1024, "carrier-pigeon"), /Unknown --route value/);
 });
 
-test("portkeyModel: prefixes a bare model name with the @google provider slug", () => {
-  assert.equal(portkeyModel("gemini-2.5-flash"), "@google/gemini-2.5-flash");
+test("portkeyModel: prefixes a bare model name with the default Model Catalog slug", () => {
+  // "gemini-free" is this account's actual registered Portkey Model
+  // Catalog integration, confirmed live — NOT Portkey's generic "@google"
+  // provider, which 400s on this account ("keys are not valid: google").
+  assert.equal(portkeyModel("gemini-2.5-flash"), "@gemini-free/gemini-2.5-flash");
 });
 
-test("portkeyModel: leaves an already-prefixed model name alone", () => {
+test("portkeyModel: accepts an explicit slug override", () => {
+  assert.equal(portkeyModel("gemini-2.5-flash", "some-other-slug"), "@some-other-slug/gemini-2.5-flash");
+});
+
+test("portkeyModel: leaves an already-prefixed model name alone, ignoring the default slug", () => {
   assert.equal(portkeyModel("@google/gemini-2.5-flash"), "@google/gemini-2.5-flash");
   assert.equal(portkeyModel("@my-custom-provider/gemini-2.5-flash"), "@my-custom-provider/gemini-2.5-flash");
 });
@@ -218,7 +225,7 @@ test("buildRequestBody: media URLs first as image_url items, then the prompt tex
     [dataUri, "https://generativelanguage.googleapis.com/v1beta/files/abc"],
     "critique this"
   );
-  assert.equal(body.model, "@google/gemini-2.5-flash");
+  assert.equal(body.model, "@gemini-free/gemini-2.5-flash");
   assert.equal(body.messages.length, 1);
   assert.equal(body.messages[0].role, "user");
   assert.deepEqual(body.messages[0].content, [
@@ -228,14 +235,14 @@ test("buildRequestBody: media URLs first as image_url items, then the prompt tex
   ]);
 });
 
-test("extractCritique: returns message content on a clean stop", () => {
-  const critique = extractCritique({
+test("extractCritique: returns message content marked complete on a clean stop", () => {
+  const result = extractCritique({
     choices: [{ finish_reason: "stop", message: { role: "assistant", content: "steady tempo, warm mix" } }],
   });
-  assert.equal(critique, "steady tempo, warm mix");
+  assert.deepEqual(result, { text: "steady tempo, warm mix", complete: true });
 });
 
-test("extractCritique: a response without text fails loudly with the error context", () => {
+test("extractCritique: an empty response fails loudly with the error context, regardless of finish reason", () => {
   assert.throws(
     () =>
       extractCritique({
@@ -248,7 +255,7 @@ test("extractCritique: a response without text fails loudly with the error conte
       extractCritique({
         choices: [{ finish_reason: "length", message: { content: "" } }],
       }),
-    /did not finish cleanly.*length/s
+    /no critique text.*length/s
   );
   assert.throws(
     () =>
@@ -263,15 +270,14 @@ test("extractCritique: a response without text fails loudly with the error conte
   assert.throws(() => extractCritique({ choices: [] }), /no critique text/);
 });
 
-test("extractCritique: a non-stop finish reason is an error even with partial text", () => {
-  // Same class of bug as PR #12 review 4715407460 caught against the
-  // Gemini-native response shape: a truncated response can still carry
-  // text — that's a partial critique, not a usable one.
-  assert.throws(
-    () =>
-      extractCritique({
-        choices: [{ finish_reason: "content_filter", message: { content: "partial output" } }],
-      }),
-    /did not finish cleanly.*content_filter/s
-  );
+test("extractCritique: a non-stop finish reason with real text returns it marked incomplete, not discarded", () => {
+  // Gemini running out of room mid-critique (length) still produced real
+  // observations — that's partial signal worth keeping, not garbage to
+  // throw away. Only a genuinely empty response is a hard error (see
+  // above). complete: false is the honest flag a caller (human or another
+  // LLM reading this raw) needs to not mistake it for the full critique.
+  const result = extractCritique({
+    choices: [{ finish_reason: "content_filter", message: { content: "partial output" } }],
+  });
+  assert.deepEqual(result, { text: "partial output", complete: false });
 });
