@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .venv/
 .ruff_cache/
+node_modules/
+suno-profile/scripts/.chrome-login-profile/

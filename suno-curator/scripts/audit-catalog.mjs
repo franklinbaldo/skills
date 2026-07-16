@@ -1,0 +1,398 @@
+#!/usr/bin/env node
+
+import { readFile, readdir } from "node:fs/promises";
+import { extname, join, resolve } from "node:path";
+
+const PROFILE_URL =
+  "https://studio-api-prod.suno.com/api/profiles/franklinbaldo/";
+
+function usage() {
+  console.error(`Usage: node audit-catalog.mjs [options]\n\nOptions:\n  --repo <path>          Blog repository root (default: .)\n  --profile-json <path>  Offline Suno profile snapshot (one page or {pages:[...]})\n  --format <json|markdown>  Output format (default: markdown)\n  --help                 Show this help\n`);
+}
+
+function parseArgs(argv) {
+  const args = { repo: ".", format: "markdown", profileJson: null };
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--help") return { ...args, help: true };
+    if (["--repo", "--profile-json", "--format"].includes(arg) && !argv[i + 1]) {
+      throw new Error(`${arg} requires a value`);
+    }
+    if (arg === "--repo") args.repo = argv[++i];
+    else if (arg === "--profile-json") args.profileJson = argv[++i];
+    else if (arg === "--format") args.format = argv[++i];
+    else throw new Error(`Unknown argument: ${arg}`);
+  }
+  if (!new Set(["json", "markdown"]).has(args.format))
+    throw new Error("--format must be json or markdown");
+  return args;
+}
+
+const sleep = (ms) =>
+  new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
+
+async function fetchJson(url) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+    });
+    if (response.ok) return response.json();
+    if ((response.status === 429 || response.status >= 500) && attempt < 3) {
+      await sleep(1000 * 2 ** attempt);
+      continue;
+    }
+    throw new Error(`HTTP ${response.status} on ${url}`);
+  }
+  throw new Error(`Exhausted retries on ${url}`);
+}
+
+function pageUrl(page) {
+  const url = new URL(PROFILE_URL);
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("playlists_sort_by", "created_at");
+  url.searchParams.set("clips_sort_by", "created_at");
+  return url.toString();
+}
+
+function normalizePages(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.pages)) return payload.pages;
+  return [payload];
+}
+
+function clipsFromPages(pages) {
+  const byId = new Map();
+  for (const page of pages) {
+    for (const clip of page?.clips ?? []) {
+      if (clip?.id && clip.is_public === true && !byId.has(clip.id)) {
+        byId.set(clip.id, clip);
+      }
+    }
+  }
+  return [...byId.values()];
+}
+
+async function loadProfile(profileJson) {
+  if (profileJson) {
+    const payload = JSON.parse(await readFile(resolve(profileJson), "utf8"));
+    return clipsFromPages(normalizePages(payload));
+  }
+
+  const pages = [];
+  const first = await fetchJson(pageUrl(1));
+  pages.push(first);
+  // num_total_clips is undocumented API surface. If it's ever missing or
+  // renamed, treat the total as unknown rather than silently defaulting to
+  // 0 — a 0 total would stop pagination after page 1 with no error, hiding
+  // every clip past the first page.
+  const rawTotal = Number(first?.num_total_clips);
+  const total = Number.isFinite(rawTotal) ? Math.max(0, rawTotal) : null;
+  const seen = new Set(
+    (first?.clips ?? []).map((clip) => clip?.id).filter(Boolean)
+  );
+  let page = 2;
+  while (total === null || seen.size < total) {
+    const next = await fetchJson(pageUrl(page));
+    pages.push(next);
+    const clips = next?.clips ?? [];
+    if (clips.length === 0) break;
+    for (const clip of clips) if (clip?.id) seen.add(clip.id);
+    page++;
+  }
+  return clipsFromPages(pages);
+}
+
+async function walk(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...(await walk(path)));
+    else if ([".md", ".mdx"].includes(extname(entry.name))) files.push(path);
+  }
+  return files;
+}
+
+function frontmatter(text) {
+  const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  return match?.[1] ?? null;
+}
+
+function scalar(fm, key) {
+  const match = fm.match(new RegExp(`^${key}:\\s*(.*)$`, "m"));
+  if (!match) return null;
+  const raw = match[1].trim();
+  if (!raw || raw === "|-" || raw === ">-") return null;
+  return raw.replace(/^(["'])(.*)\1$/, "$2");
+}
+
+function listField(fm, key) {
+  const lines = fm.split(/\r?\n/);
+  const index = lines.findIndex((line) =>
+    new RegExp(`^${key}:\\s*$`).test(line)
+  );
+  if (index === -1) return [];
+  const values = [];
+  for (let i = index + 1; i < lines.length; i++) {
+    const match = lines[i].match(/^\s+-\s+(.*)$/);
+    if (!match) break;
+    values.push(match[1].trim().replace(/^(["'])(.*)\1$/, "$2"));
+  }
+  return values;
+}
+
+function trackIds(fm) {
+  const lines = fm.split(/\r?\n/);
+  const tracksLine = lines.findIndex((line) => /^tracks:/.test(line));
+  if (tracksLine === -1) return [];
+  // Flow-style YAML (`tracks: [{sunoId: "abc"}, ...]`) is valid but isn't a
+  // block sequence — pull sunoId values directly out of the bracketed text
+  // instead of falling through to the block-sequence reader below, which
+  // would otherwise silently see no items and return [].
+  const flowMatch = lines[tracksLine].match(/^tracks:\s*(\[.*\])\s*$/);
+  if (flowMatch) {
+    const ids = [...flowMatch[1].matchAll(/sunoId:\s*(["']?)([^"',}\]]+)\1/g)].map(
+      (match) => match[2].trim()
+    );
+    return [...new Set(ids)].filter(Boolean);
+  }
+  const start = /^tracks:\s*$/.test(lines[tracksLine]) ? tracksLine : -1;
+  if (start === -1) return [];
+  const ids = [];
+  // itemIndent is the indent of the "- " that starts each tracks[] item,
+  // fixed once from the first such line. A sub-field's own nested list
+  // (e.g. genre: - indie) uses the same "- " marker at a deeper indent —
+  // only a dash exactly at itemIndent is a new tracks[] item boundary;
+  // anything deeper (a genre entry, a block-scalar line) must never be
+  // mistaken for one, or a later sunoId line can be missed depending on
+  // where genre happens to fall in the item's key order.
+  let itemIndent = null;
+  let keyIndent = null;
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    const indent = line.match(/^\s*/)[0].length;
+    if (indent === 0) break;
+    const dash = line.match(/^(\s*)-\s+(.*)$/);
+    if (dash && (itemIndent === null || dash[1].length === itemIndent)) {
+      itemIndent = dash[1].length;
+      keyIndent = itemIndent + 2;
+      const inline = dash[2].match(/^sunoId:\s*(.*)$/);
+      if (inline)
+        ids.push(inline[1].trim().replace(/^(["'])(.*)\1$/, "$2"));
+      continue;
+    }
+    // Only lines at the item-key indent count — deeper lines belong to a
+    // sub-list like genre or a block scalar like sunoStyle and must not be
+    // parsed as keys.
+    if (keyIndent !== null && indent === keyIndent) {
+      const match = line.match(/^\s*sunoId:\s*(.*)$/);
+      if (match)
+        ids.push(match[1].trim().replace(/^(["'])(.*)\1$/, "$2"));
+    }
+  }
+  return [...new Set(ids)].filter(Boolean);
+}
+
+function normalizeTitle(value) {
+  return value == null ? null : value.normalize("NFC").trim();
+}
+
+function sourceDuration(clip) {
+  const value = Number(clip?.metadata?.duration);
+  return Number.isFinite(value) ? Math.round(value) : null;
+}
+
+async function loadPosts(repoRoot) {
+  const blogDir = join(repoRoot, "src", "content", "blog");
+  const posts = [];
+  for (const path of await walk(blogDir)) {
+    const text = await readFile(path, "utf8");
+    const fm = frontmatter(text);
+    if (!fm || scalar(fm, "postType") !== "music") continue;
+    posts.push({
+      path: path.slice(repoRoot.length + 1).replaceAll("\\", "/"),
+      title: scalar(fm, "title"),
+      sunoId: scalar(fm, "sunoId"),
+      lang: scalar(fm, "lang"),
+      translationKey: scalar(fm, "translationKey"),
+      sunoImageUrl: scalar(fm, "sunoImageUrl"),
+      duration: scalar(fm, "duration"),
+      genre: listField(fm, "genre"),
+      trackIds: trackIds(fm),
+    });
+  }
+  return posts;
+}
+
+function audit(clips, posts) {
+  const clipsById = new Map(clips.map((clip) => [clip.id, clip]));
+  // A post mirrors its primary sunoId plus every tracks[].sunoId rendition,
+  // so all of them enter the index — otherwise a sync would recreate posts
+  // for songs already represented as tracks.
+  const postsById = new Map();
+  for (const post of posts) {
+    const ids = new Set(post.trackIds);
+    if (post.sunoId) ids.add(post.sunoId);
+    for (const id of ids) {
+      const group = postsById.get(id) ?? [];
+      group.push(post);
+      postsById.set(id, group);
+    }
+  }
+
+  const missingFromBlog = clips
+    .filter((clip) => !postsById.has(clip.id))
+    .map((clip) => ({ id: clip.id, title: clip.title ?? null }));
+  const blogOnlyIds = [...postsById.keys()]
+    .filter((id) => !clipsById.has(id))
+    .map((id) => ({
+      id,
+      posts: postsById.get(id).map((post) => post.path),
+    }));
+
+  const sameLanguageDuplicates = [];
+  for (const [id, group] of postsById) {
+    const byLang = new Map();
+    for (const post of group) {
+      const lang = post.lang ?? "missing";
+      const paths = byLang.get(lang) ?? [];
+      paths.push(post.path);
+      byLang.set(lang, paths);
+    }
+    for (const [lang, paths] of byLang) {
+      if (paths.length > 1) sameLanguageDuplicates.push({ id, lang, paths });
+    }
+  }
+
+  const metadataGaps = [];
+  const genreViolations = [];
+  const titleDrift = [];
+  for (const post of posts) {
+    const missing = [];
+    for (const key of [
+      "sunoId",
+      "lang",
+      "translationKey",
+      "sunoImageUrl",
+      "duration",
+    ])
+      if (!post[key]) missing.push(key);
+    if (missing.length) metadataGaps.push({ path: post.path, missing });
+
+    const invalid = post.genre.filter(
+      (label) => label.length > 40 || /[:,;]/.test(label)
+    );
+    if (post.genre.length > 5 || invalid.length)
+      genreViolations.push({
+        path: post.path,
+        count: post.genre.length,
+        invalid,
+      });
+
+    const clip = clipsById.get(post.sunoId);
+    // Suno titles often carry trailing whitespace; NFC + trim keeps that
+    // noise out while raw values are still reported for internal diffs.
+    if (
+      clip &&
+      post.lang === "pt" &&
+      post.title &&
+      clip.title &&
+      normalizeTitle(post.title) !== normalizeTitle(clip.title)
+    )
+      titleDrift.push({
+        path: post.path,
+        source: clip.title,
+        blog: post.title,
+      });
+
+    if (clip) {
+      const expectedDuration = sourceDuration(clip);
+      const actualDuration = post.duration ? Number(post.duration) : null;
+      if (
+        expectedDuration !== null &&
+        actualDuration !== null &&
+        expectedDuration !== actualDuration
+      )
+        metadataGaps.push({
+          path: post.path,
+          mismatch: {
+            duration: { source: expectedDuration, blog: actualDuration },
+          },
+        });
+    }
+  }
+
+  return {
+    summary: {
+      publicClips: clips.length,
+      musicPosts: posts.length,
+      mirroredIds: [...clipsById.keys()].filter((id) => postsById.has(id))
+        .length,
+      missingFromBlog: missingFromBlog.length,
+      blogOnlyIds: blogOnlyIds.length,
+      sameLanguageDuplicates: sameLanguageDuplicates.length,
+      metadataGaps: metadataGaps.length,
+      genreViolations: genreViolations.length,
+      titleDrift: titleDrift.length,
+    },
+    missingFromBlog,
+    blogOnlyIds,
+    sameLanguageDuplicates,
+    metadataGaps,
+    genreViolations,
+    titleDrift,
+  };
+}
+
+function markdown(report) {
+  const lines = ["# Suno catalog audit", "", "## Summary", ""];
+  for (const [key, value] of Object.entries(report.summary))
+    lines.push(`- **${key}:** ${value}`);
+  for (const section of [
+    "missingFromBlog",
+    "blogOnlyIds",
+    "sameLanguageDuplicates",
+    "metadataGaps",
+    "genreViolations",
+    "titleDrift",
+  ]) {
+    lines.push("", `## ${section}`, "");
+    const rows = report[section];
+    if (rows.length === 0) lines.push("None.");
+    else for (const row of rows) lines.push(`- \`${JSON.stringify(row)}\``);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    usage();
+    return;
+  }
+  const repoRoot = resolve(args.repo);
+  const packageJson = JSON.parse(
+    await readFile(join(repoRoot, "package.json"), "utf8")
+  );
+  if (packageJson.name !== "franklinbaldo-pico")
+    throw new Error(
+      `Unexpected repository package name: ${packageJson.name ?? "missing"}`
+    );
+
+  const [clips, posts] = await Promise.all([
+    loadProfile(args.profileJson),
+    loadPosts(repoRoot),
+  ]);
+  const report = audit(clips, posts);
+  process.stdout.write(
+    args.format === "json"
+      ? `${JSON.stringify(report, null, 2)}\n`
+      : markdown(report)
+  );
+}
+
+main().catch((error) => {
+  console.error(`audit-catalog: ${error.message}`);
+  process.exitCode = 1;
+});
