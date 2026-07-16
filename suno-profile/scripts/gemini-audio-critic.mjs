@@ -281,9 +281,10 @@ export function extractCritique(result) {
     .map((part) => part.text ?? "")
     .join("\n")
     .trim();
-  if (critique) return critique;
+  const finishReason = candidate?.finishReason ?? null;
+  if (critique && finishReason === "STOP") return critique;
   const context = JSON.stringify({
-    finishReason: candidate?.finishReason ?? null,
+    finishReason,
     promptFeedback: result?.promptFeedback ?? null,
   }).slice(0, 500);
   throw new Error(`generateContent returned no critique text: ${context}`);

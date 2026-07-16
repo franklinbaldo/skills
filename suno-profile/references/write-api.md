@@ -118,15 +118,15 @@ simple boolean on the clip object (`GET /api/clip/{id}/` doesn't reliably
 include `is_pinned`; only the `pin-clip` response itself does, for the
 clip just pinned).
 
-**Known bug, observed directly, twice:** pinning a new clip evicted an
-*already-pinned, unrelated* clip from the set — with only 3-4 total pins
-active, nowhere near the stated `max_pins: 5` or the UI's 10-slot cap.
-Verify the full pinned set after every pin/unpin, not just the clip you
-touched. Separately, an evicted-then-re-pinned clip **lost its pin
-caption** (reverted to none) even though the clip itself came back —
-re-apply the caption after any unpin/re-pin cycle, don't assume it
-survived. No corresponding `unpin-clip`-style endpoint has been captured
-yet; presumably exists but unmapped.
+**Caption loss on unpin/re-pin:** a clip that was manually unpinned and
+later re-pinned came back without its pin caption (reverted to none),
+even though the clip itself returned. Re-apply the caption after any
+unpin/re-pin cycle — don't assume it survived. (An earlier version of
+this note attributed a separate pinned-clip eviction to a `pin-clip`
+bug; Franklin clarified that the other clip's unpin was a manual action,
+not caused by this endpoint — that claim is retracted.) No corresponding
+`unpin-clip`-style endpoint has been captured yet; presumably exists but
+unmapped.
 
 ## Pinned-song caption (profile page)
 
