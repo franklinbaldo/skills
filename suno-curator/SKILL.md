@@ -60,7 +60,9 @@ flows and report formats, read
 [`references/workflows.md`](references/workflows.md). For the reverse-engineered
 Suno write API (title, tags, cover, visibility, profile, playlists) — currently
 documentation only, since the boundaries above still forbid using it — read
-[`references/write-api.md`](references/write-api.md).
+[`references/write-api.md`](references/write-api.md). For SEO and editorial
+guidance on wording profile bios, genre tags, and playlist titles/descriptions
+well, read [`references/seo-and-taste.md`](references/seo-and-taste.md).
 
 ## Choose exactly one session mode
 
