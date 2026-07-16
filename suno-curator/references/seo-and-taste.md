@@ -1,10 +1,9 @@
 # Profile, description, and playlist quality: SEO + editorial taste
 
 Guidance for *how to word* a Suno profile bio, song descriptions, and
-playlist titles/descriptions well — as opposed to `write-api.md`, which
-covers *how to send the request*. Still subject to this skill's
-non-negotiable boundaries: these are recommendations to draft and hand to
-Franklin, not things this skill applies to Suno on its own.
+playlist titles/descriptions well. Everything here is subject to this
+skill's non-negotiable boundaries: these are recommendations to draft and
+hand to Franklin, not things this skill applies to Suno on its own.
 
 Synthesized 2026-07-16 from general music-streaming SEO practice (Spotify,
 Apple Music, etc. — Suno doesn't publish its own SEO guidance) plus
@@ -18,12 +17,11 @@ LLM reads the text and decides whether to click.
 ## Suno-specific facts to work within
 
 - Bio: up to 1,200 characters.
-- Genres: up to 5, shown as a filter/keyword surface, not free text — see
-  `write-api.md`'s `bio.user_inputted_genres`.
+- Genres: up to 5, shown as a filter/keyword surface, not free text.
 - Up to 10 songs can be pinned to the profile for priority visibility.
-- Song `display_tags` (also via `write-api.md`) is a short comma-separated
-  list, not the long-form AI-style `metadata.tags` description — treat it
-  like Spotify genre tags, not like ad copy.
+- Song `display_tags` is a short comma-separated list, not the long-form
+  AI-style `metadata.tags` description — treat it like Spotify genre tags,
+  not like ad copy.
 
 ## Writing the profile bio
 
@@ -60,8 +58,8 @@ LLM reads the text and decides whether to click.
 
 ## Pinned-song captions
 
-Up to 10 songs can be pinned to the profile, each with its own caption
-(`write-api.md`'s pin-caption endpoint) — this is the first text a visitor
+Up to 10 songs can be pinned to the profile, each with its own caption —
+this is the first text a visitor
 (or an LLM summarizing the profile) reads next to a song, before ever
 pressing play. Treat each one as a one-line pitch, not a repeat of the bio:
 

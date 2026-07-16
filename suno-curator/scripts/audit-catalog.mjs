@@ -136,6 +136,40 @@ function listField(fm, key) {
   return values;
 }
 
+function trackIds(fm) {
+  const lines = fm.split(/\r?\n/);
+  const start = lines.findIndex((line) => /^tracks:\s*$/.test(line));
+  if (start === -1) return [];
+  const ids = [];
+  let keyIndent = null;
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    const indent = line.match(/^\s*/)[0].length;
+    if (indent === 0) break;
+    const dash = line.match(/^(\s*)-\s+(.*)$/);
+    if (dash) {
+      keyIndent = dash[1].length + 2;
+      const inline = dash[2].match(/^sunoId:\s*(.*)$/);
+      if (inline)
+        ids.push(inline[1].trim().replace(/^(["'])(.*)\1$/, "$2"));
+      continue;
+    }
+    // Only lines at the item-key indent count — deeper lines belong to
+    // block scalars like sunoStyle and must not be parsed as keys.
+    if (keyIndent !== null && indent === keyIndent) {
+      const match = line.match(/^\s*sunoId:\s*(.*)$/);
+      if (match)
+        ids.push(match[1].trim().replace(/^(["'])(.*)\1$/, "$2"));
+    }
+  }
+  return [...new Set(ids)].filter(Boolean);
+}
+
+function normalizeTitle(value) {
+  return value == null ? null : value.normalize("NFC").trim();
+}
+
 function sourceDuration(clip) {
   const value = Number(clip?.metadata?.duration);
   return Number.isFinite(value) ? Math.round(value) : null;
@@ -157,6 +191,7 @@ async function loadPosts(repoRoot) {
       sunoImageUrl: scalar(fm, "sunoImageUrl"),
       duration: scalar(fm, "duration"),
       genre: listField(fm, "genre"),
+      trackIds: trackIds(fm),
     });
   }
   return posts;
@@ -164,12 +199,18 @@ async function loadPosts(repoRoot) {
 
 function audit(clips, posts) {
   const clipsById = new Map(clips.map((clip) => [clip.id, clip]));
+  // A post mirrors its primary sunoId plus every tracks[].sunoId rendition,
+  // so all of them enter the index — otherwise a sync would recreate posts
+  // for songs already represented as tracks.
   const postsById = new Map();
   for (const post of posts) {
-    if (!post.sunoId) continue;
-    const group = postsById.get(post.sunoId) ?? [];
-    group.push(post);
-    postsById.set(post.sunoId, group);
+    const ids = new Set(post.trackIds);
+    if (post.sunoId) ids.add(post.sunoId);
+    for (const id of ids) {
+      const group = postsById.get(id) ?? [];
+      group.push(post);
+      postsById.set(id, group);
+    }
   }
 
   const missingFromBlog = clips
@@ -222,12 +263,14 @@ function audit(clips, posts) {
       });
 
     const clip = clipsById.get(post.sunoId);
+    // Suno titles often carry trailing whitespace; NFC + trim keeps that
+    // noise out while raw values are still reported for internal diffs.
     if (
       clip &&
       post.lang === "pt" &&
       post.title &&
       clip.title &&
-      post.title !== clip.title
+      normalizeTitle(post.title) !== normalizeTitle(clip.title)
     )
       titleDrift.push({
         path: post.path,

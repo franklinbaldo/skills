@@ -63,10 +63,7 @@ Use `--profile-json <snapshot.json>` for offline or reproducible evaluation.
 For the detailed current data contract, read
 [`references/blog-contract.md`](references/blog-contract.md). For exact session
 flows and report formats, read
-[`references/workflows.md`](references/workflows.md). For the reverse-engineered
-Suno write API (title, tags, cover, visibility, profile, playlists) — currently
-documentation only, since the boundaries above still forbid using it — read
-[`references/write-api.md`](references/write-api.md). For SEO and editorial
+[`references/workflows.md`](references/workflows.md). For SEO and editorial
 guidance on wording profile bios, genre tags, and playlist titles/descriptions
 well, read [`references/seo-and-taste.md`](references/seo-and-taste.md).
 
@@ -143,14 +140,13 @@ applying that in pieces over multiple sessions.
   every recommendation from the plan in the same session — read
   `references/curation-plan.md`'s "Applying the plan" section for how
   incremental application and review work together.
-- Every apply session (bio, tags, pinned songs, playlists) should check
-  itself against the current plan and note any drift — either the change
-  matches the plan, or the plan is stale and should be revised, but silent
+- Nothing in the plan is ever applied to Suno by this skill. Each piece
+  (the bio, one pinned caption, one playlist) becomes a scoped
+  recommendation — final wording included — that Franklin applies himself.
+- After Franklin reports a piece applied, check the live profile (public
+  API) against the plan and note any drift — either the change matches the
+  plan, or the plan is stale and should be revised, but silent
   disagreement between the two is a bug.
-- Applying anything from the plan to live Suno data still requires the same
-  explicit authorization as any other write covered in `write-api.md` —
-  the plan documents *what to aim for*, it doesn't grant standing
-  permission to write.
 
 ## Repository contract that usually applies
 
