@@ -33,9 +33,29 @@ export function parseArgs(argv) {
   return args;
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Same exponential-backoff-on-429/5xx contract as the sibling scripts in
+// this skill set (suno-curator/scripts/audit-catalog.mjs's fetchJson,
+// gemini-audio-critic.mjs's withRetry) — this script makes a call per clip
+// (dozens to ~100 per run), so a single transient failure without a retry
+// would abort the whole export.
+async function withRetry(fn, label) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const response = await fn();
+    if (response.ok) return response;
+    if ((response.status === 429 || response.status >= 500) && attempt < 3) {
+      await sleep(1000 * 2 ** attempt);
+      continue;
+    }
+    const body = await response.text().catch(() => "");
+    throw new Error(`${label}: HTTP ${response.status} ${body.slice(0, 500)}`);
+  }
+  throw new Error(`${label}: exhausted retries`);
+}
+
 async function fetchJson(url, jwt) {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${jwt}` } });
-  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  const res = await withRetry(() => fetch(url, { headers: { Authorization: `Bearer ${jwt}` } }), url);
   return res.json();
 }
 
@@ -43,18 +63,31 @@ async function fetchAllClips(handle, jwt) {
   const clips = new Map();
   const playlistRefs = [];
   let page = 1;
+  // num_total_clips is undocumented API surface (see
+  // suno-curator/scripts/audit-catalog.mjs's identical guard) — if it's
+  // ever missing/renamed, treat the total as unknown rather than letting a
+  // stray 0 silently stop pagination after page 1.
   let total = null;
   while (total === null || clips.size < total) {
     const body = await fetchJson(
       `${API_BASE}/api/profiles/${handle}/?page=${page}&playlists_sort_by=created_at&clips_sort_by=created_at`,
       jwt
     );
-    total = body.num_total_clips ?? total;
+    const rawTotal = Number(body.num_total_clips);
+    if (Number.isFinite(rawTotal)) total = Math.max(0, rawTotal);
     const pageClips = body.clips ?? [];
     if (pageClips.length === 0) break;
     for (const c of pageClips) {
-      if (c.is_public) clips.set(c.id, { id: c.id, title: c.title, play_count: c.play_count ?? 0 });
+      // Strict === true, not a bare truthy check — an undocumented API
+      // omitting this field on some clip shapes shouldn't be silently
+      // treated the same as an explicit "private."
+      if (c.is_public === true) {
+        clips.set(c.id, { id: c.id, title: c.title, play_count: c.play_count ?? 0 });
+      }
     }
+    // Verified live 2026-07-16: `playlists` carries the full, identical
+    // list on every page (not paginated itself), so reading it only once
+    // from page 1 is correct, not an unverified assumption.
     if (page === 1) playlistRefs.push(...(body.playlists ?? []));
     page++;
   }
@@ -74,18 +107,27 @@ async function fetchClipDetail(id, jwt) {
   };
 }
 
+// Per-item failures (a clip deleted mid-run, a transient error that
+// survived withRetry's backoff) are collected rather than left to reject
+// the whole batch — losing one clip out of ~100 shouldn't discard the
+// other 99 that already succeeded.
 async function fetchAllClipDetails(clipIds, jwt) {
   const details = [];
+  const failures = [];
   let idx = 0;
   async function worker() {
     while (idx < clipIds.length) {
       const i = idx++;
-      details.push(await fetchClipDetail(clipIds[i], jwt));
-      await new Promise((r) => setTimeout(r, STAGGER_MS));
+      try {
+        details.push(await fetchClipDetail(clipIds[i], jwt));
+      } catch (error) {
+        failures.push({ id: clipIds[i], message: error.message });
+      }
+      if (idx < clipIds.length) await sleep(STAGGER_MS);
     }
   }
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-  return details;
+  return { details, failures };
 }
 
 async function fetchProfile(handle, jwt) {
@@ -99,8 +141,35 @@ async function fetchPlaylistDetail(id, jwt) {
     name: body.name,
     description: body.description ?? "",
     is_public: body.is_public,
-    tracks: (body.playlist_clips ?? []).map((pc) => pc.clip.title),
+    // A playlist can contain a track that was later deleted or made
+    // private by its owner — `clip` may be null/absent for that entry.
+    tracks: (body.playlist_clips ?? [])
+      .map((pc) => pc.clip?.title)
+      .filter(Boolean),
   };
+}
+
+// Same per-item resilience as fetchAllClipDetails — one bad playlist
+// shouldn't discard every already-fetched clip detail.
+async function fetchAllPlaylistDetails(playlistRefs, jwt) {
+  const results = await Promise.allSettled(playlistRefs.map((p) => fetchPlaylistDetail(p.id, jwt)));
+  const playlists = [];
+  const failures = [];
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled") playlists.push(r.value);
+    else failures.push({ id: playlistRefs[i].id, message: r.reason?.message });
+  });
+  return { playlists, failures };
+}
+
+// Picks a fence longer than the longest run of backticks already present
+// in the text, so lyrics/prompts that happen to contain literal ``` (e.g.
+// a pasted code example) can't prematurely close the block and corrupt
+// every song listed after it in the output.
+function codeFenceFor(text) {
+  const runs = text.match(/`+/g) ?? [];
+  const longest = runs.reduce((max, run) => Math.max(max, run.length), 0);
+  return "`".repeat(Math.max(3, longest + 1));
 }
 
 // Pure formatting function — exported for offline testing without a live
@@ -130,6 +199,7 @@ export function buildMarkdown({ handle, profile, clipDetails, playlists }) {
     ?.content_item?.items ?? [];
   for (const item of pinnedFeed) {
     const clip = item.content_item;
+    if (!clip) continue;
     lines.push(`- **${clip.title}** (${clip.id}) — pin caption: "${pinCaptions.get(clip.id) ?? ""}"`);
   }
   lines.push("");
@@ -159,9 +229,10 @@ export function buildMarkdown({ handle, profile, clipDetails, playlists }) {
     lines.push("");
     lines.push("Lyrics/prompt:");
     lines.push("");
-    lines.push("```");
+    const fence = codeFenceFor(clip.lyrics);
+    lines.push(fence);
     lines.push(clip.lyrics);
-    lines.push("```");
+    lines.push(fence);
     lines.push("");
   }
 
@@ -176,11 +247,23 @@ async function main() {
   const { clips, playlistRefs } = await fetchAllClips(args.handle, jwt);
   console.error(`Found ${clips.size} public clips, ${playlistRefs.length} playlists. Fetching details...`);
 
-  const [clipDetails, playlists, profile] = await Promise.all([
-    fetchAllClipDetails([...clips.keys()], jwt),
-    Promise.all(playlistRefs.map((p) => fetchPlaylistDetail(p.id, jwt))),
-    fetchProfile(args.handle, jwt),
-  ]);
+  const [{ details: clipDetails, failures: clipFailures }, { playlists, failures: playlistFailures }, profile] =
+    await Promise.all([
+      fetchAllClipDetails([...clips.keys()], jwt),
+      fetchAllPlaylistDetails(playlistRefs, jwt),
+      fetchProfile(args.handle, jwt),
+    ]);
+
+  if (clipFailures.length) {
+    console.error(
+      `Warning: ${clipFailures.length} clip(s) failed and are excluded: ${clipFailures.map((f) => `${f.id} (${f.message})`).join("; ")}`
+    );
+  }
+  if (playlistFailures.length) {
+    console.error(
+      `Warning: ${playlistFailures.length} playlist(s) failed and are excluded: ${playlistFailures.map((f) => `${f.id} (${f.message})`).join("; ")}`
+    );
+  }
 
   const markdown = buildMarkdown({ handle: args.handle, profile, clipDetails, playlists });
   const outPath = args.out ?? `./catalog-export-${args.handle}.md`;

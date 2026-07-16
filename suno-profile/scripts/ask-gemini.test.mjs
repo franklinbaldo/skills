@@ -57,10 +57,13 @@ test("extractAnswer: a non-stop finish reason with real text returns it marked i
 });
 
 test("extractAnswer: an empty response fails loudly with the error context", () => {
+  // extractAnswer is gemini-audio-critic.mjs's extractCritique re-exported
+  // under a script-appropriate name (see ask-gemini.mjs's header comment)
+  // — the error text is that function's, "critique" not "answer".
   assert.throws(
     () => extractAnswer({ error: { message: "blocked" } }),
-    /no answer text.*blocked/s
+    /no critique text.*blocked/s
   );
-  assert.throws(() => extractAnswer({}), /no answer text/);
-  assert.throws(() => extractAnswer({ choices: [] }), /no answer text/);
+  assert.throws(() => extractAnswer({}), /no critique text/);
+  assert.throws(() => extractAnswer({ choices: [] }), /no critique text/);
 });

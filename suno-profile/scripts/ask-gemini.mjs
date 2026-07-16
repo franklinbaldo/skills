@@ -6,7 +6,8 @@
 // the same Portkey Model Catalog integration and auth confirmed live in
 // gemini-audio-critic.mjs (see that script/references/gemini-critic.md
 // for why "@gemini-free" and only x-portkey-api-key, not "@google" or an
-// Authorization passthrough).
+// Authorization passthrough) — imported directly rather than re-implemented,
+// so the two scripts can't silently drift on that hard-won contract.
 //
 // Usage:
 //   node ask-gemini.mjs --context catalog-export.md --question "..."
@@ -14,10 +15,16 @@
 
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { portkeyModel, extractCritique } from "./gemini-audio-critic.mjs";
 
 const PORTKEY_BASE = "https://api.portkey.ai/v1";
 const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
-const DEFAULT_PORTKEY_GEMINI_SLUG = process.env.PORTKEY_GEMINI_SLUG ?? "gemini-free";
+
+// Re-exported so existing imports/tests can keep referring to
+// portkeyModel/extractAnswer from this module; the implementation itself
+// lives in gemini-audio-critic.mjs (see header comment above).
+export { portkeyModel };
+export const extractAnswer = extractCritique;
 
 function usage() {
   console.error(
@@ -46,11 +53,6 @@ export function parseArgs(argv) {
   return args;
 }
 
-// Same idempotent slug-prefixing as gemini-audio-critic.mjs's portkeyModel().
-export function portkeyModel(model, slug = DEFAULT_PORTKEY_GEMINI_SLUG) {
-  return model.startsWith("@") ? model : `@${slug}/${model}`;
-}
-
 // The catalog export is Franklin's own data, not third-party untrusted
 // content in the usual sense — but any song title/lyric/caption inside it
 // still came from Suno-generated or self-authored creative text, not from
@@ -68,21 +70,24 @@ Question: ${question}
 Answer using only what's in the catalog data above. If the data doesn't contain enough to answer confidently, say so explicitly rather than guessing.`;
 }
 
-// Shared with gemini-audio-critic.mjs's contract: only a genuinely empty
-// response is a hard error; a non-"stop" finish reason with real text is
-// returned marked incomplete rather than discarded.
-export function extractAnswer(result) {
-  const choice = result?.choices?.[0];
-  const finishReason = choice?.finish_reason ?? null;
-  const answer = (choice?.message?.content ?? "").trim();
-  if (!answer) {
-    const context = JSON.stringify({
-      finishReason,
-      error: result?.error ?? null,
-    }).slice(0, 500);
-    throw new Error(`chat completion returned no answer text: ${context}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Same exponential-backoff-on-429/5xx contract as gemini-audio-critic.mjs's
+// withRetry for its structurally identical Portkey call — Portkey/Gemini
+// are documented to rate-limit, and this script's one network call
+// shouldn't fail outright on a transient hiccup a retry would clear.
+async function withRetry(fn, label) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const response = await fn();
+    if (response.ok) return response;
+    if ((response.status === 429 || response.status >= 500) && attempt < 3) {
+      await sleep(1000 * 2 ** attempt);
+      continue;
+    }
+    const body = await response.text().catch(() => "");
+    throw new Error(`${label}: HTTP ${response.status} ${body.slice(0, 500)}`);
   }
-  return { text: answer, complete: !finishReason || finishReason === "stop" };
+  throw new Error(`${label}: exhausted retries`);
 }
 
 async function main() {
@@ -102,18 +107,18 @@ async function main() {
     messages: [{ role: "user", content: prompt }],
   };
 
-  const response = await fetch(`${PORTKEY_BASE}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-portkey-api-key": portkeyApiKey,
-    },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    const errText = await response.text().catch(() => "");
-    throw new Error(`Portkey chat completion: HTTP ${response.status} ${errText.slice(0, 500)}`);
-  }
+  const response = await withRetry(
+    () =>
+      fetch(`${PORTKEY_BASE}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-portkey-api-key": portkeyApiKey,
+        },
+        body: JSON.stringify(body),
+      }),
+    "Portkey chat completion"
+  );
 
   const result = await response.json();
   const { text: answer, complete } = extractAnswer(result);

@@ -83,3 +83,59 @@ test("buildMarkdown: an empty caption is shown explicitly, not left blank", () =
   const md = buildMarkdown(FIXTURE);
   assert.match(md, /Caption: \(empty\)/);
 });
+
+test("buildMarkdown: lyrics containing a literal ``` don't break the fence for later songs", () => {
+  const fixture = {
+    ...FIXTURE,
+    clipDetails: [
+      {
+        id: "clip-1",
+        title: "Contains A Fence",
+        duration: 100,
+        tags: "",
+        caption: "",
+        lyrics: "before\n```\nsome pasted code\n```\nafter",
+        play_count: 5,
+      },
+      {
+        id: "clip-2",
+        title: "Comes After",
+        duration: 100,
+        tags: "",
+        caption: "",
+        lyrics: "ordinary lyrics",
+        play_count: 1,
+      },
+    ],
+  };
+  const md = buildMarkdown(fixture);
+  // The fence around the tricky lyrics must be longer than any backtick
+  // run inside them (4 backticks beats the embedded 3), so it doesn't
+  // close early.
+  assert.match(md, /````\nbefore\n```\nsome pasted code\n```\nafter\n````/);
+  // "Comes After" must still render as its own heading, not get swallowed
+  // into the unterminated block a naive 3-backtick fence would produce.
+  assert.match(md, /### Comes After/);
+});
+
+test("buildMarkdown: a pinned feed item with no content_item is skipped, not a crash", () => {
+  const fixture = {
+    ...FIXTURE,
+    profile: {
+      ...FIXTURE.profile,
+      feed: {
+        items: [
+          {
+            content_id: "pinned_songs_feed",
+            content_item: {
+              items: [{ content_item: null }, { content_item: { id: "clip-1", title: "Xadrez" } }],
+            },
+          },
+        ],
+      },
+    },
+  };
+  assert.doesNotThrow(() => buildMarkdown(fixture));
+  const md = buildMarkdown(fixture);
+  assert.match(md, /Xadrez/);
+});
