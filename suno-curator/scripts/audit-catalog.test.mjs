@@ -250,3 +250,70 @@ tracks:
   assert.equal(report.summary.mirroredIds, 2);
   assert.deepEqual(report.missingFromBlog, []);
 });
+
+test("indexes tracks[] written as flow-style YAML, not just block sequences", async () => {
+  const root = await mkdtemp(join(tmpdir(), "suno-curator-"));
+  const blog = join(root, "src", "content", "blog");
+  await mkdir(blog, { recursive: true });
+  await writeFile(
+    join(root, "package.json"),
+    JSON.stringify({ name: "franklinbaldo-pico" })
+  );
+
+  // `tracks: [{sunoId: "..."}]` is valid YAML but not a block sequence — the
+  // `tracks:\s*$` boundary check must not silently see zero items for it.
+  await writeFile(
+    join(blog, "flow.mdx"),
+    `---
+type: Music Post
+postType: music
+title: Flow
+lang: pt
+sunoId: clip-primary
+sunoImageUrl: "https://example.com/cover.jpg"
+duration: 120
+translationKey: music-flow
+genre:
+  - indie
+tracks: [{label: "Alt version", sunoId: "clip-track"}]
+---
+
+## Letra
+`
+  );
+
+  const profile = join(root, "profile.json");
+  await writeFile(
+    profile,
+    JSON.stringify({
+      num_total_clips: 2,
+      clips: [
+        {
+          id: "clip-primary",
+          title: "Flow",
+          is_public: true,
+          metadata: { duration: 120 },
+        },
+        {
+          id: "clip-track",
+          title: "Alt version",
+          is_public: true,
+          metadata: {},
+        },
+      ],
+    })
+  );
+
+  const { stdout } = await execFileAsync(process.execPath, [
+    script,
+    "--repo",
+    root,
+    "--profile-json",
+    profile,
+    "--format",
+    "json",
+  ]);
+  const report = JSON.parse(stdout);
+  assert.equal(report.summary.mirroredIds, 2);
+  assert.deepEqual(report.missingFromBlog, []);
+});

@@ -21,8 +21,8 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { setSecret } from "./keyring.mjs";
+import { CRED_TARGET, clerkClientUrl } from "./clerk-constants.mjs";
 
-const CRED_TARGET = "suno-clerk-client-cookie";
 const PROFILE_DIR = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   ".chrome-login-profile",
@@ -31,8 +31,6 @@ const CDP_PORT = 9222;
 const CDP_URL = `http://localhost:${CDP_PORT}`;
 const POLL_MS = 2000;
 const TIMEOUT_MS = 5 * 60 * 1000;
-const CLERK_API_VERSION = "2025-11-10";
-const CLERK_JS_VERSION = "5.117.0";
 
 const CHROME_CANDIDATES = [
   "C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -75,9 +73,7 @@ async function waitForAuthenticatedSession(context, deadline) {
     const cookies = await context.cookies("https://auth.suno.com");
     const cookie = cookies.find((c) => c.name === "__client");
     if (cookie) {
-      const res = await context.request.get(
-        `https://auth.suno.com/v1/client?__clerk_api_version=${CLERK_API_VERSION}&_clerk_js_version=${CLERK_JS_VERSION}`,
-      );
+      const res = await context.request.get(clerkClientUrl());
       if (res.ok()) {
         const body = await res.json();
         const session = body?.response?.sessions?.[0];
@@ -133,11 +129,20 @@ export async function loginAndCapture() {
     // browser Playwright didn't launch — kill the whole process tree
     // (chrome.exe spawns child renderer processes) explicitly.
     if (chromeProcess.pid) {
-      await new Promise((resolve) => {
+      const killCode = await new Promise((resolve) => {
         spawn("taskkill", ["/F", "/T", "/PID", String(chromeProcess.pid)], {
           stdio: "ignore",
         }).on("exit", resolve);
       });
+      // A non-zero/null exit code means the process tree may still be
+      // alive (access denied, PID-not-found race) — warn rather than
+      // silently reporting success, since the profile dir below can still
+      // hold the just-captured Clerk session cookie.
+      if (killCode !== 0) {
+        console.warn(
+          `taskkill exited with code ${killCode} — Chrome (PID ${chromeProcess.pid}) may still be running.`,
+        );
+      }
     }
     // A crashpad handler process can briefly outlive the main tree and hold
     // a file lock on Windows — retry the cleanup instead of crashing on it.

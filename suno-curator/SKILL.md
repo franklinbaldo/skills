@@ -85,10 +85,12 @@ Use when public Suno clips are absent from the blog.
 - Draft composer notes only after loading the installed `franklin-blog` skill.
   If unavailable, stop the voice-writing portion and report the dependency;
   complete only source-backed/mechanical work.
-- When `GEMINI_API_KEY` is available, the sibling `suno-profile` skill's
+- When `PORTKEY_API_KEY` is available, the sibling `suno-profile` skill's
   `scripts/gemini-audio-critic.mjs` (see its `references/gemini-critic.md`)
   can ground composer notes in what a track actually sounds like, not just
-  its lyrics — optional, skip when no key is set.
+  its lyrics — optional, skip when no key is set. `PORTKEY_API_KEY` is
+  required on both its routes; `GEMINI_API_KEY` is only needed in addition
+  for large tracks (`route: portkey`), not the default small-track route.
 - Re-run the audit and repository checks. Report created, skipped, unresolved,
   and recommended Suno-side actions separately.
 

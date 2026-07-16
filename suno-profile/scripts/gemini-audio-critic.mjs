@@ -442,11 +442,15 @@ async function main() {
     return;
   }
 
-  const loaded = [];
-  for (const track of args.tracks) {
-    const { bytes, mimeType } = await loadAudio(track.source);
-    loaded.push({ title: track.title, bytes, mimeType });
-  }
+  // Each track's load is independent I/O (a CDN fetch or a disk read);
+  // Promise.all preserves array order to match buildPrompt's "Track N"
+  // labels, so nothing downstream needs to change for the concurrency.
+  const loaded = await Promise.all(
+    args.tracks.map(async (track) => {
+      const { bytes, mimeType } = await loadAudio(track.source);
+      return { title: track.title, bytes, mimeType };
+    })
+  );
   const totalBytes = loaded.reduce((sum, t) => sum + t.bytes.length, 0);
   const route = chooseRoute(totalBytes, args.route);
 
@@ -479,11 +483,12 @@ async function main() {
     const portkeyApiKey = process.env.PORTKEY_API_KEY;
     if (!portkeyApiKey) throw new Error("PORTKEY_API_KEY is not set (route: portkey)");
 
-    const uploaded = [];
-    for (const track of loaded) {
-      const file = await uploadFile(apiKey, track.bytes, track.mimeType, track.title);
-      uploaded.push(file);
-    }
+    // Each upload (including its own internal ACTIVE-state poll loop) is
+    // independent of the others — run them concurrently rather than
+    // serializing what can be tens of seconds of pure waiting per track.
+    const uploaded = await Promise.all(
+      loaded.map((track) => uploadFile(apiKey, track.bytes, track.mimeType, track.title))
+    );
     const body = buildPortkeyRequestBody(args.model, uploaded, prompt);
     response = await withRetry(
       () =>
