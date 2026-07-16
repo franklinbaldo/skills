@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   parseArgs,
   extMimeType,
+  resolveMimeType,
+  extractCritique,
   buildPrompt,
   waitUntilActive,
   loadAudio,
@@ -42,12 +44,33 @@ test("parseArgs: rejects an unknown format", () => {
   );
 });
 
-test("extMimeType: guesses from extension, ignoring query/hash", () => {
-  assert.equal(extMimeType("song.mp3"), "audio/mpeg");
+test("extMimeType: guesses officially supported types from extension, ignoring query/hash", () => {
+  assert.equal(extMimeType("song.mp3"), "audio/mp3");
   assert.equal(extMimeType("https://cdn.example.com/song.wav?token=abc"), "audio/wav");
   assert.equal(extMimeType("song.flac#frag"), "audio/flac");
-  assert.equal(extMimeType("song.m4a"), "audio/mp4");
+  assert.equal(extMimeType("song.aiff"), "audio/aiff");
+  // M4A is not in Gemini's documented audio formats — no guess, no upload.
+  assert.equal(extMimeType("song.m4a"), null);
   assert.equal(extMimeType("song.unknownext"), null);
+});
+
+test("resolveMimeType: normalizes known aliases to the documented value", () => {
+  assert.equal(resolveMimeType("x.bin", "audio/mpeg"), "audio/mp3");
+  assert.equal(resolveMimeType("x.bin", "audio/x-wav; charset=binary"), "audio/wav");
+});
+
+test("resolveMimeType: rejects an audio Content-Type outside the official allowlist", () => {
+  assert.throws(
+    () => resolveMimeType("https://cdn.example.com/track.mp3", "audio/webm"),
+    /not a Gemini-supported audio format/
+  );
+});
+
+test("resolveMimeType: falls back to the extension on a non-audio Content-Type", () => {
+  assert.equal(
+    resolveMimeType("https://cdn.example.com/track.mp3", "application/octet-stream"),
+    "audio/mp3"
+  );
 });
 
 test("loadAudio: local file uses extension-based mimeType", async () => {
@@ -75,7 +98,7 @@ test("loadAudio: throws rather than silently mislabeling an undetectable MIME ty
       loadAudio("https://cdn.example.com/track", {
         fetch: async () => new Response(new ArrayBuffer(4), { status: 200, headers: {} }),
       }),
-    /Cannot determine audio MIME type/
+    /Cannot determine a supported audio MIME type/
   );
 });
 
@@ -143,5 +166,33 @@ test("waitUntilActive: gives up after maxAttempts on a stuck non-terminal state"
         maxAttempts: 3,
       }),
     /never became ACTIVE/
+  );
+});
+
+test("extractCritique: joins candidate text parts", () => {
+  const critique = extractCritique({
+    candidates: [{ content: { parts: [{ text: "steady tempo" }, { text: "warm mix" }] } }],
+  });
+  assert.equal(critique, "steady tempo\nwarm mix");
+});
+
+test("extractCritique: a response without text fails loudly with the block context", () => {
+  assert.throws(
+    () =>
+      extractCritique({
+        promptFeedback: { blockReason: "SAFETY" },
+      }),
+    /no critique text.*SAFETY/s
+  );
+  assert.throws(
+    () =>
+      extractCritique({
+        candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [] } }],
+      }),
+    /no critique text.*MAX_TOKENS/s
+  );
+  assert.throws(
+    () => extractCritique({ candidates: [{ content: { parts: [{ text: "   " }] } }] }),
+    /no critique text/
   );
 });

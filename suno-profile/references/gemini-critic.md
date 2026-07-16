@@ -92,12 +92,16 @@ being invoked from a particular skill's directory.
 ## Testing
 
 `gemini-audio-critic.test.mjs` covers argument parsing, MIME-type
-detection (extension and response Content-Type), prompt construction
-(including the untrusted-content delimiting), and the upload polling
-state machine (absent/`STATE_UNSPECIFIED`/`PROCESSING` → `ACTIVE`, a
-`FAILED` state surfacing the server's error, and giving up after
-`maxAttempts` on a stuck non-terminal state) — all offline, via a mocked
-`fetch`/`readFile`, no `GEMINI_API_KEY` required. Run with:
+resolution (extension and response Content-Type, alias normalization to
+Gemini's officially supported audio formats, rejection of unsupported
+`audio/*` types like WebM), prompt construction (including the
+untrusted-content delimiting), the upload polling state machine
+(absent/`STATE_UNSPECIFIED`/`PROCESSING` → `ACTIVE`, a `FAILED` state
+surfacing the server's error, and giving up after `maxAttempts` on a
+stuck non-terminal state), and `extractCritique` failing loudly on a
+200-with-no-text response (safety block, empty candidate) instead of
+printing an empty report — all offline, via a mocked `fetch`/`readFile`,
+no `GEMINI_API_KEY` required. Run with:
 
 ```bash
 node --test scripts/gemini-audio-critic.test.mjs

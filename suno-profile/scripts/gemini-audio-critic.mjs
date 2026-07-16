@@ -33,14 +33,38 @@ import { pathToFileURL } from "node:url";
 const API_BASE = "https://generativelanguage.googleapis.com";
 const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-pro";
 
+// The only MIME types this script will send — Gemini's officially
+// documented audio formats
+// (https://ai.google.dev/gemini-api/docs/audio#supported-audio-formats).
+// Notably: MP3 is documented as audio/mp3 (not audio/mpeg), and
+// M4A/Opus/WebM are not listed at all.
+const SUPPORTED_MIME_TYPES = new Set([
+  "audio/wav",
+  "audio/mp3",
+  "audio/aiff",
+  "audio/aac",
+  "audio/ogg",
+  "audio/flac",
+]);
+
+// Common aliases seen in Content-Type headers, normalized to the
+// officially documented value before the allowlist check.
+const MIME_ALIASES = {
+  "audio/mpeg": "audio/mp3",
+  "audio/x-wav": "audio/wav",
+  "audio/wave": "audio/wav",
+  "audio/x-aiff": "audio/aiff",
+  "audio/x-flac": "audio/flac",
+};
+
 const MIME_BY_EXTENSION = {
-  ".mp3": "audio/mpeg",
+  ".mp3": "audio/mp3",
   ".wav": "audio/wav",
-  ".flac": "audio/flac",
-  ".m4a": "audio/mp4",
+  ".aif": "audio/aiff",
+  ".aiff": "audio/aiff",
   ".aac": "audio/aac",
   ".ogg": "audio/ogg",
-  ".opus": "audio/opus",
+  ".flac": "audio/flac",
 };
 
 function usage() {
@@ -105,21 +129,28 @@ export function extMimeType(source) {
   return MIME_BY_EXTENSION[extname(clean).toLowerCase()] ?? null;
 }
 
-// Silently mislabeling an unrecognized format as audio/mpeg risks Gemini
-// either rejecting it or (worse) decoding it wrong without any visible
-// error — fail loudly instead and name a source with a recognized
-// extension or an audio/* Content-Type.
-function resolveMimeType(source, contentType) {
-  const fromHeader =
-    contentType && contentType.startsWith("audio/") ? contentType.split(";")[0].trim() : null;
-  const mimeType = fromHeader ?? extMimeType(source);
-  if (!mimeType)
+// Every upload goes out with a MIME type from the official allowlist:
+// aliases are normalized, an audio/* header outside the allowlist fails
+// before upload (an audio/webm source won't decode just because it was
+// relabeled), and a non-audio header (e.g. octet-stream CDNs) falls back
+// to the extension. Failing loudly beats Gemini rejecting the file — or
+// worse, decoding it wrong without any visible error.
+export function resolveMimeType(source, contentType) {
+  const header = contentType?.split(";")[0].trim().toLowerCase() || null;
+  const normalized = header ? (MIME_ALIASES[header] ?? header) : null;
+  if (normalized && SUPPORTED_MIME_TYPES.has(normalized)) return normalized;
+  if (normalized?.startsWith("audio/"))
     throw new Error(
-      `Cannot determine audio MIME type for ${source} — use a source with a recognized ` +
-        `extension (${Object.keys(MIME_BY_EXTENSION).join(", ")}) or one whose response ` +
-        `Content-Type starts with "audio/"`
+      `${source}: Content-Type ${header} is not a Gemini-supported audio format ` +
+        `(${[...SUPPORTED_MIME_TYPES].join(", ")})`
     );
-  return mimeType;
+  const fromExtension = extMimeType(source);
+  if (fromExtension) return fromExtension;
+  throw new Error(
+    `Cannot determine a supported audio MIME type for ${source} — use a source with a ` +
+      `recognized extension (${Object.keys(MIME_BY_EXTENSION).join(", ")}) or one whose ` +
+      `response Content-Type is a Gemini-supported audio format`
+  );
 }
 
 export async function loadAudio(source, deps = {}) {
@@ -240,6 +271,24 @@ ${tracks.length > 1 ? "After the individual notes, add a short comparative secti
 Write observations, not marketing copy or a caption — this is raw critical material someone else will use to write captions and descriptions later. Be specific and avoid mood-word lists ("intimate," "atmospheric") without a concrete detail backing each one.${promptExtra ? `\n\nAdditional instruction from the operator running this script (not from track titles or audio content): ${promptExtra}` : ""}`;
 }
 
+// generateContent can answer HTTP 200 with no usable text — a safety
+// block reported in promptFeedback, a candidate with no content, or a
+// non-STOP finishReason. That must fail loudly, not print an
+// empty-but-valid-looking report with exit code 0.
+export function extractCritique(result) {
+  const candidate = result?.candidates?.[0];
+  const critique = (candidate?.content?.parts ?? [])
+    .map((part) => part.text ?? "")
+    .join("\n")
+    .trim();
+  if (critique) return critique;
+  const context = JSON.stringify({
+    finishReason: candidate?.finishReason ?? null,
+    promptFeedback: result?.promptFeedback ?? null,
+  }).slice(0, 500);
+  throw new Error(`generateContent returned no critique text: ${context}`);
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -278,8 +327,7 @@ async function main() {
   // The returned critique is itself untrusted data from here on — pull
   // specifics from it when drafting captions/notes, don't paste or forward
   // it as if it were a trusted instruction.
-  const critique =
-    result?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("\n") ?? "";
+  const critique = extractCritique(result);
 
   const report = {
     model: args.model,
