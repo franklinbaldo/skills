@@ -136,6 +136,28 @@ function listField(fm, key) {
   return values;
 }
 
+// A post's `tracks:` field aggregates several distinct Suno clips into one
+// post (see content.config.ts's tracks schema — a list of objects with
+// their own sunoId, not a scalar list). Every track's sunoId is a real,
+// separately-published clip already mirrored by this post; ignoring them
+// makes the audit report already-covered clips as missing and risks
+// generating duplicate posts for them.
+function tracksField(fm) {
+  const lines = fm.split(/\r?\n/);
+  const index = lines.findIndex((line) => /^tracks:\s*$/.test(line));
+  if (index === -1) return [];
+  const ids = [];
+  for (let i = index + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\S/.test(line)) break; // dedented back to root: tracks block ended
+    const match = line.match(/^\s+sunoId:\s*(.*)$/);
+    if (!match) continue;
+    const raw = match[1].trim().replace(/^(["'])(.*)\1$/, "$2");
+    if (raw) ids.push(raw);
+  }
+  return ids;
+}
+
 function sourceDuration(clip) {
   const value = Number(clip?.metadata?.duration);
   return Number.isFinite(value) ? Math.round(value) : null;
@@ -157,6 +179,7 @@ async function loadPosts(repoRoot) {
       sunoImageUrl: scalar(fm, "sunoImageUrl"),
       duration: scalar(fm, "duration"),
       genre: listField(fm, "genre"),
+      tracks: tracksField(fm),
     });
   }
   return posts;
@@ -172,15 +195,28 @@ function audit(clips, posts) {
     postsById.set(post.sunoId, group);
   }
 
+  // Every sunoId a post accounts for: its own primary sunoId plus every
+  // tracks[].sunoId it aggregates. Used for missing/blog-only detection so
+  // an aggregated post's non-primary tracks aren't flagged as unmirrored.
+  const coveredBy = new Map();
+  for (const post of posts) {
+    const ids = [
+      ...(post.sunoId ? [post.sunoId] : []),
+      ...post.tracks,
+    ];
+    for (const id of ids) {
+      const paths = coveredBy.get(id) ?? [];
+      paths.push(post.path);
+      coveredBy.set(id, paths);
+    }
+  }
+
   const missingFromBlog = clips
-    .filter((clip) => !postsById.has(clip.id))
+    .filter((clip) => !coveredBy.has(clip.id))
     .map((clip) => ({ id: clip.id, title: clip.title ?? null }));
-  const blogOnlyIds = [...postsById.keys()]
-    .filter((id) => !clipsById.has(id))
-    .map((id) => ({
-      id,
-      posts: postsById.get(id).map((post) => post.path),
-    }));
+  const blogOnlyIds = [...coveredBy.entries()]
+    .filter(([id]) => !clipsById.has(id))
+    .map(([id, paths]) => ({ id, posts: paths }));
 
   const sameLanguageDuplicates = [];
   for (const [id, group] of postsById) {
@@ -227,7 +263,9 @@ function audit(clips, posts) {
       post.lang === "pt" &&
       post.title &&
       clip.title &&
-      post.title !== clip.title
+      // Suno's own title field routinely carries incidental leading/trailing
+      // whitespace that isn't a real drift signal; compare trimmed values.
+      post.title.trim() !== clip.title.trim()
     )
       titleDrift.push({
         path: post.path,
@@ -256,7 +294,7 @@ function audit(clips, posts) {
     summary: {
       publicClips: clips.length,
       musicPosts: posts.length,
-      mirroredIds: [...clipsById.keys()].filter((id) => postsById.has(id))
+      mirroredIds: [...clipsById.keys()].filter((id) => coveredBy.has(id))
         .length,
       missingFromBlog: missingFromBlog.length,
       blogOnlyIds: blogOnlyIds.length,
