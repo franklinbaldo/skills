@@ -6,7 +6,8 @@ description: >-
   checking Suno/blog drift, repairing music metadata, reviewing composer
   notes, preparing a catalog report, or choosing songs to feature. Reads Suno
   only; writes only to the blog repository; treats every Suno-side change as a
-  recommendation for Franklin.
+  recommendation for Franklin. For the Suno profile itself — bio, genre tags,
+  pinned songs, playlists — use the sibling `suno-profile` skill instead.
 compatibility: >-
   Designed for Claude Code with network access, git, Node.js 24+, and a checkout
   of franklinbaldo/franklinbaldo.github.io.
@@ -43,32 +44,25 @@ Before changing anything:
 3. Treat the checkout as newer than this skill. When commands, layouts, or
    schemas disagree, follow the repository and note the drift.
 4. Inspect the working tree. Preserve unrelated user changes.
-5. If `docs/suno-curation-plan.md` (or wherever Franklin keeps it) exists,
-   check its `Last reviewed` date. Missing or more than a week old: run the
-   self-critique checklist in
-   [`references/curation-plan.md`](references/curation-plan.md) before any
-   other work this session and report the findings — don't wait to be
-   asked.
-6. Run the deterministic read-only audit:
+5. Run the deterministic read-only audit:
 
 ```bash
 node <skill-dir>/scripts/audit-catalog.mjs --repo . --format markdown
 ```
 
 The audit fetches the profile once, compares by `sunoId`, tolerates the expected
-PT/EN pair sharing one ID, and reports missing clips, blog-only IDs,
-same-language duplicates, metadata gaps, genre violations, and title drift.
-Use `--profile-json <snapshot.json>` for offline or reproducible evaluation.
+PT/EN pair sharing one ID (and a post's `tracks[]` aggregating several distinct
+clip IDs into one post — see `content.config.ts`'s tracks schema), and reports
+missing clips, blog-only IDs, same-language duplicates, metadata gaps, genre
+violations, and title drift (compared with whitespace trimmed — Suno's own
+title field routinely carries incidental leading/trailing spaces that aren't
+real drift). Use `--profile-json <snapshot.json>` for offline or reproducible
+evaluation.
 
 For the detailed current data contract, read
 [`references/blog-contract.md`](references/blog-contract.md). For exact session
 flows and report formats, read
-[`references/workflows.md`](references/workflows.md). For the reverse-engineered
-Suno write API (title, tags, cover, visibility, profile, playlists) — currently
-documentation only, since the boundaries above still forbid using it — read
-[`references/write-api.md`](references/write-api.md). For SEO and editorial
-guidance on wording profile bios, genre tags, and playlist titles/descriptions
-well, read [`references/seo-and-taste.md`](references/seo-and-taste.md).
+[`references/workflows.md`](references/workflows.md).
 
 ## Choose exactly one session mode
 
@@ -127,30 +121,9 @@ Use for one song or one PT/EN pair.
 - Load `franklin-blog` before voice work and keep PT/EN semantics aligned in one
   commit when the change is substantive.
 
-### 5. Curation plan
-
-Use when the goal is the profile's overall identity, not one field or one
-song — deciding what the Suno profile as a whole should say and show, then
-applying that in pieces over multiple sessions.
-
-- The plan is a single living document, not a one-shot deliverable. Write
-  it to `<blog-repo>/docs/suno-curation-plan.md` (propose this location to
-  Franklin the first time; follow wherever he actually keeps it after
-  that).
-- Use the template and drafting guidance in
-  [`references/curation-plan.md`](references/curation-plan.md).
-- A planning session drafts or revises the plan. It does **not** apply
-  every recommendation from the plan in the same session — read
-  `references/curation-plan.md`'s "Applying the plan" section for how
-  incremental application and review work together.
-- Every apply session (bio, tags, pinned songs, playlists) should check
-  itself against the current plan and note any drift — either the change
-  matches the plan, or the plan is stale and should be revised, but silent
-  disagreement between the two is a bug.
-- Applying anything from the plan to live Suno data still requires the same
-  explicit authorization as any other write covered in `write-api.md` —
-  the plan documents *what to aim for*, it doesn't grant standing
-  permission to write.
+Whole-profile identity work — the bio, genre tags, pinned songs, and
+playlists, plus the curation-plan process that ties them together — is out
+of scope for this skill. Use the `suno-profile` skill for that.
 
 ## Repository contract that usually applies
 
