@@ -113,9 +113,9 @@ per song. For a catalog-sized audit (dozens to ~100 songs):
   pattern in `write-api.md` (accented characters replaced by plain
   spaces) — recognizable on sight, so no separate investigation is needed
   each time, but recognizing the pattern is not authorization to fix it:
-  flag it, propose the corrected text, and wait for Franklin's go-ahead on
-  that specific write like any other caption change, even though this is
-  a read-only audit pass.
+  flag it, propose the corrected text, and wait for Franklin's explicit
+  go-ahead on that specific write before calling `set_metadata`, same as
+  any other caption change, even though this is a read-only audit pass.
 - Report the completeness percentage and a prioritized list; don't draft
   the missing captions in the same breath — that's the next, separate,
   Franklin-reviewed step (see "Song descriptions" in the template above).

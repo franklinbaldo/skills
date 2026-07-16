@@ -171,9 +171,11 @@ test("waitUntilActive: gives up after maxAttempts on a stuck non-terminal state"
   );
 });
 
-test("extractCritique: joins candidate text parts", () => {
+test("extractCritique: joins candidate text parts on a clean STOP", () => {
   const critique = extractCritique({
-    candidates: [{ content: { parts: [{ text: "steady tempo" }, { text: "warm mix" }] } }],
+    candidates: [
+      { finishReason: "STOP", content: { parts: [{ text: "steady tempo" }, { text: "warm mix" }] } },
+    ],
   });
   assert.equal(critique, "steady tempo\nwarm mix");
 });
@@ -194,7 +196,10 @@ test("extractCritique: a response without text fails loudly with the block conte
     /did not finish cleanly.*MAX_TOKENS/s
   );
   assert.throws(
-    () => extractCritique({ candidates: [{ content: { parts: [{ text: "   " }] } }] }),
+    () =>
+      extractCritique({
+        candidates: [{ finishReason: "STOP", content: { parts: [{ text: "   " }] } }],
+      }),
     /no critique text/
   );
   // No candidates at all (not just an empty/blocked one) must fail the

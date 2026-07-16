@@ -90,14 +90,6 @@ Bearer:
   — there is a short read-after-write propagation delay (observed up to
   ~10s) on several endpoints. Don't conclude a write failed from one stale
   read; re-check after a few seconds.
-- Most write calls are `POST` with a trailing slash; a couple of exceptions
-  are noted below. `DELETE` is **not** supported anywhere in this API
-  (confirmed: `405 Method not allowed`) — don't reuse REST conventions from
-  unrelated APIs without testing them first.
-- Success does not always mean the change is visible on the very next `GET`
-  — there is a short read-after-write propagation delay (observed up to
-  ~10s) on several endpoints. Don't conclude a write failed from one stale
-  read; re-check after a few seconds.
 
 ## Song (clip) metadata
 
@@ -196,15 +188,15 @@ inference — the disappearance was Franklin manually unpinning a clip
 himself in the same window, not an effect of this endpoint. Confirmed
 independently the same day: pinning a 5th clip (`Beatriz`) onto an
 existing 4-clip pinned set left all 4 prior clips **and** their pin
-captions intact, verified via a fresh `GET
-/api/profiles/v2/{handle}` immediately after. Treat `pin-clip` as additive
-and non-destructive to the rest of the pinned set unless a future
-observation reproduces otherwise. It remains possible that a clip
-**manually** unpinned (by whatever means) and later re-pinned loses its
-pin caption — that specific sequence hasn't been cleanly isolated from
-the API's own behavior, so don't assume it either way; just re-verify the
-full pinned set and captions after any pin/unpin/re-pin sequence, same
-general discipline as the propagation-delay note above, not because of a
+captions intact, verified via a fresh `GET /api/profiles/v2/{handle}`
+immediately after. Treat `pin-clip` as additive and non-destructive to
+the rest of the pinned set unless a future observation reproduces
+otherwise. It remains possible that a clip **manually** unpinned (by
+whatever means) and later re-pinned loses its pin caption — that
+specific sequence hasn't been cleanly isolated from the API's own
+behavior, so don't assume it either way; just re-verify the full pinned
+set and captions after any pin/unpin/re-pin sequence, same general
+discipline as the propagation-delay note above, not because of a
 confirmed bug. No corresponding `unpin-clip`-style endpoint has been
 captured yet; presumably exists but unmapped.
 
