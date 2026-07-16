@@ -74,17 +74,12 @@ break before the next paragraph block. Posts that violate this rhythm
 how good the writing. Posts that overdo it (visual every 100 words
 without breathing room) feel like content marketing.
 
-The screen heuristic, as a rule of thumb:
+Use that 400–500-word cadence as the practical screen heuristic. A
+visual rest may be a meme or any of the lighter-weight elements listed
+above; do not add an image meme just to meet the cadence.
 
-> **Roughly every 200 words of prose, the reader should hit a visual
-> rest before the next paragraph block.**
-
-200 words is approximately one mobile screen of comfortable reading.
-On desktop the count is higher per screen, but mobile is the binding
-constraint — design for the tighter reader.
-
-For a 2,000-word post, that means ~8–10 visual rests. For 2,500
-words, ~10–12. Image memes are heavier than other rest types and
+For a 2,000-word post, that means roughly 4–5 visual rests. For 2,500
+words, roughly 5–6. Image memes are heavier than other rest types and
 should account for roughly 1/4 to 1/3 of the rests in a meme-friendly
 register; the remaining rests are text memes, diagrams, SVGs, maps,
 footnotes, pull quotes, and section headers.
@@ -106,8 +101,9 @@ This means:
   doesn't need a full exoneration paragraph. Memes that don't carry
   a contestable thesis (pure tonal pieces) need no reflexive landing
   at all.
-- No two image memes within ~500 words of each other — they need
-  breathing room to land separately.
+- Keep at least ~800 words between image memes. If another visual
+  element sits between them, ~500 words is acceptable because the eye
+  has had a different kind of rest.
 
 The serious-register rules (one image meme max, only at openings, full
 reflexive landing) apply only when the user explicitly says "this post
@@ -222,15 +218,15 @@ memes):
 ```bash
 KEYWORD="brain"
 curl -s https://api.memegen.link/templates/ | python3 -c "
-import json, sys, os
+import json, sys
 data = json.load(sys.stdin)
-keyword = os.environ.get('KEYWORD', '').lower()
+keyword = sys.argv[1].lower()
 for t in data:
     name = t.get('name', '').lower()
     tid = t.get('id', '').lower()
     if keyword in name or keyword in tid:
         print(f\"  {t['id']:25s} | lines={t.get('lines','?')} | {t.get('name','')}\")
-"
+" "$KEYWORD"
 ```
 
 Each template's full spec (lines, styles, example):
