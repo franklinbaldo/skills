@@ -58,6 +58,27 @@ LLM reads the text and decides whether to click.
 - Keep them stable across a series (e.g. all "Moving Window" tracks sharing
   a tag) so the series reads as a set, not as disconnected one-offs.
 
+## Pinned-song captions
+
+Up to 10 songs can be pinned to the profile, each with its own caption
+(`write-api.md`'s pin-caption endpoint) — this is the first text a visitor
+(or an LLM summarizing the profile) reads next to a song, before ever
+pressing play. Treat each one as a one-line pitch, not a repeat of the bio:
+
+- Say what the song specifically *is about* — the concrete premise, not a
+  mood-word ("a greentext retelling of Borges' own essay about himself,"
+  not "an introspective spoken-word piece").
+- Don't let two pinned captions restate the same angle. Ten pinned slots
+  with ten distinct hooks cover more searchable ground than ten similar
+  descriptions of "intimate spoken-word folk."
+- A caption doubles as the disambiguator between songs sharing a theme or
+  series — if three pinned songs are all Borges-adjacent, each caption
+  should say *which* Borges thing, not just "inspired by Borges" three
+  times.
+- Same voice rule as the bio: specific and slightly wry beats polished
+  ad-copy. A caption that only a fan of the actual song would write is
+  doing its job; a caption that could apply to half the catalog isn't.
+
 ## Playlist titles
 
 - Be specific and evocative, not generic. "Late Night Drive Vibes" beats

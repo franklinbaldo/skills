@@ -82,6 +82,21 @@ is not directly settable this way).
 }
 ```
 
+## Pinned-song caption (profile page)
+
+`PUT /api/profiles/pin-caption/{clip_id}`
+
+```json
+{"caption": "..."}
+```
+
+Sets the caption shown under a song **on the profile's pinned-songs
+section**, not the song's own `caption` field (that one lives on
+`set_metadata` and shows on the song's own page). Distinct field, distinct
+endpoint, distinct storage: read back via `GET /api/profiles/v2/{handle}`'s
+top-level `pin_captions` array (`[{"clip_id", "caption"}, ...]`), not from
+the clip object itself.
+
 ## Song visibility (publish/unpublish)
 
 `POST /api/gen/{clip_id}/set_visibility/`
