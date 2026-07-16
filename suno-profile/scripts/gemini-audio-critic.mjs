@@ -6,10 +6,13 @@
 // descriptions, and composer notes grounded in what the track actually
 // sounds like, not just its lyrics or Suno-generated style prompt.
 //
-// Requires GEMINI_API_KEY (see references/gemini-critic.md for setup and
-// prompt-design notes). No npm dependencies: uses the Gemini REST API
-// directly via fetch, matching the rest of this skill set's zero-dependency
-// scripts.
+// Requires GEMINI_API_KEY and PORTKEY_API_KEY (see references/gemini-critic.md
+// for setup and prompt-design notes). Hybrid design: audio still uploads
+// directly to Google's Files API (Portkey doesn't proxy the upload/poll
+// lifecycle) — only the resulting file URI and the prompt go through
+// Portkey's gateway for inference, via its OpenAI-compatible
+// /v1/chat/completions endpoint. No npm dependencies: fetch only, matching
+// the rest of this skill set's zero-dependency scripts.
 //
 // Usage:
 //   node gemini-audio-critic.mjs --track "Title=<path-or-url>" [--track ...]
@@ -31,6 +34,7 @@ import { extname } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const API_BASE = "https://generativelanguage.googleapis.com";
+const PORTKEY_BASE = "https://api.portkey.ai/v1";
 const DEFAULT_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-pro";
 
 // The only MIME types this script will send — Gemini's officially
@@ -70,7 +74,7 @@ const MIME_BY_EXTENSION = {
 function usage() {
   console.error(
     `Usage: node gemini-audio-critic.mjs --track "<title>=<path-or-url>" [--track ...] [--model <name>] [--format json|markdown] [--prompt-extra "<text>"]\n\n` +
-      `Requires GEMINI_API_KEY in the environment. Model defaults to ${DEFAULT_MODEL} ` +
+      `Requires GEMINI_API_KEY and PORTKEY_API_KEY in the environment. Model defaults to ${DEFAULT_MODEL} ` +
       `(override with --model or GEMINI_MODEL — check current model availability, this changes over time).\n`
   );
 }
@@ -271,29 +275,58 @@ ${tracks.length > 1 ? "After the individual notes, add a short comparative secti
 Write observations, not marketing copy or a caption — this is raw critical material someone else will use to write captions and descriptions later. Be specific and avoid mood-word lists ("intimate," "atmospheric") without a concrete detail backing each one.${promptExtra ? `\n\nAdditional instruction from the operator running this script (not from track titles or audio content): ${promptExtra}` : ""}`;
 }
 
-// generateContent can answer HTTP 200 with no usable text — a safety
-// block reported in promptFeedback, a candidate with no content, or a
-// non-STOP finishReason. That must fail loudly, not print an
+// Portkey's provider slug convention for a Gemini model — idempotent, so a
+// caller who already passes the full "@google/..." form (e.g. copy-pasted
+// from Portkey's own docs) doesn't get double-prefixed.
+export function portkeyModel(model) {
+  return model.startsWith("@") ? model : `@google/${model}`;
+}
+
+// One multimodal chat-completions request: each uploaded file as an
+// "image_url" content item (Portkey's unified media envelope — it
+// translates this to Gemini's native file-reference format regardless of
+// media type, per Portkey's own docs) pointing at the Google Files API URI,
+// followed by the prompt text. Exported for offline testing of the request
+// shape without a live Portkey/Gemini call.
+export function buildPortkeyRequestBody(model, uploadedFiles, prompt) {
+  return {
+    model: portkeyModel(model),
+    messages: [
+      {
+        role: "user",
+        content: [
+          ...uploadedFiles.map((file) => ({
+            type: "image_url",
+            image_url: { url: file.uri },
+          })),
+          { type: "text", text: prompt },
+        ],
+      },
+    ],
+  };
+}
+
+// Portkey's OpenAI-compatible chat completion can answer HTTP 200 with no
+// usable text — no choices at all, or a finish_reason other than "stop"
+// (Portkey maps Gemini's native finishReason, e.g. MAX_TOKENS/SAFETY, to
+// this OpenAI-style value). That must fail loudly, not print an
 // empty-but-valid-looking report with exit code 0.
 export function extractCritique(result) {
-  const candidate = result?.candidates?.[0];
-  const finishReason = candidate?.finishReason ?? null;
-  const critique = (candidate?.content?.parts ?? [])
-    .map((part) => part.text ?? "")
-    .join("\n")
-    .trim();
+  const choice = result?.choices?.[0];
+  const finishReason = choice?.finish_reason ?? null;
+  const critique = (choice?.message?.content ?? "").trim();
   const context = JSON.stringify({
     finishReason,
-    promptFeedback: result?.promptFeedback ?? null,
+    error: result?.error ?? null,
   }).slice(0, 500);
-  // A non-STOP finish reason (e.g. MAX_TOKENS) can still carry partial
-  // text in `parts` — that's not a usable critique, it's a truncated one,
-  // so it's an error the same as no text at all, not a lesser case.
-  if (finishReason && finishReason !== "STOP") {
-    throw new Error(`generateContent did not finish cleanly: ${context}`);
+  // A non-"stop" finish reason (e.g. length/content_filter) can still carry
+  // partial text — that's not a usable critique, it's a truncated one, so
+  // it's an error the same as no text at all, not a lesser case.
+  if (finishReason && finishReason !== "stop") {
+    throw new Error(`Portkey chat completion did not finish cleanly: ${context}`);
   }
   if (critique) return critique;
-  throw new Error(`generateContent returned no critique text: ${context}`);
+  throw new Error(`Portkey chat completion returned no critique text: ${context}`);
 }
 
 async function main() {
@@ -304,6 +337,8 @@ async function main() {
   }
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
+  const portkeyApiKey = process.env.PORTKEY_API_KEY;
+  if (!portkeyApiKey) throw new Error("PORTKEY_API_KEY is not set");
 
   const uploaded = [];
   for (const track of args.tracks) {
@@ -312,23 +347,25 @@ async function main() {
     uploaded.push({ title: track.title, file });
   }
 
-  const parts = [
-    // Use the Files API's own reported mimeType, not the locally-guessed
-    // one — it's the authoritative value for what was actually stored.
-    ...uploaded.map(({ file }) => ({
-      fileData: { mimeType: file.mimeType, fileUri: file.uri },
-    })),
-    { text: buildPrompt(args.tracks, args.promptExtra) },
-  ];
+  const body = buildPortkeyRequestBody(
+    args.model,
+    uploaded.map(({ file }) => file),
+    buildPrompt(args.tracks, args.promptExtra)
+  );
 
   const response = await withRetry(
     () =>
-      fetch(`${API_BASE}/v1beta/models/${args.model}:generateContent?key=${apiKey}`, {
+      fetch(`${PORTKEY_BASE}/chat/completions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts }] }),
+        headers: {
+          "Content-Type": "application/json",
+          "x-portkey-api-key": portkeyApiKey,
+          "x-portkey-provider": "@google",
+          Authorization: apiKey,
+        },
+        body: JSON.stringify(body),
       }),
-    "generateContent"
+    "Portkey chat completion"
   );
   const result = await response.json();
   // The returned critique is itself untrusted data from here on — pull

@@ -8,6 +8,8 @@ import {
   buildPrompt,
   waitUntilActive,
   loadAudio,
+  portkeyModel,
+  buildPortkeyRequestBody,
 } from "./gemini-audio-critic.mjs";
 
 test("parseArgs: parses one or more --track flags", () => {
@@ -171,54 +173,75 @@ test("waitUntilActive: gives up after maxAttempts on a stuck non-terminal state"
   );
 });
 
-test("extractCritique: joins candidate text parts on a clean STOP", () => {
-  const critique = extractCritique({
-    candidates: [
-      { finishReason: "STOP", content: { parts: [{ text: "steady tempo" }, { text: "warm mix" }] } },
-    ],
-  });
-  assert.equal(critique, "steady tempo\nwarm mix");
+test("portkeyModel: prefixes a bare model name with the @google provider slug", () => {
+  assert.equal(portkeyModel("gemini-2.5-flash"), "@google/gemini-2.5-flash");
 });
 
-test("extractCritique: a response without text fails loudly with the block context", () => {
+test("portkeyModel: leaves an already-prefixed model name alone", () => {
+  assert.equal(portkeyModel("@google/gemini-2.5-flash"), "@google/gemini-2.5-flash");
+  assert.equal(portkeyModel("@my-custom-provider/gemini-2.5-flash"), "@my-custom-provider/gemini-2.5-flash");
+});
+
+test("buildPortkeyRequestBody: files first as image_url items, then the prompt text", () => {
+  const body = buildPortkeyRequestBody(
+    "gemini-2.5-flash",
+    [{ uri: "https://generativelanguage.googleapis.com/v1beta/files/abc" }, { uri: "files/def" }],
+    "critique this"
+  );
+  assert.equal(body.model, "@google/gemini-2.5-flash");
+  assert.equal(body.messages.length, 1);
+  assert.equal(body.messages[0].role, "user");
+  assert.deepEqual(body.messages[0].content, [
+    { type: "image_url", image_url: { url: "https://generativelanguage.googleapis.com/v1beta/files/abc" } },
+    { type: "image_url", image_url: { url: "files/def" } },
+    { type: "text", text: "critique this" },
+  ]);
+});
+
+test("extractCritique: returns message content on a clean stop", () => {
+  const critique = extractCritique({
+    choices: [{ finish_reason: "stop", message: { role: "assistant", content: "steady tempo, warm mix" } }],
+  });
+  assert.equal(critique, "steady tempo, warm mix");
+});
+
+test("extractCritique: a response without text fails loudly with the error context", () => {
   assert.throws(
     () =>
       extractCritique({
-        promptFeedback: { blockReason: "SAFETY" },
+        error: { message: "blocked by safety filter" },
       }),
-    /no critique text.*SAFETY/s
+    /no critique text.*blocked by safety filter/s
   );
   assert.throws(
     () =>
       extractCritique({
-        candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [] } }],
+        choices: [{ finish_reason: "length", message: { content: "" } }],
       }),
-    /did not finish cleanly.*MAX_TOKENS/s
+    /did not finish cleanly.*length/s
   );
   assert.throws(
     () =>
       extractCritique({
-        candidates: [{ finishReason: "STOP", content: { parts: [{ text: "   " }] } }],
+        choices: [{ finish_reason: "stop", message: { content: "   " } }],
       }),
     /no critique text/
   );
-  // No candidates at all (not just an empty/blocked one) must fail the
-  // same way, not throw a TypeError from reading into an undefined result.
+  // No choices at all (not just an empty/blocked one) must fail the same
+  // way, not throw a TypeError from reading into an undefined result.
   assert.throws(() => extractCritique({}), /no critique text/);
-  assert.throws(() => extractCritique({ candidates: [] }), /no critique text/);
+  assert.throws(() => extractCritique({ choices: [] }), /no critique text/);
 });
 
-test("extractCritique: a non-STOP finish reason is an error even with partial text", () => {
-  // Reproduces the exact case from PR #12 review 4715407460: a truncated
-  // response can still carry text in `parts` — that's a partial critique,
-  // not a usable one, and must not be returned as if it were complete.
+test("extractCritique: a non-stop finish reason is an error even with partial text", () => {
+  // Same class of bug as PR #12 review 4715407460 caught against the
+  // Gemini-native response shape: a truncated response can still carry
+  // text — that's a partial critique, not a usable one.
   assert.throws(
     () =>
       extractCritique({
-        candidates: [
-          { finishReason: "MAX_TOKENS", content: { parts: [{ text: "partial output" }] } },
-        ],
+        choices: [{ finish_reason: "content_filter", message: { content: "partial output" } }],
       }),
-    /did not finish cleanly.*MAX_TOKENS/s
+    /did not finish cleanly.*content_filter/s
   );
 });

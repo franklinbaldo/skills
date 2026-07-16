@@ -9,9 +9,23 @@ AI-generated style prompt (`metadata.tags`), which describes what Suno
 *intended* to generate, not necessarily what's actually audible in the
 render.
 
-**Gated on availability**: only usable when `GEMINI_API_KEY` is set in
-the environment. When it isn't, skip this step and fall back to
-lyrics/style-prompt-only drafting — don't block other work on it.
+**Gated on availability**: only usable when both `GEMINI_API_KEY` and
+`PORTKEY_API_KEY` are set in the environment. When either isn't, skip this
+step and fall back to lyrics/style-prompt-only drafting — don't block
+other work on it.
+
+**Routed through Portkey.** Audio still uploads directly to Google's
+Files API (Portkey doesn't proxy the upload/poll lifecycle) — only the
+resulting file reference and the prompt go through Portkey's
+OpenAI-compatible gateway (`/v1/chat/completions`) for the actual
+inference call. This was a deliberate choice, not a default: for a
+single-user, occasional-volume script, calling Gemini directly was
+simpler and had one fewer account/secret/third party in the path. It was
+switched to Portkey on request, trading that simplicity for
+cross-model/cross-key fallback, circuit breaking, and centralized
+observability the direct path didn't have — capabilities this script
+doesn't currently exercise, but the gateway is now the call path if that
+changes.
 
 ## Why audio, not just metadata
 
@@ -73,21 +87,33 @@ being invoked from a particular skill's directory.
 
 ## Setup
 
-- `GEMINI_API_KEY` — required. Not currently set in this environment as of
-  the session that wrote this reference; treat every use as conditional on
-  checking `process.env.GEMINI_API_KEY` first (the script itself errors
-  clearly if it's missing).
-- `GEMINI_MODEL` — optional override (default `gemini-2.5-pro`). Gemini's
-  available models change over time; if the default 404s, check current
-  model availability rather than assuming the script is broken.
-- No npm dependencies — the script uses the Gemini REST API directly via
-  `fetch`, matching the zero-dependency style of this skill set's other
-  scripts (e.g. `suno-curator/scripts/audit-catalog.mjs`).
+- `GEMINI_API_KEY` — required. Used two ways: as the Google Files API
+  upload/poll credential (unchanged, direct to Google), and as the
+  `Authorization` header value Portkey forwards to Gemini for the
+  inference call itself. Treat every use as conditional on checking
+  `process.env.GEMINI_API_KEY` first (the script itself errors clearly if
+  it's missing).
+- `PORTKEY_API_KEY` — required. Authenticates to Portkey's gateway
+  (`x-portkey-api-key` header) for the `/v1/chat/completions` call.
+  [portkey.ai](https://portkey.ai) issues these; not the same key as
+  `GEMINI_API_KEY`.
+- `GEMINI_MODEL` — optional override (default `gemini-2.5-pro`), passed
+  through Portkey's `@google/<model>` provider-slug convention
+  (`portkeyModel()` adds the prefix automatically — pass either the bare
+  model name or the full `@google/...` form). Gemini's available models
+  change over time; if the default errors, check current model
+  availability rather than assuming the script is broken.
+- No npm dependencies — the script talks to both Google's Files API and
+  Portkey's gateway directly via `fetch`, matching the zero-dependency
+  style of this skill set's other scripts (e.g.
+  `suno-curator/scripts/audit-catalog.mjs`).
 - Audio files upload via Gemini's Files API (resumable upload), not as
   inline base64 — necessary for audio generally and for sending several
   tracks in one request without hitting inline-request size limits.
   Uploaded files process asynchronously; the script polls until `ACTIVE`
-  before requesting the critique.
+  before requesting the critique. This part of the flow is unchanged by
+  the Portkey switch — only the final inference call is routed through
+  the gateway, using the uploaded files' resulting URIs.
 - Supported formats are exactly WAV, MP3, AIFF, AAC, OGG Vorbis, and FLAC
   (`audio/wav`, `audio/mp3`, `audio/aiff`, `audio/aac`, `audio/ogg`,
   `audio/flac` — see [Gemini's supported audio
@@ -95,11 +121,12 @@ being invoked from a particular skill's directory.
   Not every `audio/*` Content-Type, and not M4A or Opus — the script
   rejects a source it can't map to one of these rather than guessing.
   `audio/mpeg` (what most HTTP servers actually send for `.mp3`) is
-  normalized to `audio/mp3`.
-- A response with no usable critique text — a blocked prompt, a candidate
-  that stopped for a reason other than `STOP`, or an empty part list —
-  is a hard error (non-zero exit, clear message), never a silent empty
-  critique.
+  normalized to `audio/mp3`. This validation happens before upload and is
+  unaffected by the Portkey switch.
+- A response with no usable critique text — an error response, a choice
+  that finished for a reason other than `stop`, or an empty/missing
+  message — is a hard error (non-zero exit, clear message), never a
+  silent empty critique.
 
 ## Testing
 
@@ -110,11 +137,13 @@ Gemini's officially supported audio formats, and rejection of unsupported
 prompt construction (including the untrusted-content delimiting), the
 upload polling state machine (absent/`STATE_UNSPECIFIED`/`PROCESSING` →
 `ACTIVE`, a `FAILED` state surfacing the server's error, and giving up
-after `maxAttempts` on a stuck non-terminal state), and `extractCritique`
-failing loudly on a 200-with-no-text response (safety block, non-`STOP`
-finish reason, no candidates, empty text) instead of printing an empty
-report — all offline, via a mocked `fetch`/`readFile`, no
-`GEMINI_API_KEY` required. Run with:
+after `maxAttempts` on a stuck non-terminal state), the Portkey request
+shape (`portkeyModel`'s `@google/` prefixing, `buildPortkeyRequestBody`'s
+file-then-text content ordering), and `extractCritique` failing loudly on
+a response with no usable text (error response, non-`stop` finish
+reason, no choices, empty content) instead of printing an empty report —
+all offline, via a mocked `fetch`/`readFile`, no live keys required. Run
+with:
 
 ```bash
 node --test scripts/gemini-audio-critic.test.mjs
@@ -122,19 +151,28 @@ node --test scripts/gemini-audio-critic.test.mjs
 
 ## Verified live
 
-Confirmed 2026-07-16 against two real, full-length (5-7 min) public Suno
-tracks in one call (`> be me Borges`, `Fourteen Words`), `.mp3` via
-`audio_url`: upload, polling through non-terminal states, `audio/mp3`
-file parts, and a real multi-track critique with the requested
-comparative section all worked as designed. `extractCritique` correctly
-parsed a normal `STOP`-finished response.
+**Predates the Portkey switch — needs re-verification.** The upload/poll
+half of the flow (Google Files API) is unchanged and was confirmed
+2026-07-16 against two real, full-length (5-7 min) public Suno tracks in
+one call (`> be me Borges`, `Fourteen Words`), `.mp3` via `audio_url`:
+upload, polling through non-terminal states, and `audio/mp3` file parts
+all worked as designed. The inference call itself was, at that time,
+direct to Gemini's native `generateContent` — the Portkey
+`/v1/chat/completions` path (`image_url`-wrapped file references,
+`choices[0].message.content`/`finish_reason` response shape) has not yet
+been exercised against a live Portkey account. Before relying on this in
+a real session, run one real `--track` call end-to-end and confirm the
+critique comes back — don't assume the offline request/response-shape
+tests are a substitute for one live round trip through the actual
+gateway.
 
-One operational finding: **`gemini-2.5-pro` had zero free-tier quota**
-(`429`, `limit: 0` for `generate_content_free_tier_requests`) on the key
-tested — `gemini-2.5-flash` worked immediately with the same request. If
-the default model 429s, try `--model gemini-2.5-flash` before assuming
-the script is broken; which models a given key/tier can actually reach
-varies and isn't something this script can detect in advance.
+One operational finding from the pre-Portkey verification, likely still
+relevant since it's a Gemini-side quota, not a Portkey-side one:
+**`gemini-2.5-pro` had zero free-tier quota** (`429`,
+`limit: 0` for `generate_content_free_tier_requests`) on the key tested
+— `gemini-2.5-flash` worked immediately with the same request. If the
+default model errors, try `--model gemini-2.5-flash` before assuming the
+script is broken.
 
 Still not verified: behavior with more than two tracks in one call, or
 with much longer/heavier audio — context/token limits may cap how many

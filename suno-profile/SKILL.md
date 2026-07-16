@@ -71,9 +71,10 @@ itself says or shows, use this one.
   *word* a bio, genre tags, and playlist titles/descriptions well, adapted
   from general streaming-platform SEO practice plus Suno's own field limits.
 - [`references/gemini-critic.md`](references/gemini-critic.md) — when
-  `GEMINI_API_KEY` is available, send actual song audio to Gemini for a
-  listening critique (rhythm, mood, production texture, vocal delivery) to
-  ground captions/descriptions in what a track actually sounds like, not
+  `GEMINI_API_KEY` and `PORTKEY_API_KEY` are both available, send actual
+  song audio to Gemini (via Portkey's gateway) for a listening critique
+  (rhythm, mood, production texture, vocal delivery) to ground
+  captions/descriptions in what a track actually sounds like, not
   just its lyrics or Suno's own style prompt. Optional; skip when no key is
   set.
   Read before drafting text, not just before sending it.
