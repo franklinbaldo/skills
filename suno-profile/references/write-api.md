@@ -119,6 +119,16 @@ yet; presumably exists but unmapped.
 {"caption": "..."}
 ```
 
+**Server-enforced hard limit: 500 characters.** Confirmed by the actual
+error, not a guess: a 600-character caption is rejected with `400
+{"detail": "Caption exceeds maximum length of 500 characters."}` — the
+write is atomic (rejected outright, not truncated), so an over-length
+caption never partially applies. Note this is a display constraint on
+top of the hard limit: 500 characters is far more than reads well in the
+UI — see `seo-and-taste.md`'s "Pinned-song captions" for the practical
+target length, confirmed too long in Franklin's own real feedback the
+first time a ~124-character caption was applied live.
+
 Sets the caption shown under a song **on the profile's pinned-songs
 section**, not the song's own `caption` field (that one lives on
 `set_metadata` and shows on the song's own page). Distinct field, distinct

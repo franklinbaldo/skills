@@ -64,6 +64,12 @@ this is the first text a visitor
 (or an LLM summarizing the profile) reads next to a song, before ever
 pressing play. Treat each one as a one-line pitch, not a repeat of the bio:
 
+- **Target ~50 characters.** The server's hard limit is 500
+  (`write-api.md`), but that's a validation ceiling, not a writing
+  target — a caption anywhere near it reads badly in the UI. Confirmed
+  directly: a ~124-character caption was already too long in practice
+  and had to be cut to ~40 once applied live. Aim for one short, sharp
+  clause, not a sentence with room to spare.
 - Say what the song specifically *is about* — the concrete premise, not a
   mood-word ("a greentext retelling of Borges' own essay about himself,"
   not "an introspective spoken-word piece").
