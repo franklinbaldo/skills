@@ -31,6 +31,9 @@ export JULES_API_KEY=<sua_key>
 
 Verne lê `JULES_API_KEY` do ambiente. Sem a key, todos os comandos falham com 401.
 
+> **Configuração em Ambientes Ona:** Adicione a exportação da variável `JULES_API_KEY` e o alias `alias verne='uvx --from git+https://github.com/franklinbaldo/verne verne'` ao seu repositório de [dotfiles](https://github.com/franklinbaldo/dotfiles) (`install.sh`) para persistência automática em novos ambientes.
+
+
 ---
 
 ## Comandos principais
