@@ -403,6 +403,7 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
         
         part_filename = parse_bookmark_title(title, part_idx, default_date, kanoe_dates=kanoe_dates)
         final_part_path = os.path.join(output_dir, part_filename)
+        temp_part_path = os.path.join(output_dir, f"temp_part_{part_idx}.pdf")
         
         print(f"\n--- Processing Part {part_idx}/{len(parts)}: '{title}' (Pages {start+1} to {end}) ---")
         
