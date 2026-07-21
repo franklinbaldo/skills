@@ -216,9 +216,14 @@ def convert_to_nup(input_path, output_path, nup=1):
                     x1 = x0 + w
                     y1 = y0 + h
                     rect = fitz.Rect(x0, y0, x1, y1)
-                    new_page.show_pdf_page(rect, src, idx, rotate=(360 - src[idx].rotation) % 360)
+                    page_to_draw = src[idx]
+                    orig_rotation = page_to_draw.rotation
+                    if orig_rotation != 0:
+                        page_to_draw.set_rotation(0)
+                    new_page.show_pdf_page(rect, src, idx, rotate=(360 - orig_rotation) % 360)
                     
         start_idx += chunk_size
+
 
 
         
