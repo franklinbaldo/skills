@@ -34,10 +34,11 @@ def make_2up(input_path, output_path):
             out_h = h1
             
         new_page = doc.new_page(width=out_w, height=out_h)
-        new_page.show_pdf_page(fitz.Rect(0, 0, w1, h1), src, i)
+        new_page.show_pdf_page(fitz.Rect(0, 0, w1, h1), src, i, rotate=p1.rotation)
         
         if p2 is not None:
-            new_page.show_pdf_page(fitz.Rect(w1, 0, w1 + w2, h2), src, i+1)
+            new_page.show_pdf_page(fitz.Rect(w1, 0, w1 + w2, h2), src, i+1, rotate=p2.rotation)
+
             
     print(f"Saving 2-up PDF to: {output_path}...")
     doc.save(output_path)
