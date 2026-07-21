@@ -149,35 +149,59 @@ def convert_to_nup(input_path, output_path, nup=1):
     if nup <= 1:
         return
         
-    if nup == 2:
-        cols, rows = 2, 1
-    elif nup == 3:
-        cols, rows = 3, 1
-    elif nup == 4:
-        cols, rows = 2, 2
-    elif nup == 6:
-        cols, rows = 3, 2
-    elif nup == 8:
-        cols, rows = 4, 2
-    elif nup == 9:
-        cols, rows = 3, 3
-    elif nup == 12:
-        cols, rows = 4, 3
-    elif nup == 16:
-        cols, rows = 4, 4
-    else:
-        cols = int(math.ceil(math.sqrt(nup)))
-        rows = int(math.ceil(nup / cols))
-        
     src = fitz.open(input_path)
     doc = fitz.open()
     total_pages = len(src)
     
-    chunk_size = cols * rows
-    for start_idx in range(0, total_pages, chunk_size):
+    start_idx = 0
+    while start_idx < total_pages:
         ref_page = src[start_idx]
         w, h = ref_page.rect.width, ref_page.rect.height
+        is_landscape = w > h
         
+        if nup == 2:
+            if is_landscape:
+                cols, rows = 1, 2  # Stack vertically (top and bottom) -> results in portrait
+            else:
+                cols, rows = 2, 1  # Side-by-side -> results in landscape
+        elif nup == 3:
+            if is_landscape:
+                cols, rows = 1, 3
+            else:
+                cols, rows = 3, 1
+        elif nup == 4:
+            cols, rows = 2, 2
+        elif nup == 6:
+            if is_landscape:
+                cols, rows = 2, 3
+            else:
+                cols, rows = 3, 2
+        elif nup == 8:
+            if is_landscape:
+                cols, rows = 2, 4
+            else:
+                cols, rows = 4, 2
+        elif nup == 9:
+            cols, rows = 3, 3
+        elif nup == 12:
+            if is_landscape:
+                cols, rows = 3, 4
+            else:
+                cols, rows = 4, 3
+        elif nup == 16:
+            cols, rows = 4, 4
+        else:
+            standard_cols = int(math.ceil(math.sqrt(nup)))
+            standard_rows = int(math.ceil(nup / standard_cols))
+            if is_landscape:
+                if standard_cols > standard_rows:
+                    cols, rows = standard_rows, standard_cols
+                else:
+                    cols, rows = standard_cols, standard_rows
+            else:
+                cols, rows = standard_cols, standard_rows
+                
+        chunk_size = cols * rows
         out_w = w * cols
         out_h = h * rows
         
@@ -194,9 +218,12 @@ def convert_to_nup(input_path, output_path, nup=1):
                     rect = fitz.Rect(x0, y0, x1, y1)
                     new_page.show_pdf_page(rect, src, idx)
                     
+        start_idx += chunk_size
+        
     doc.save(output_path)
     doc.close()
     src.close()
+
 
 def _compress_with_size_fallback(temp_path, final_path, mode, title, max_dim, quality, threshold_kb, p_count, part_idx):
     """Compress temp_path to final_path, applying grayscale/rasterization fallbacks if still
