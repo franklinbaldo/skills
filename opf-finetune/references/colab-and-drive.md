@@ -142,6 +142,7 @@ These are the patterns that turn a flaky notebook into a resumable one. Order ma
 available to every later cell:
 ```python
 from google.colab import drive
+
 drive.mount("/content/drive")
 ROOT = "/content/drive/MyDrive/opf-finetune"
 ```
@@ -149,15 +150,17 @@ ROOT = "/content/drive/MyDrive/opf-finetune"
 **2. Restore-or-fetch the base model** (skip the 2.8 GB copy when it is already local):
 ```python
 import os, shutil
+
 LOCAL_BASE = "/content/base/privacy_filter"
 DRIVE_BASE = f"{ROOT}/base/privacy_filter"
 if os.path.exists(f"{LOCAL_BASE}/config.json"):
-    pass                                              # already here this session
+    pass  # already here this session
 elif os.path.exists(f"{DRIVE_BASE}/config.json"):
-    shutil.copytree(DRIVE_BASE, LOCAL_BASE)           # restore from Drive (fast-ish)
+    shutil.copytree(DRIVE_BASE, LOCAL_BASE)  # restore from Drive (fast-ish)
 else:
     # first time ever: download once, then persist to Drive for all future runs
     from huggingface_hub import snapshot_download
+
     snapshot_download("openai/privacy-filter", local_dir=LOCAL_BASE)
     shutil.copytree(LOCAL_BASE, DRIVE_BASE)
 ```
@@ -180,11 +183,25 @@ shutil.copytree("/content/out/best", RUN, dirs_exist_ok=True)
   different interpreter than the kernel where OPF was installed:
   ```python
   import sys, subprocess
-  subprocess.run([sys.executable, "-m", "opf", "train", "train.jsonl",
-                  "--validation-dataset", "val.jsonl",
-                  "--label-space-json", "label_space.json",
-                  "--output-dir", "/content/out/best",
-                  "--device", "cuda"], check=True)
+
+  subprocess.run(
+      [
+          sys.executable,
+          "-m",
+          "opf",
+          "train",
+          "train.jsonl",
+          "--validation-dataset",
+          "val.jsonl",
+          "--label-space-json",
+          "label_space.json",
+          "--output-dir",
+          "/content/out/best",
+          "--device",
+          "cuda",
+      ],
+      check=True,
+  )
   ```
 - **Memory:** `os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"`.
 - **Do not cargo-cult `--n-ctx 512`.** That value was a concession to fit CPU/16 GB RAM.

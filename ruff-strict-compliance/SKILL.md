@@ -43,10 +43,11 @@ import typer
 
 app = typer.Typer()
 
+
 @app.command()
 def main(
-    name: str = typer.Option("World", help="Who to greet"), # B008 triggered here
-    verbose: bool = typer.Option(False, "--verbose", "-v") # B008 triggered here
+    name: str = typer.Option("World", help="Who to greet"),  # B008 triggered here
+    verbose: bool = typer.Option(False, "--verbose", "-v"),  # B008 triggered here
 ):
     print(f"Hello {name}")
 ```
@@ -58,10 +59,11 @@ from typing import Annotated
 
 app = typer.Typer()
 
+
 @app.command()
 def main(
     name: Annotated[str, typer.Option(help="Who to greet")] = "World",
-    verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False
+    verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ):
     print(f"Hello {name}")
 ```
@@ -83,6 +85,7 @@ def process_items(items: list = [], config: dict = dict()):
 #  CORRECT
 from typing import Optional
 
+
 def process_items(items: Optional[list] = None, config: Optional[dir] = None):
     if items is None:
         items = []
@@ -101,7 +104,8 @@ def process_items(items: Optional[list] = None, config: Optional[dir] = None):
 ```python
 # ❌ INCORRECT (F401/F841)
 import os  # F401: unused import
-import sys # noqa: F401 (Banned bypass!)
+import sys  # noqa: F401 (Banned bypass!)
+
 
 def compute(x):
     result = x * 2  # F841: local variable is assigned but never used
@@ -122,7 +126,7 @@ def compute(x):
 
 ```python
 # ❌ INCORRECT (F403)
-from math import * # noqa: F403
+from math import *  # noqa: F403
 ```
 
 ```python
@@ -141,22 +145,26 @@ from math import pi, sin, cos
 def process_data(data):
     try:
         return data["value"] * 10
-    except Exception: # BLE001 (blind exception caught)
-        raise Exception("We failed to process the data because the value key was missing or malformed") # TRY002 (raw Exception), TRY003 (long string)
+    except Exception:  # BLE001 (blind exception caught)
+        raise Exception(
+            "We failed to process the data because the value key was missing or malformed"
+        )  # TRY002 (raw Exception), TRY003 (long string)
 ```
 
 ```python
 #  CORRECT (Modern Standard - 0 Ruff Warnings)
 class DataProcessingError(Exception):
     """Custom exception for domain-specific errors."""
+
     pass
+
 
 def process_data(data: dict) -> int:
     try:
         return data["value"] * 10
-    except KeyError as e: # Specific Exception
+    except KeyError as e:  # Specific Exception
         raise DataProcessingError("Missing 'value' key") from e
-    except TypeError as e: # Specific Exception
+    except TypeError as e:  # Specific Exception
         raise DataProcessingError("Value is not a number") from e
 ```
 
@@ -170,6 +178,7 @@ def process_data(data: dict) -> int:
 # ❌ INCORRECT (Triggers PTH118, PTH110, etc.)
 import os
 
+
 def get_config_content(filename):
     full_path = os.path.join(os.getcwd(), "config", filename)
     if os.path.exists(full_path):
@@ -181,6 +190,7 @@ def get_config_content(filename):
 ```python
 #  CORRECT (Modern Pathlib - 0 Ruff Warnings)
 from pathlib import Path
+
 
 def get_config_content(filename: str) -> str:
     full_path = Path.cwd() / "config" / filename
@@ -198,16 +208,17 @@ def get_config_content(filename: str) -> str:
 ```python
 # ❌ INCORRECT (Triggers RUF012)
 class ProjectManager:
-    active_tasks: list[str] = [] # RUF012 (mutable class attribute)
-    default_config: dict[str, str] = {} # RUF012
+    active_tasks: list[str] = []  # RUF012 (mutable class attribute)
+    default_config: dict[str, str] = {}  # RUF012
 ```
 
 ```python
 #  CORRECT (For static class variables)
 from typing import ClassVar
 
+
 class ProjectManager:
-    active_tasks: ClassVar[list[str]] = [] # Explicitly marked as ClassVar
+    active_tasks: ClassVar[list[str]] = []  # Explicitly marked as ClassVar
     default_config: ClassVar[dict[str, str]] = {}
 ```
 
@@ -228,16 +239,18 @@ class ProjectManager:
 ```python
 # ❌ INCORRECT (Triggers C408, C416)
 def get_names(users):
-    names_list = list([u.name for u in users]) # C416 (unnecessary list comprehension inside list())
-    empty_dict = dict() # C408 (unnecessary dict() call, use {} literal instead)
+    names_list = list(
+        [u.name for u in users]
+    )  # C416 (unnecessary list comprehension inside list())
+    empty_dict = dict()  # C408 (unnecessary dict() call, use {} literal instead)
     return names_list
 ```
 
 ```python
 #  CORRECT (0 Ruff Warnings)
 def get_names(users) -> list[str]:
-    names_list = [u.name for u in users] # Simple list comprehension
-    empty_dict = {} # Dictionary literal
+    names_list = [u.name for u in users]  # Simple list comprehension
+    empty_dict = {}  # Dictionary literal
     return names_list
 ```
 
@@ -252,8 +265,8 @@ def get_names(users) -> list[str]:
 def check_value(x):
     if x > 10:
         result = "large"
-        return result # RET504 (unnecessary variable assignment before return)
-    else: # RET505 (unnecessary else after return statement)
+        return result  # RET504 (unnecessary variable assignment before return)
+    else:  # RET505 (unnecessary else after return statement)
         return "small"
 ```
 
@@ -275,9 +288,9 @@ def check_value(x) -> str:
 # ❌ INCORRECT (Triggers SIM102, SIM103)
 def is_valid_user(user):
     if user.is_active:
-        if user.has_permission: # SIM102 (nested ifs can be combined into a single if)
+        if user.has_permission:  # SIM102 (nested ifs can be combined into a single if)
             return True
-    return False # SIM103 (unnecessary if-else statement returning boolean)
+    return False  # SIM103 (unnecessary if-else statement returning boolean)
 ```
 
 ```python
@@ -295,6 +308,7 @@ def is_valid_user(user) -> bool:
 ```python
 # ❌ INCORRECT (Triggers UP006, UP035)
 from typing import List, Dict, Tuple
+
 
 def process_data(items: List[str]) -> Dict[str, Tuple[int, int]]:
     pass
@@ -314,8 +328,8 @@ def process_data(items: list[str]) -> dict[str, tuple[int, int]]:
 
 ```python
 # ❌ INCORRECT (Triggers A001, A002)
-def get_user_by_id(id: int): # A002 (shadowing builtin 'id')
-    list = ["active", "inactive"] # A001 (shadowing builtin 'list')
+def get_user_by_id(id: int):  # A002 (shadowing builtin 'id')
+    list = ["active", "inactive"]  # A001 (shadowing builtin 'list')
     return list
 ```
 
@@ -335,16 +349,18 @@ def get_user_by_id(user_id: int) -> list[str]:
 ```python
 # ❌ INCORRECT (Triggers G004)
 import logging
+
 logger = logging.getLogger(__name__)
 
+
 def log_event(name):
-    logger.info(f"Processing event: {name}") # G004 (logging statement uses f-string)
+    logger.info(f"Processing event: {name}")  # G004 (logging statement uses f-string)
 ```
 
 ```python
 #  CORRECT (Modern Standard - 0 Ruff Warnings)
 def log_event(name: str):
-    logger.info("Processing event: %s", name) # Lazy evaluation (highly performant)
+    logger.info("Processing event: %s", name)  # Lazy evaluation (highly performant)
 ```
 
 ---
@@ -356,11 +372,11 @@ def log_event(name: str):
 ```python
 # ❌ INCORRECT (Triggers S101, S110)
 def process_age(age: int):
-    assert age >= 0, "Age cannot be negative" # S101 (assert used in production)
+    assert age >= 0, "Age cannot be negative"  # S101 (assert used in production)
     try:
         do_something()
     except ValueError:
-        pass # S110 (try-except-pass detected, exception silently swallowed)
+        pass  # S110 (try-except-pass detected, exception silently swallowed)
 ```
 
 ```python

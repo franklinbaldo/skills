@@ -104,8 +104,9 @@ Or load directly with transformers and consume spans in your pipeline:
 ```python
 from transformers import pipeline
 
-clf = pipeline("token-classification", model="./ckpt_legal_v1",
-               aggregation_strategy="simple")   # groups BIOES into whole spans
+clf = pipeline(
+    "token-classification", model="./ckpt_legal_v1", aggregation_strategy="simple"
+)  # groups BIOES into whole spans
 out = clf(open("acordao.txt").read())
 # out: [{"entity_group": "dispositivo", "score": ..., "word": ...,
 #        "start": <char>, "end": <char>}, ...]

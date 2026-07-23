@@ -17,15 +17,16 @@ Subcommands
 
 Stdlib only. Python 3.8+.
 """
+
 import argparse
+import itertools
 import json
 import sys
-from typing import Dict, List, Optional, Tuple
 
 SPAN_FIELDS = ("label", "spans")  # OPF accepts either; `label` is what demo data uses.
 
 
-def _spans_of(rec: dict) -> List[dict]:
+def _spans_of(rec: dict) -> list[dict]:
     for f in SPAN_FIELDS:
         if f in rec:
             return rec[f] or []
@@ -44,28 +45,30 @@ def _read_jsonl(path: str):
                 yield ln, e
 
 
-def _load_label_space(path: str) -> Tuple[List[str], List[str]]:
+def _load_label_space(path: str) -> tuple[list[str], list[str]]:
     """Return (categories_without_O, problems)."""
-    problems: List[str] = []
+    problems: list[str] = []
     with open(path, "r", encoding="utf-8") as fh:
         ls = json.load(fh)
     names = ls.get("span_class_names") or ls.get("category_names") or []
     if not names:
         problems.append("label space has no `span_class_names`")
     elif names[0] != "O":
-        problems.append(f"`O` must be the first entry in span_class_names (got {names[0]!r})")
+        problems.append(
+            f"`O` must be the first entry in span_class_names (got {names[0]!r})"
+        )
     return [n for n in names if n != "O"], problems
 
 
 # --------------------------------------------------------------------------- validate
-def validate(path: str, label_space: Optional[str]) -> int:
-    errors: List[str] = []
-    warnings: List[str] = []
+def validate(path: str, label_space: str | None) -> int:
+    errors: list[str] = []
+    warnings: list[str] = []
     n_lines = 0
     n_spans = 0
-    cat_counts: Dict[str, int] = {}
+    cat_counts: dict[str, int] = {}
 
-    allowed: Optional[set] = None
+    allowed: set | None = None
     if label_space:
         cats, ls_problems = _load_label_space(label_space)
         for p in ls_problems:
@@ -83,7 +86,7 @@ def validate(path: str, label_space: Optional[str]) -> int:
             continue
         tlen = len(text)
         spans = _spans_of(rec)
-        norm: List[Tuple[int, int, str]] = []
+        norm: list[tuple[int, int, str]] = []
         for i, sp in enumerate(spans):
             try:
                 start, end, cat = sp["start"], sp["end"], sp["category"]
@@ -116,7 +119,7 @@ def validate(path: str, label_space: Optional[str]) -> int:
 
         # overlap check (BIOES decoder assumes one span per region)
         norm.sort()
-        for (s1, e1, c1), (s2, e2, c2) in zip(norm, norm[1:]):
+        for (s1, e1, c1), (s2, e2, c2) in itertools.pairwise(norm):
             if s2 < e1:
                 errors.append(
                     f"L{ln}: overlapping spans [{c1}]({s1}:{e1}) & [{c2}]({s2}:{e2}). "
@@ -141,64 +144,79 @@ def validate(path: str, label_space: Optional[str]) -> int:
     for e in errors:
         print(f"ERROR {e}", file=sys.stderr)
     if errors:
-        print(f"\nFAILED: {len(errors)} error(s), {len(warnings)} warning(s)", file=sys.stderr)
+        print(
+            f"\nFAILED: {len(errors)} error(s), {len(warnings)} warning(s)",
+            file=sys.stderr,
+        )
         return 1
     print(f"\nOK: {len(warnings)} warning(s)")
     return 0
 
 
 # ------------------------------------------------------------------------- from-spans
-def from_spans(path: str, output: Optional[str]) -> int:
+def _from_spans_write(path: str, out_fh) -> tuple[int, int]:
+    n = 0
+    errors = 0
+    for ln, rec in _read_jsonl(path):
+        if isinstance(rec, json.JSONDecodeError):
+            print(f"ERROR L{ln}: invalid JSON ({rec})", file=sys.stderr)
+            errors += 1
+            continue
+        text = rec.get("text")
+        if not isinstance(text, str):
+            print(f"ERROR L{ln}: missing/invalid `text`", file=sys.stderr)
+            errors += 1
+            continue
+        label: list[dict] = []
+        for sp in rec.get("spans", []) or []:
+            label.append(
+                {
+                    "category": sp["category"],
+                    "start": int(sp["start"]),
+                    "end": int(sp["end"]),
+                }
+            )
+        for fnd in rec.get("finds", []) or []:
+            match, cat = fnd["match"], fnd["category"]
+            nth = int(fnd.get("nth", 1))
+            idx, found, count = -1, -1, 0
+            while True:
+                idx = text.find(match, idx + 1)
+                if idx == -1:
+                    break
+                count += 1
+                if count == nth:
+                    found = idx
+                    break
+            if found == -1:
+                print(
+                    f"ERROR L{ln}: match {match!r} (nth={nth}) for [{cat}] "
+                    f"not found in text",
+                    file=sys.stderr,
+                )
+                errors += 1
+                continue
+            label.append({"category": cat, "start": found, "end": found + len(match)})
+        out = {"text": text, "label": label}
+        if "info" in rec:
+            out["info"] = rec["info"]
+        out_fh.write(json.dumps(out, ensure_ascii=False) + "\n")
+        n += 1
+    return n, errors
+
+
+def from_spans(path: str, output: str | None) -> int:
     """Input JSONL records: {"text":..., "spans":[{category,start,end}],
     "finds":[{category, match, nth?}], "info":{...}}.
     `finds` resolve a substring to offsets (nth, 1-based, default 1) so an LLM or human
     never has to count characters. `spans` (explicit offsets) pass through validated.
     Emits OPF JSONL with merged `label`.
     """
-    out_fh = open(output, "w", encoding="utf-8") if output else sys.stdout
-    n = 0
-    errors = 0
-    try:
-        for ln, rec in _read_jsonl(path):
-            if isinstance(rec, json.JSONDecodeError):
-                print(f"ERROR L{ln}: invalid JSON ({rec})", file=sys.stderr)
-                errors += 1
-                continue
-            text = rec.get("text")
-            if not isinstance(text, str):
-                print(f"ERROR L{ln}: missing/invalid `text`", file=sys.stderr)
-                errors += 1
-                continue
-            label: List[dict] = []
-            for sp in rec.get("spans", []) or []:
-                label.append({"category": sp["category"],
-                              "start": int(sp["start"]), "end": int(sp["end"])})
-            for fnd in rec.get("finds", []) or []:
-                match, cat = fnd["match"], fnd["category"]
-                nth = int(fnd.get("nth", 1))
-                idx, found, count = -1, -1, 0
-                while True:
-                    idx = text.find(match, idx + 1)
-                    if idx == -1:
-                        break
-                    count += 1
-                    if count == nth:
-                        found = idx
-                        break
-                if found == -1:
-                    print(f"ERROR L{ln}: match {match!r} (nth={nth}) for [{cat}] "
-                          f"not found in text", file=sys.stderr)
-                    errors += 1
-                    continue
-                label.append({"category": cat, "start": found, "end": found + len(match)})
-            out = {"text": text, "label": label}
-            if "info" in rec:
-                out["info"] = rec["info"]
-            out_fh.write(json.dumps(out, ensure_ascii=False) + "\n")
-            n += 1
-    finally:
-        if output:
-            out_fh.close()
+    if output:
+        with open(output, "w", encoding="utf-8") as out_fh:
+            n, errors = _from_spans_write(path, out_fh)
+    else:
+        n, errors = _from_spans_write(path, sys.stdout)
     print(f"wrote {n} record(s)" + (f" -> {output}" if output else ""), file=sys.stderr)
     return 1 if errors else 0
 
@@ -231,15 +249,18 @@ def preview(path: str, n: int) -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     pv = sub.add_parser("validate", help="check offsets/overlaps/label-space")
     pv.add_argument("jsonl")
     pv.add_argument("--label-space", help="label_space.json to check category coverage")
 
-    pf = sub.add_parser("from-spans", help="build OPF JSONL (resolves `match` -> offsets)")
+    pf = sub.add_parser(
+        "from-spans", help="build OPF JSONL (resolves `match` -> offsets)"
+    )
     pf.add_argument("jsonl")
     pf.add_argument("--output", help="output path (default: stdout)")
 
