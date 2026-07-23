@@ -157,3 +157,29 @@ trabalho futuro, fora do escopo deste documento.
 8. ⏳ Segmentação MRC para páginas mistas continua como trabalho futuro,
    fora do escopo desta implementação (que cobre apenas páginas já
    classificadas como bitonais).
+
+## 6. Fallback experimental no Windows: LiteBox
+
+No Linux e no macOS, a ausência do binário `jbig2` é só mais um pacote de
+sistema para instalar (seção acima). No Windows, sem um build nativo do
+`jbig2enc` e sem WSL2/Hyper-V habilitado, não há esse caminho simples.
+
+Para esse caso específico existe agora a skill [`litebox`](../../litebox/SKILL.md),
+que documenta quando e como avaliar o [LiteBox da Microsoft](https://github.com/microsoft/litebox)
+— um library OS em Rust, pré-1.0, que roda ELF Linux sem modificação em
+userland Windows comum, sem precisar de Hyper-V. A árvore de decisão e o
+exemplo trabalhado usando exatamente o `jbig2enc` estão lá; aqui vale só
+registrar o vínculo e o que **não** mudou nesta PR:
+
+- `compress.py` **não** ganhou nenhuma chamada automática ao LiteBox — a
+  skill `litebox` é material de consulta para o agente avaliar caso a caso,
+  não um código executado por `--jbig2`.
+- Qualquer stream JBIG2 produzido por essa rota ainda precisaria passar
+  pela mesma verificação bit a bit via MuPDF e pela mesma comparação de
+  tamanho real (`_verify_and_measure_jbig2`/`_g4_embedded_size`) que já
+  protege o caminho nativo — não há um caminho de aceitação mais frouxo só
+  porque o binário veio de dentro do LiteBox.
+- A skill `litebox` já lista o checklist de reprodutibilidade (Dockerfile
+  pinado, commit do LiteBox pinado, script de empacotamento, SHA-256 do
+  artefato, teste real em Windows sem Hyper-V) necessário antes de esse
+  caminho virar algo mais que uma sugestão para o agente avaliar.
