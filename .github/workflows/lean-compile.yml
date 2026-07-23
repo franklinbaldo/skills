@@ -1,4 +1,4 @@
-name: Lean 4 Compilation
+name: CI
 
 on:
   push:
@@ -12,6 +12,22 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: '**/requirements.txt'
+
+    - name: Install Ruff
+      run: |
+        python -m pip install --upgrade pip
+        pip install ruff
+
+    - name: Lint Python Code
+      run: |
+        ruff check .
 
     - name: Install elan
       run: |
