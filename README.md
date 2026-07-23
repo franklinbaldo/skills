@@ -18,6 +18,7 @@ Each skill is installed as a directory under `~/.claude/skills/<name>/`, with it
 | [franklin-blog](franklin-blog/SKILL.md) | Write posts for Franklin's blog, preserving his voice via draft-and-react workflow. |
 | [juris-tjro](juris-tjro/SKILL.md) | Search TJRO (Rondonia court) case law via the JURIS system. |
 | [legal-argument-lean](legal-argument-lean/SKILL.md) | Formalize Brazilian legal arguments (CPC-anchored vicios) in Lean 4. |
+| [litebox](litebox/SKILL.md) | When and how to consider Microsoft's experimental LiteBox for sandboxing/running Linux binaries on Windows without WSL/Hyper-V. |
 | [llm-work-via-subagents](llm-work-via-subagents/SKILL.md) | Do bulk LLM work with parallel subagents instead of API-key scripts. |
 | [meme-image](meme-image/SKILL.md) | Generate image memes via the memegen.link API for markdown content. |
 | [notebooklm-processos](notebooklm-processos/SKILL.md) | Draft grounded NotebookLM question blocks to verify case-file facts before drafting. |
