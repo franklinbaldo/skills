@@ -11,6 +11,24 @@ from PIL import Image
 JBIG2_BIN = shutil.which("jbig2")
 
 
+def _jbig2_install_hint():
+    """Best-guess one-line install command for the current system's package manager.
+
+    jbig2enc has no PyPI wheel (it's a system package everywhere, including
+    in OCRmyPDF's own docs) -- an agent with shell access should just run
+    this command rather than treating a missing binary as a hard blocker.
+    """
+    if shutil.which("apt-get"):
+        return "apt-get install -y jbig2"
+    if shutil.which("brew"):
+        return "brew install jbig2enc"
+    if shutil.which("dnf"):
+        return "dnf install -y jbig2enc"
+    if shutil.which("pacman"):
+        return "pacman -S --noconfirm jbig2enc"
+    return "install 'jbig2enc' via your OS package manager (see references/jbig2enc-licensing.md)"
+
+
 def _set_jbig2_stream(doc, xref, jbig2_bytes, width, height):
     """Point an existing image xref at a raw JBIG2Decode-ready stream.
 
@@ -107,7 +125,12 @@ def compress_pdf(input_path, output_path, mode="auto", max_dim=1200, quality=50,
         sys.exit(1)
 
     if use_jbig2 and not JBIG2_BIN:
-        print("Warning: --jbig2 was requested but the 'jbig2' binary is not on PATH. Falling back to CCITT G4 for all bw-mode pages.", file=sys.stderr)
+        print(
+            "Warning: --jbig2 was requested but the 'jbig2' binary is not on PATH. "
+            f"Install it first (e.g. `{_jbig2_install_hint()}`) and re-run -- falling back to "
+            "CCITT G4 for all bw-mode pages for now.",
+            file=sys.stderr,
+        )
         use_jbig2 = False
 
     print(f"Opening PDF: {input_path}...")

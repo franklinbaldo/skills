@@ -12,7 +12,11 @@ refinamento — ver seções 3 e 5), decodifica o resultado de volta via o
 próprio decoder JBIG2 do MuPDF e compara pixel a pixel com o bitmap
 binarizado antes de aceitar; só substitui o CCITT G4 quando a verificação
 passa e o arquivo fica menor. Sem o binário `jbig2` no `PATH`, a skill cai
-de volta para CCITT G4 automaticamente.
+de volta para CCITT G4 automaticamente e imprime o comando de instalação
+correto para a máquina atual (`apt-get`/`brew`/`dnf`) — não há binário
+empacotado no repositório nem instalação automática silenciosa; é só mais
+um pacote de sistema a instalar quando fizer falta, igual a qualquer outra
+CLI que o agente já sabe instalar sob demanda.
 
 ## 1. Licença do código
 
