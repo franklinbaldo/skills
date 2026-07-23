@@ -2,8 +2,78 @@ import argparse
 import fitz
 import io
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 from PIL import Image
+
+JBIG2_BIN = shutil.which("jbig2")
+
+
+def _set_jbig2_stream(doc, xref, jbig2_bytes, width, height):
+    """Point an existing image xref at a raw JBIG2Decode-ready stream.
+
+    Reuses the xref already wired into the page's Resources/content stream
+    instead of inserting a new image object.
+    """
+    doc.update_stream(xref, jbig2_bytes, new=False, compress=False)
+    doc.xref_set_key(xref, "Filter", "/JBIG2Decode")
+    doc.xref_set_key(xref, "DecodeParms", "null")
+    doc.xref_set_key(xref, "Width", str(width))
+    doc.xref_set_key(xref, "Height", str(height))
+    doc.xref_set_key(xref, "BitsPerComponent", "1")
+    doc.xref_set_key(xref, "ColorSpace", "/DeviceGray")
+
+
+def _jbig2_roundtrips_losslessly(jbig2_bytes, bw_img):
+    """Decode jbig2_bytes via MuPDF's own JBIG2 decoder and compare pixel-for-pixel."""
+    width, height = bw_img.size
+    check_doc = fitz.open()
+    try:
+        page = check_doc.new_page(width=width, height=height)
+        placeholder = fitz.Pixmap(fitz.csGRAY, fitz.IRect(0, 0, width, height))
+        placeholder.clear_with(255)
+        xref = page.insert_image(fitz.Rect(0, 0, width, height), pixmap=placeholder)
+        _set_jbig2_stream(check_doc, xref, jbig2_bytes, width, height)
+        pix = page.get_pixmap(dpi=72, colorspace=fitz.csGRAY)
+        decoded = Image.frombytes("L", (pix.width, pix.height), pix.samples)
+        decoded_bw = decoded.convert("1", dither=Image.Dither.NONE)
+    finally:
+        check_doc.close()
+    return decoded_bw.tobytes() == bw_img.tobytes()
+
+
+def encode_jbig2_lossless(bw_img):
+    """Encode a 1-bit PIL image with jbig2enc's generic-region (lossless) coder.
+
+    Returns the raw PDF-ready JBIG2 stream, verified to decode back to the
+    exact same bitmap, or None if the encoder is unavailable, fails, or the
+    roundtrip check doesn't match (in which case the caller should keep
+    using CCITT G4).
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        src_path = os.path.join(tmp, "page.pbm")
+        bw_img.save(src_path, format="PPM")
+        try:
+            result = subprocess.run(
+                [JBIG2_BIN, "-p", src_path],
+                capture_output=True, timeout=60, check=True,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+            print(f"Warning: jbig2 encoding failed ({e}). Using CCITT G4 instead.", file=sys.stderr)
+            return None
+        jbig2_bytes = result.stdout
+
+    if not jbig2_bytes:
+        return None
+
+    if not _jbig2_roundtrips_losslessly(jbig2_bytes, bw_img):
+        print("Warning: jbig2 output failed roundtrip verification. Using CCITT G4 instead.", file=sys.stderr)
+        return None
+
+    return jbig2_bytes
+
 
 def is_scanned_page(page):
     """
@@ -31,11 +101,15 @@ def is_scanned_page(page):
                     return True
     return False
 
-def compress_pdf(input_path, output_path, mode="auto", max_dim=1200, quality=50, skip_small=150, denoise=False, enhance_contrast=False):
+def compress_pdf(input_path, output_path, mode="auto", max_dim=1200, quality=50, skip_small=150, denoise=False, enhance_contrast=False, use_jbig2=False):
     if not os.path.exists(input_path):
         print(f"Error: Input file '{input_path}' does not exist.", file=sys.stderr)
         sys.exit(1)
-        
+
+    if use_jbig2 and not JBIG2_BIN:
+        print("Warning: --jbig2 was requested but the 'jbig2' binary is not on PATH. Falling back to CCITT G4 for all bw-mode pages.", file=sys.stderr)
+        use_jbig2 = False
+
     print(f"Opening PDF: {input_path}...")
     try:
         doc = fitz.open(input_path)
@@ -69,7 +143,8 @@ def compress_pdf(input_path, output_path, mode="auto", max_dim=1200, quality=50,
     
     replaced_count = 0
     skipped_count = 0
-    
+    jbig2_count = 0
+
     for count, xref in enumerate(unique_xrefs, 1):
         page_idx = image_to_page[xref]
         page = doc[page_idx]
@@ -118,7 +193,8 @@ def compress_pdf(input_path, output_path, mode="auto", max_dim=1200, quality=50,
                         current_mode = "color"
             
             compressed_bytes = None
-            
+            jbig2_replacement = None
+
             # Compression loop with fallback logic
             while compressed_bytes is None:
                 try:
@@ -158,6 +234,14 @@ def compress_pdf(input_path, output_path, mode="auto", max_dim=1200, quality=50,
                             bw_img = gray_img.point(lambda x: 0 if x < 128 else 255, mode="1")
                         
                         bw_img.save(out_io, format="TIFF", compression="group4")
+
+                        if use_jbig2:
+                            try:
+                                jbig2_bytes = encode_jbig2_lossless(bw_img)
+                                if jbig2_bytes is not None and len(jbig2_bytes) < out_io.tell():
+                                    jbig2_replacement = (jbig2_bytes, bw_img.width, bw_img.height)
+                            except Exception as e:
+                                print(f"Warning: JBIG2 backend raised an unexpected error ({e}). Using CCITT G4 instead.", file=sys.stderr)
                     elif current_mode == "gray":
                         gray_img = img.convert("L")
                         try:
@@ -187,14 +271,20 @@ def compress_pdf(input_path, output_path, mode="auto", max_dim=1200, quality=50,
                     else:
                         raise e
             
-            page.replace_image(xref, stream=compressed_bytes)
+            if jbig2_replacement is not None:
+                jbig2_bytes, jbig2_width, jbig2_height = jbig2_replacement
+                _set_jbig2_stream(doc, xref, jbig2_bytes, jbig2_width, jbig2_height)
+                jbig2_count += 1
+            else:
+                page.replace_image(xref, stream=compressed_bytes)
             replaced_count += 1
             
         except Exception as e:
             print(f"Error compressing image {xref} on page {page_idx}: {e}", file=sys.stderr)
             sys.stdout.flush()
             
-    print(f"\nProcessing complete. Replaced: {replaced_count}, Skipped: {skipped_count}")
+    jbig2_note = f", JBIG2: {jbig2_count}" if use_jbig2 else ""
+    print(f"\nProcessing complete. Replaced: {replaced_count}, Skipped: {skipped_count}{jbig2_note}")
     print(f"Saving optimized PDF to: {output_path}...")
     sys.stdout.flush()
     
@@ -223,7 +313,8 @@ if __name__ == "__main__":
     parser.add_argument("--skip-small", type=int, default=150, help="Skip images smaller than this threshold (default: 150)")
     parser.add_argument("--denoise", action="store_true", help="Apply NLM denoising to scanned pages")
     parser.add_argument("--enhance-contrast", action="store_true", help="Apply contrast enhancement to scanned pages")
-    
+    parser.add_argument("--jbig2", action="store_true", help="For bw-mode pages, also try JBIG2 lossless encoding (requires the 'jbig2' binary on PATH) and use it instead of CCITT G4 whenever it verifies bit-exact via a MuPDF roundtrip decode and comes out smaller. See references/jbig2enc-licensing.md.")
+
     args = parser.parse_args()
     compress_pdf(
         input_path=args.input,
@@ -233,5 +324,6 @@ if __name__ == "__main__":
         quality=args.quality,
         skip_small=args.skip_small,
         denoise=args.denoise,
-        enhance_contrast=args.enhance_contrast
+        enhance_contrast=args.enhance_contrast,
+        use_jbig2=args.jbig2
     )

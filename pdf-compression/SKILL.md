@@ -34,6 +34,7 @@ The CLI script provides several options to control the compression style and tar
 - `--max-dim` (default: 1200): Downscale any image whose width or height exceeds this value, maintaining aspect ratio.
 - `--quality` (default: 50): JPEG compression quality (1-100) for `gray` and `color` modes.
 - `--skip-small` (default: 150): Do not compress images with both dimensions smaller than this threshold (useful to protect logos, icons, and small vector graphics from compression artifacts).
+- `--jbig2`: For `bw`-mode pages, also try JBIG2 lossless encoding (generic-region coder only — no symbol/text-region matching, no refinement) and use it instead of CCITT G4 whenever it verifies bit-exact via a MuPDF roundtrip decode *and* comes out smaller. Requires the `jbig2` binary on `PATH` (`apt install jbig2` on Debian/Ubuntu); silently falls back to CCITT G4 with a warning if it's missing or a given page doesn't win. See `references/jbig2enc-licensing.md` for the licensing/patent analysis behind this backend.
 
 ### `process_pdf.py`
 This script splits a large PDF based on its bookmarks (Table of Contents), applies a customizable N-up layout, compresses each split document (with binarization, downscaling, grayscale, and rasterization fallbacks), and re-merges the optimized parts back into a single PDF with rebuilt bookmarks.
@@ -80,20 +81,29 @@ uv run --no-project --with pymupdf <skill-dir>/scripts/2up.py \
   --input "/path/to/document.pdf" --output "/path/to/2up_document.pdf"
 ```
 
+**5. Compress a scanned document, preferring JBIG2 over CCITT G4 when it's smaller:**
+```bash
+uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py \
+  --input "/path/to/document.pdf" --output "/path/to/compressed.pdf" --mode bw --jbig2
+```
 
 ## Format Alternatives
 
-The current `bw` mode uses CCITT Group 4 via Pillow/PyMuPDF. `jbig2enc`
-(lossless mode) would typically beat CCITT G4 on scanned text pages by
-sharing a symbol dictionary across repeated glyphs, but it is **not
-integrated yet** — it requires an external `jbig2` binary (not a PyPI
-package) and needs a lossless-only, size-gated implementation per the plan
-in `references/jbig2enc-licensing.md`. See that file for the Apache-2.0
-licensing/patent analysis and a comparison against DjVu/JB2, JPEG XL, AVIF,
-and JPEG 2000 before adding it as a backend.
+The default `bw` path uses CCITT Group 4 via Pillow/PyMuPDF. Passing
+`--jbig2` also tries `jbig2enc`'s lossless generic-region coder, which
+typically beats CCITT G4 on scanned text pages by using arithmetic coding
+instead of MMR — it's still per-image (no cross-page symbol dictionary),
+so the win comes from the coder itself, not symbol sharing. Each JBIG2
+candidate is decoded back via MuPDF's own JBIG2Decode support and compared
+pixel-for-pixel against the binarized image before it's accepted; the
+script keeps CCITT G4 whenever the roundtrip fails, the binary is missing,
+or JBIG2 doesn't come out smaller. See `references/jbig2enc-licensing.md`
+for the Apache-2.0 licensing/patent analysis and a comparison against
+DjVu/JB2, JPEG XL, AVIF, and JPEG 2000.
 
 ## Common Mistakes
 
 - **Running with standard Python instead of `uv run`:** Standard python invocation might fail if `pymupdf` or `pillow` are not installed in the global environment. Always run using `uv run --no-project --with pymupdf,pillow`.
 - **Skipping `process_pdf.py`'s optional dependencies:** `process_pdf.py` can also use `opencv-python` and `numpy` for adaptive thresholding. If they're missing, it falls back automatically to plain Pillow thresholding (with a warning) rather than failing — add `uv run --no-project --with pymupdf,pillow,opencv-python,numpy` only if you want the OpenCV-based enhancement.
 - **Using `bw` mode for photos/color-heavy figures:** If the PDF has high-resolution colored graphs, photos, or diagrams where color is critical, `bw` mode will binarize them into high-contrast black and white, making them unreadable. Use `color` or `gray` mode for these files.
+- **Expecting `--jbig2` to work out of the box:** the `jbig2` CLI is a system package, not a PyPI dependency `uv run --with` can install. If it's not on `PATH`, `compress.py` prints a warning and transparently falls back to CCITT G4 — check for that warning if compression ratios look like plain `bw` mode despite passing `--jbig2`.

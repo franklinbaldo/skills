@@ -1,10 +1,18 @@
 # jbig2enc: licenciamento e alternativas de formato
 
-Análise de viabilidade jurídica e técnica para eventual adoção do
-[`jbig2enc`](https://github.com/agl/jbig2enc) como backend opcional de
-compressão bitonal na skill `pdf-compression`, hoje limitada a CCITT Group 4
-(`bw` mode) e JPEG (`gray`/`color` modes). **Não implementado ainda** — este
-documento é o estudo que embasa a decisão.
+Análise de viabilidade jurídica e técnica que embasou a adoção do
+[`jbig2enc`](https://github.com/agl/jbig2enc) como backend **opcional** de
+compressão bitonal na skill `pdf-compression` (flag `--jbig2` de
+`compress.py`), ao lado do CCITT Group 4 (`bw` mode, ainda o padrão) e JPEG
+(`gray`/`color` modes).
+
+**Status: implementado.** `compress.py --mode bw --jbig2` chama o binário
+`jbig2` (modo generic-region, sem symbol/text-region matching e sem
+refinamento — ver seções 3 e 5), decodifica o resultado de volta via o
+próprio decoder JBIG2 do MuPDF e compara pixel a pixel com o bitmap
+binarizado antes de aceitar; só substitui o CCITT G4 quando a verificação
+passa e o arquivo fica menor. Sem o binário `jbig2` no `PATH`, a skill cai
+de volta para CCITT G4 automaticamente.
 
 ## 1. Licença do código
 
@@ -64,7 +72,7 @@ fotografia/HDR/cor, não para dicionários de glifos repetidos:
 
 | Formato | Filtro nativo em PDF | Licença | Por que (não) serve aqui |
 | --- | --- | --- | --- |
-| **JBIG2 lossless** | `JBIG2Decode` (PDF 1.4+) | Apache-2.0 (jbig2enc) | Dicionário de símbolos compartilhados entre ocorrências e entre páginas — vantagem estrutural para texto binário. |
+| **JBIG2 lossless** | `JBIG2Decode` (PDF 1.4+) | Apache-2.0 (jbig2enc) | Codificação aritmética por contexto supera MMR (CCITT G4) em texto binário mesmo só com o generic region coder (sem dicionário de símbolos — ver nota abaixo); o modo `-s` (symbol/text region), não usado aqui, ganharia mais ainda ao compartilhar glifos repetidos entre páginas. |
 | DjVu/JB2 | Nenhum (formato próprio) | DjVuLibre é GPL-2 | Tecnicamente similar (dicionário de formas), mas exigiria entregar `.djvu` em vez de PDF — quebra interoperabilidade. |
 | JPEG XL lossless | Nenhum (sem `JXLDecode`) | BSD-3-Clause + concessão de patentes | Ótimo lossless genérico, mas sem filtro de imagem em PDF e sem foco em símbolos repetidos. |
 | AVIF lossless | Nenhum | BSD (libavif), royalty-free (AOMedia) | Deriva do AV1, feito para foto; não é filtro nativo de PDF. |
@@ -77,20 +85,36 @@ em JBIG2 lossless + fundo/primeiro plano em JPEG/JPEG2000 de resolução menor
 + camada OCR — em vez de trocar o codec único da página inteira. Isso é
 trabalho futuro, fora do escopo deste documento.
 
-## 5. Recomendação de implementação (quando for feita)
+## 5. Plano de implementação e status
 
-1. Manter Pillow + TIFF/G4 (`compress.py --mode bw`) como fallback universal
-   — continua funcionando sem dependências externas.
-2. Adicionar `jbig2enc` como backend **opcional**, usado apenas para páginas
-   já classificadas como bitonais/escaneadas (mesma heurística de
-   `is_scanned_page`).
-3. Usar **somente o modo lossless** do `jbig2enc` (sem `-s`/symbol matching
-   com perdas, sem refinamento habilitado — ver seção 3).
-4. Após codificar, decodificar o resultado e comparar bit a bit com o bitmap
-   1-bit original antes de aceitar a saída.
-5. Só escolher a saída JBIG2 quando o arquivo resultante for **efetivamente
-   menor** que o CCITT G4 equivalente — caso contrário, manter o fallback.
-6. Testar a compatibilidade do PDF gerado nos visualizadores listados na
-   seção 3 antes de tornar o backend padrão.
-7. Documentar a dependência externa (binário `jbig2` precisa estar instalado
-   no sistema — não é um pacote PyPI) nos "Common Mistakes" do `SKILL.md`.
+1. ✅ Manter Pillow + TIFF/G4 (`compress.py --mode bw`) como fallback
+   universal e como **padrão** — `--jbig2` é estritamente opt-in, sem mudar
+   o comportamento de quem não passar a flag.
+2. ✅ `jbig2enc` entra como backend opcional, usado apenas para páginas já
+   classificadas como bitonais/escaneadas (reaproveita o `bw_img` já
+   binarizado pela mesma heurística de `is_scanned_page`/adaptive threshold
+   — não há um segundo threshold nem reprocessamento).
+3. ✅ Usa **somente o generic region coder** do `jbig2enc` (sem `-s`/symbol
+   matching, sem `-r`/refinamento — ver seção 3). É o modo bit-exato mais
+   simples de auditar; symbol/text-region mode fica como possível trabalho
+   futuro, não implementado.
+4. ✅ Cada candidato JBIG2 é decodificado de volta (via o decoder JBIG2 do
+   próprio MuPDF, injetando o stream bruto num documento fitz descartável)
+   e comparado bit a bit com o bitmap 1-bit original antes de ser aceito.
+   Validado também de ponta a ponta com o encoder `jbig2` e o decoder
+   independente `jbig2dec` (pacotes Debian `jbig2`/`jbig2dec`).
+5. ✅ Só escolhe a saída JBIG2 quando o arquivo resultante é **efetivamente
+   menor** que o CCITT G4 equivalente para aquela imagem — caso contrário,
+   mantém o CCITT G4 já calculado.
+6. ⏳ Testado com MuPDF (via a própria verificação de roundtrip) e produção
+   local com `jbig2dec`. **Ainda não testado** em Acrobat, Chrome/PDFium,
+   Firefox/PDF.js nem nos visualizadores usados no peticionamento judicial
+   — fazer essa verificação antes de adotar `--jbig2` por padrão em fluxos
+   de produção sensíveis.
+7. ✅ Dependência externa (binário `jbig2`, pacote de sistema — não é
+   pacote PyPI) documentada nos "Common Mistakes" do `SKILL.md`, com a
+   mensagem de aviso que a própria `compress.py` imprime quando o binário
+   está ausente.
+8. ⏳ Segmentação MRC para páginas mistas continua como trabalho futuro,
+   fora do escopo desta implementação (que cobre apenas páginas já
+   classificadas como bitonais).
