@@ -81,6 +81,17 @@ uv run --no-project --with pymupdf <skill-dir>/scripts/2up.py \
 ```
 
 
+## Format Alternatives
+
+The current `bw` mode uses CCITT Group 4 via Pillow/PyMuPDF. `jbig2enc`
+(lossless mode) would typically beat CCITT G4 on scanned text pages by
+sharing a symbol dictionary across repeated glyphs, but it is **not
+integrated yet** — it requires an external `jbig2` binary (not a PyPI
+package) and needs a lossless-only, size-gated implementation per the plan
+in `references/jbig2enc-licensing.md`. See that file for the Apache-2.0
+licensing/patent analysis and a comparison against DjVu/JB2, JPEG XL, AVIF,
+and JPEG 2000 before adding it as a backend.
+
 ## Common Mistakes
 
 - **Running with standard Python instead of `uv run`:** Standard python invocation might fail if `pymupdf` or `pillow` are not installed in the global environment. Always run using `uv run --no-project --with pymupdf,pillow`.
