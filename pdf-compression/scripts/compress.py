@@ -41,7 +41,7 @@ def _jbig2_install_hint():
             "helper (e.g. `yay -S jbig2enc`) or `git clone https://aur.archlinux.org/jbig2enc.git "
             "&& cd jbig2enc && makepkg -si`"
         )
-    return "install 'jbig2enc' via your OS package manager or build from source (see references/jbig2enc-licensing.md)"
+    return "install 'jbig2enc' via your OS package manager or build from source"
 
 
 _JBIG2_IMAGE_KEYS = {"Type", "Subtype", "Width", "Height", "BitsPerComponent", "ColorSpace", "Filter", "DecodeParms"}
@@ -415,7 +415,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip-small", type=int, default=150, help="Skip images smaller than this threshold (default: 150)")
     parser.add_argument("--denoise", action="store_true", help="Apply NLM denoising to scanned pages")
     parser.add_argument("--enhance-contrast", action="store_true", help="Apply contrast enhancement to scanned pages")
-    parser.add_argument("--jbig2", action="store_true", help="For bw-mode pages, also try JBIG2 lossless encoding (requires the 'jbig2' binary on PATH) and use it instead of CCITT G4 whenever it verifies bit-exact via a MuPDF roundtrip decode and comes out smaller. See references/jbig2enc-licensing.md.")
+    parser.add_argument("--jbig2", action="store_true", help="For bw-mode pages, also try JBIG2 lossless encoding (requires the 'jbig2' binary on PATH) and use it instead of CCITT G4 whenever it verifies bit-exact via a MuPDF roundtrip decode and comes out smaller. See SKILL.md's Licensing/Format Alternatives sections.")
 
     args = parser.parse_args()
     compress_pdf(

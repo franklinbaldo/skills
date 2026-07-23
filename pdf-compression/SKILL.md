@@ -34,7 +34,7 @@ The CLI script provides several options to control the compression style and tar
 - `--max-dim` (default: 1200): Downscale any image whose width or height exceeds this value, maintaining aspect ratio.
 - `--quality` (default: 50): JPEG compression quality (1-100) for `gray` and `color` modes.
 - `--skip-small` (default: 150): Do not compress images with both dimensions smaller than this threshold (useful to protect logos, icons, and small vector graphics from compression artifacts).
-- `--jbig2`: For `bw`-mode pages, also try JBIG2 lossless encoding (generic-region coder only — no symbol/text-region matching, no refinement) and use it instead of CCITT G4 whenever it verifies bit-exact via a MuPDF roundtrip decode *and* the size it will actually occupy in the saved PDF beats CCITT G4's real saved size (not the intermediate TIFF container size — see Format Alternatives below). Requires the `jbig2` binary on `PATH`. **If it's missing and you (the agent) have shell access, just install it** — it's a normal OS package, not something that needs bundling or special handling: `apt-get install -y jbig2` on Debian/Ubuntu, `brew install jbig2enc` on macOS. Fedora's and Arch's *official* repos don't package the encoder at all (only Fedora's `jbig2dec` decoder, or Arch's AUR) — `compress.py` prints accurate build-from-source/AUR guidance for those rather than a command that would just fail. **On Windows** there's no native `jbig2` package to fall back on; if WSL2/Hyper-V aren't an option either, see the [`litebox`](../litebox/SKILL.md) skill for an experimental, conditional path to run the Linux `jbig2` binary via Microsoft's LiteBox — evaluate it case by case, it is *not* wired into `compress.py` automatically. See `references/jbig2enc-licensing.md` for the licensing/patent analysis behind this backend.
+- `--jbig2`: For `bw`-mode pages, also try JBIG2 lossless encoding (generic-region coder only — no symbol/text-region matching, no refinement) and use it instead of CCITT G4 whenever it verifies bit-exact via a MuPDF roundtrip decode *and* the size it will actually occupy in the saved PDF beats CCITT G4's real saved size (not the intermediate TIFF container size — see Format Alternatives below). Requires the `jbig2` binary on `PATH`. **If it's missing and you (the agent) have shell access, just install it** — it's a normal OS package, not something that needs bundling or special handling: `apt-get install -y jbig2` on Debian/Ubuntu, `brew install jbig2enc` on macOS. Fedora's and Arch's *official* repos don't package the encoder at all (only Fedora's `jbig2dec` decoder, or Arch's AUR) — `compress.py` prints accurate build-from-source/AUR guidance for those rather than a command that would just fail. **On Windows** there's no native `jbig2` package to fall back on; if WSL2/Hyper-V aren't an option either, see the [`litebox`](../litebox/SKILL.md) skill for an experimental, conditional path to run the Linux `jbig2` binary via Microsoft's LiteBox — evaluate it case by case, it is *not* wired into `compress.py` automatically. See Licensing below for why this backend was safe to add.
 
 ### `process_pdf.py`
 This script splits a large PDF based on its bookmarks (Table of Contents), applies a customizable N-up layout, compresses each split document (with binarization, downscaling, grayscale, and rasterization fallbacks), and re-merges the optimized parts back into a single PDF with rebuilt bookmarks.
@@ -106,9 +106,19 @@ JBIG2 and CCITT-G4-via-`replace_image` candidates in a throwaway one-page
 PDF with the exact same save flags as the real output, so the size
 comparison reflects bytes-on-disk rather than an intermediate container.
 The script keeps CCITT G4 whenever the roundtrip fails, the binary is
-missing, or JBIG2 doesn't win that real comparison. See
-`references/jbig2enc-licensing.md` for the Apache-2.0 licensing/patent
-analysis and a comparison against DjVu/JB2, JPEG XL, AVIF, and JPEG 2000.
+missing, or JBIG2 doesn't win that real comparison.
+
+## Licensing
+
+`jbig2enc` is Apache-2.0 (its main dependency, Leptonica, is BSD-2-Clause)
+— permissive, redistributable, no copyleft, and calling it as a subprocess
+(as this skill does) doesn't link it into anything. JBIG2's US patents are
+documented as expired (jbig2enc's own `doc/PATENTS`, corroborated by
+OCRmyPDF's install docs); there's no way to rule out an unknown patent in
+some jurisdiction, but that's true of any codec. No licensing blocker to
+using it here. One operational caveat from jbig2enc's own README:
+refinement coding crashes Acrobat — this skill never enables it (generic
+region coder only, no `-s`/symbol matching, no `-r`/refinement).
 
 ## Testing
 
