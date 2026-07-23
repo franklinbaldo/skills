@@ -12,30 +12,60 @@ JBIG2_BIN = shutil.which("jbig2")
 
 
 def _jbig2_install_hint():
-    """Best-guess one-line install command for the current system's package manager.
+    """Best-effort install guidance for the current system's package manager.
 
     jbig2enc has no PyPI wheel (it's a system package everywhere, including
-    in OCRmyPDF's own docs) -- an agent with shell access should just run
-    this command rather than treating a missing binary as a hard blocker.
+    in OCRmyPDF's own docs) -- an agent with shell access should just
+    install it rather than treating a missing binary as a hard blocker.
+    Not every package manager actually carries it, though: Fedora's
+    official repos only ship the jbig2dec *decoder*, not the jbig2enc
+    encoder (https://bugzilla.redhat.com/show_bug.cgi?id=2058336), and
+    Arch's official repos don't carry it either (AUR-only) -- those get
+    honest build-from-source/AUR guidance instead of a command that would
+    just fail.
     """
     if shutil.which("apt-get"):
-        return "apt-get install -y jbig2"
+        return "install it with `apt-get install -y jbig2` and re-run"
     if shutil.which("brew"):
-        return "brew install jbig2enc"
+        return "install it with `brew install jbig2enc` and re-run"
     if shutil.which("dnf"):
-        return "dnf install -y jbig2enc"
+        return (
+            "Fedora's official repos don't package the jbig2enc encoder (only the "
+            "jbig2dec decoder -- see https://bugzilla.redhat.com/show_bug.cgi?id=2058336); "
+            "build it from source per https://github.com/agl/jbig2enc#readme, or run this "
+            "on a distro that packages it (e.g. Debian/Ubuntu)"
+        )
     if shutil.which("pacman"):
-        return "pacman -S --noconfirm jbig2enc"
-    return "install 'jbig2enc' via your OS package manager (see references/jbig2enc-licensing.md)"
+        return (
+            "jbig2enc isn't in Arch's official repos, only the AUR -- install with an AUR "
+            "helper (e.g. `yay -S jbig2enc`) or `git clone https://aur.archlinux.org/jbig2enc.git "
+            "&& cd jbig2enc && makepkg -si`"
+        )
+    return "install 'jbig2enc' via your OS package manager or build from source (see references/jbig2enc-licensing.md)"
+
+
+_JBIG2_IMAGE_KEYS = {"Type", "Subtype", "Width", "Height", "BitsPerComponent", "ColorSpace", "Filter", "DecodeParms"}
 
 
 def _set_jbig2_stream(doc, xref, jbig2_bytes, width, height):
     """Point an existing image xref at a raw JBIG2Decode-ready stream.
 
     Reuses the xref already wired into the page's Resources/content stream
-    instead of inserting a new image object.
+    instead of inserting a new image object. Unlike Page.replace_image()
+    (which builds a fresh object), this mutates the existing dict in
+    place, so any leftover keys from the image being replaced -- /Decode,
+    /ImageMask, /Mask, /SMask, and the like -- must be explicitly cleared
+    first or they silently corrupt the result (a stale /Decode [1 0]
+    inverts black/white; a stale /ImageMask true turns this into a
+    stencil mask that conflicts with /ColorSpace). Clear everything not
+    in the known-good image-XObject key set before setting our own.
     """
+    for key in doc.xref_get_keys(xref):
+        if key not in _JBIG2_IMAGE_KEYS:
+            doc.xref_set_key(xref, key, "null")
     doc.update_stream(xref, jbig2_bytes, new=False, compress=False)
+    doc.xref_set_key(xref, "Type", "/XObject")
+    doc.xref_set_key(xref, "Subtype", "/Image")
     doc.xref_set_key(xref, "Filter", "/JBIG2Decode")
     doc.xref_set_key(xref, "DecodeParms", "null")
     doc.xref_set_key(xref, "Width", str(width))
@@ -44,8 +74,23 @@ def _set_jbig2_stream(doc, xref, jbig2_bytes, width, height):
     doc.xref_set_key(xref, "ColorSpace", "/DeviceGray")
 
 
-def _jbig2_roundtrips_losslessly(jbig2_bytes, bw_img):
-    """Decode jbig2_bytes via MuPDF's own JBIG2 decoder and compare pixel-for-pixel."""
+def _saved_image_stream_size(pdf_bytes):
+    """Byte size of the (single) image stream in a one-page throwaway PDF, after save."""
+    check_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        xref = check_doc[0].get_images(full=True)[0][0]
+        return len(check_doc.xref_stream_raw(xref))
+    finally:
+        check_doc.close()
+
+
+def _verify_and_measure_jbig2(jbig2_bytes, bw_img):
+    """Confirm jbig2_bytes decodes pixel-exact via MuPDF, and measure the size
+    it would actually occupy once saved with compress_pdf()'s own save flags.
+
+    Returns (verified, embedded_size); embedded_size is None when verified
+    is False.
+    """
     width, height = bw_img.size
     check_doc = fitz.open()
     try:
@@ -54,21 +99,51 @@ def _jbig2_roundtrips_losslessly(jbig2_bytes, bw_img):
         placeholder.clear_with(255)
         xref = page.insert_image(fitz.Rect(0, 0, width, height), pixmap=placeholder)
         _set_jbig2_stream(check_doc, xref, jbig2_bytes, width, height)
+
         pix = page.get_pixmap(dpi=72, colorspace=fitz.csGRAY)
         decoded = Image.frombytes("L", (pix.width, pix.height), pix.samples)
         decoded_bw = decoded.convert("1", dither=Image.Dither.NONE)
+        if decoded_bw.tobytes() != bw_img.tobytes():
+            return False, None
+
+        pdf_bytes = check_doc.tobytes(garbage=4, deflate=True, clean=True)
     finally:
         check_doc.close()
-    return decoded_bw.tobytes() == bw_img.tobytes()
+
+    return True, _saved_image_stream_size(pdf_bytes)
 
 
-def encode_jbig2_lossless(bw_img):
+def _g4_embedded_size(tiff_bytes, width, height):
+    """Measure the CCITT G4 candidate's actual final size, embedded the same
+    way compress_pdf() does (Page.replace_image, then the real save flags).
+
+    MuPDF decodes the incoming TIFF and re-encodes on save (typically to
+    FlateDecode over the raw bitmap) -- the TIFF's own byte count is not a
+    reliable proxy for what ends up on disk, so this materializes it for real
+    in a cheap one-page throwaway document instead of estimating.
+    """
+    doc = fitz.open()
+    try:
+        page = doc.new_page(width=width, height=height)
+        placeholder = fitz.Pixmap(fitz.csGRAY, fitz.IRect(0, 0, width, height))
+        placeholder.clear_with(255)
+        xref = page.insert_image(fitz.Rect(0, 0, width, height), pixmap=placeholder)
+        page.replace_image(xref, stream=tiff_bytes)
+        pdf_bytes = doc.tobytes(garbage=4, deflate=True, clean=True)
+    finally:
+        doc.close()
+    return _saved_image_stream_size(pdf_bytes)
+
+
+def encode_jbig2_lossless(bw_img, g4_tiff_bytes):
     """Encode a 1-bit PIL image with jbig2enc's generic-region (lossless) coder.
 
-    Returns the raw PDF-ready JBIG2 stream, verified to decode back to the
-    exact same bitmap, or None if the encoder is unavailable, fails, or the
-    roundtrip check doesn't match (in which case the caller should keep
-    using CCITT G4).
+    Returns the raw PDF-ready JBIG2 stream only when it's verified to decode
+    back to the exact same bitmap AND confirmed smaller than the CCITT G4
+    candidate once both are actually saved the way compress_pdf() saves the
+    real document. Returns None if the encoder is unavailable, fails, the
+    roundtrip doesn't match, or it simply doesn't win on size -- in every
+    case the caller should keep using CCITT G4.
     """
     with tempfile.TemporaryDirectory() as tmp:
         src_path = os.path.join(tmp, "page.pbm")
@@ -86,8 +161,13 @@ def encode_jbig2_lossless(bw_img):
     if not jbig2_bytes:
         return None
 
-    if not _jbig2_roundtrips_losslessly(jbig2_bytes, bw_img):
+    verified, jbig2_size = _verify_and_measure_jbig2(jbig2_bytes, bw_img)
+    if not verified:
         print("Warning: jbig2 output failed roundtrip verification. Using CCITT G4 instead.", file=sys.stderr)
+        return None
+
+    g4_size = _g4_embedded_size(g4_tiff_bytes, bw_img.width, bw_img.height)
+    if jbig2_size >= g4_size:
         return None
 
     return jbig2_bytes
@@ -127,8 +207,7 @@ def compress_pdf(input_path, output_path, mode="auto", max_dim=1200, quality=50,
     if use_jbig2 and not JBIG2_BIN:
         print(
             "Warning: --jbig2 was requested but the 'jbig2' binary is not on PATH. "
-            f"Install it first (e.g. `{_jbig2_install_hint()}`) and re-run -- falling back to "
-            "CCITT G4 for all bw-mode pages for now.",
+            f"{_jbig2_install_hint()}. Falling back to CCITT G4 for all bw-mode pages for now.",
             file=sys.stderr,
         )
         use_jbig2 = False
@@ -260,8 +339,8 @@ def compress_pdf(input_path, output_path, mode="auto", max_dim=1200, quality=50,
 
                         if use_jbig2:
                             try:
-                                jbig2_bytes = encode_jbig2_lossless(bw_img)
-                                if jbig2_bytes is not None and len(jbig2_bytes) < out_io.tell():
+                                jbig2_bytes = encode_jbig2_lossless(bw_img, out_io.getvalue())
+                                if jbig2_bytes is not None:
                                     jbig2_replacement = (jbig2_bytes, bw_img.width, bw_img.height)
                             except Exception as e:
                                 print(f"Warning: JBIG2 backend raised an unexpected error ({e}). Using CCITT G4 instead.", file=sys.stderr)

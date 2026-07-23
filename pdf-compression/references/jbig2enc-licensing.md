@@ -6,17 +6,52 @@ compressão bitonal na skill `pdf-compression` (flag `--jbig2` de
 `compress.py`), ao lado do CCITT Group 4 (`bw` mode, ainda o padrão) e JPEG
 (`gray`/`color` modes).
 
-**Status: implementado.** `compress.py --mode bw --jbig2` chama o binário
-`jbig2` (modo generic-region, sem symbol/text-region matching e sem
-refinamento — ver seções 3 e 5), decodifica o resultado de volta via o
-próprio decoder JBIG2 do MuPDF e compara pixel a pixel com o bitmap
-binarizado antes de aceitar; só substitui o CCITT G4 quando a verificação
-passa e o arquivo fica menor. Sem o binário `jbig2` no `PATH`, a skill cai
-de volta para CCITT G4 automaticamente e imprime o comando de instalação
-correto para a máquina atual (`apt-get`/`brew`/`dnf`) — não há binário
+**Status: implementado**, incluindo duas correções de review (PR #17) que
+valem registrar aqui porque mudam garantias de corretude, não só estilo:
+
+- **Normalização do dicionário do XObject.** `_set_jbig2_stream()` reaproveita
+  o xref da imagem original (em vez de criar um objeto novo, como faria
+  `Page.replace_image()`), então qualquer chave antiga incompatível
+  (`/Decode`, `/ImageMask`, `/Mask`, `/SMask`...) precisa ser explicitamente
+  zerada antes de gravar o stream JBIG2 — do contrário um `/Decode [1 0]`
+  residual inverte preto/branco, ou um `/ImageMask true` residual transforma
+  o XObject numa máscara de estêncil incompatível com `/ColorSpace`. A
+  correção limpa (via `null`, semanticamente equivalente a "ausente" no PDF)
+  toda chave fora do conjunto conhecido de um XObject de imagem simples antes
+  de gravar as chaves novas.
+- **Comparação de tamanho contra o stream real, não o container TIFF.**
+  `Page.replace_image()` decodifica o TIFF/G4 de volta para um bitmap bruto
+  imediatamente; o `doc.save(..., deflate=True)` da pipeline então
+  recodifica esse bitmap como `/FlateDecode` — o payload G4 nunca chega ao
+  PDF salvo. Um TIFF/G4 de ~15 KB pode virar um stream final de ~9,5 KB só
+  com Flate sobre o bitmap bruto. Comparar o candidato JBIG2 contra o
+  tamanho do arquivo TIFF (como a primeira versão desta PR fazia) podia
+  aceitar um JBIG2 maior que o G4 real, contrariando a garantia "só quando
+  for menor". A correção materializa os dois candidatos (JBIG2 e
+  G4-via-`replace_image`) num PDF de uma página descartável, salvo com as
+  mesmas flags da pipeline real, e compara o tamanho do stream que
+  efetivamente seria salvo.
+
+`compress.py --mode bw --jbig2` chama o binário `jbig2` (modo
+generic-region, sem symbol/text-region matching e sem refinamento — ver
+seções 3 e 5), decodifica o resultado de volta via o próprio decoder JBIG2
+do MuPDF e compara pixel a pixel com o bitmap binarizado; só substitui o
+CCITT G4 quando essa verificação passa **e** o arquivo, medido da forma
+descrita acima, fica menor. Sem o binário `jbig2` no `PATH`, a skill cai de
+volta para CCITT G4 automaticamente e imprime orientação de instalação
+honesta para a máquina atual — `apt-get`/`brew` têm o pacote pronto; Fedora e
+Arch não empacotam o encoder nos repositórios oficiais (só o decoder
+`jbig2dec`, no caso do Fedora, ou a AUR, no caso do Arch), então recebem
+instruções de build/AUR em vez de um comando que falharia. Não há binário
 empacotado no repositório nem instalação automática silenciosa; é só mais
 um pacote de sistema a instalar quando fizer falta, igual a qualquer outra
 CLI que o agente já sabe instalar sob demanda.
+
+`scripts/test_compress_jbig2.py` cobre as duas correções acima com
+reproduções diretas dos cenários encontrados no review (xref com `/Decode
+[1 0]`, xref com `/ImageMask true`, e um caso onde o JBIG2 vence o TIFF mas
+perde para o G4 real), além de um teste ponta a ponta comparando pixel a
+pixel a saída `--jbig2` contra a saída G4-only.
 
 ## 1. Licença do código
 
