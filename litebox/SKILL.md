@@ -34,11 +34,16 @@ the project's own docs state APIs and interfaces may change as the design mature
 flag, and exact component name here as a starting point to re-verify against the live repo, not as a
 frozen interface — this file will go stale faster than the code does.
 
-**Security-boundary caveat:** LiteBox is marketed broadly as a "security-focused library OS," but that
-framing applies most strongly to its hardware/hypervisor-backed targets (SEV-SNP, LVBS). The plain
-Windows-userland runner maps Linux syscalls onto ordinary Win32 APIs with no hypervisor or hardware
-isolation underneath — do not treat it as a hard security boundary equivalent to a VM, and do not use
-it as a substitute for one when running genuinely untrusted code.
+**Security-boundary status: undocumented, unvalidated for the Windows-userland runner.** LiteBox is
+marketed broadly as a "security-focused library OS" that "drastically cuts down the interface to the
+host, reducing attack surface," and the Windows-userland runner reportedly uses an in-memory initial
+filesystem — the absence of a hypervisor does *not* by itself mean there's no boundary; a userland
+sandbox can still constrain the syscall/memory/filesystem interface meaningfully. But the official docs
+don't publish a threat model for this specific runner, so neither "it's as strong as the hardware-backed
+targets" nor "it provides no real isolation" is something this skill can back with a primary source.
+Treat the isolation strength of this runner as **unverified** — don't assume it's safe for genuinely
+untrusted/adversarial code until that's confirmed against LiteBox's own documentation or an independent
+security review, and don't assume the opposite either without evidence.
 
 ## When to consider it
 
@@ -49,9 +54,10 @@ it as a substitute for one when running genuinely untrusted code.
 - The workload is small and syscall-simple (a single-purpose encoder/converter/CLI tool is a much
   better fit than a full application stack) — narrow syscall surface means fewer chances of hitting an
   unimplemented syscall.
-- Reducing a Linux app's attack surface matters more than raw compatibility, and one of LiteBox's
-  hardware-backed targets (SEV-SNP, LVBS) is actually in play — that's where its security framing is
-  strongest.
+- Reducing a Linux app's attack surface matters more than raw compatibility, especially via LiteBox's
+  hardware-backed targets (SEV-SNP, LVBS), where isolation is hardware-rooted and easier to reason
+  about. For the Windows-userland runner specifically, treat any attack-surface reduction as a plausible
+  bonus, not a documented guarantee (see the security-boundary status note above).
 - The user explicitly asks about LiteBox, or asks to run a specific Linux binary on Windows without a
   VM.
 
@@ -64,8 +70,9 @@ it as a substitute for one when running genuinely untrusted code.
   networking, GPU access, etc.) that a userland syscall-rewriting layer is unlikely to cover completely.
 - Production-critical stability is required and the "no stable release yet, APIs may change" caveat
   above is disqualifying on its own.
-- The task needs a genuine security boundary against untrusted/adversarial code and only the
-  Windows-userland runner is available (see caveat above) — use a real VM or container sandbox instead.
+- The task needs a *confirmed* security boundary against untrusted/adversarial code and only the
+  Windows-userland runner is available — its isolation strength is undocumented (see caveat above), so
+  use a real VM or container sandbox instead unless and until that's independently verified.
 - ARM64 Windows, or any architecture other than x86-64, is a hard requirement — this was not confirmed
   as supported during this skill's research; check the current repo before assuming otherwise.
 
@@ -92,8 +99,8 @@ a copy-pasteable script:
 
 This scenario motivated writing this skill, and illustrates the decision tree concretely. The
 [`pdf-compression`](../pdf-compression/SKILL.md) skill's `--jbig2` flag calls the `jbig2` Linux binary
-for lossless bitonal PDF compression (see `pdf-compression/references/jbig2enc-licensing.md`). On Linux
-and macOS that's a normal package-manager install; on Windows, without WSL/Hyper-V, LiteBox is a
+for lossless bitonal PDF compression (see that skill's Licensing and Format Alternatives sections). On
+Linux and macOS that's a normal package-manager install; on Windows, without WSL/Hyper-V, LiteBox is a
 plausible experimental path — but it is **not currently wired into `compress.py`**, and shouldn't be
 until proven out per the checklist below.
 
@@ -126,9 +133,12 @@ build** before it's an operational fallback rather than a hint:
   jbig2 you tested is the jbig2 that runs" is verifiable.
 - A real test run on Windows *without* Hyper-V enabled.
 - A real test proving both the bit-exact roundtrip **and** that the final embedded size actually beats
-  the CCITT G4 fallback (mirroring `pdf-compression`'s own `_g4_embedded_size` comparison) — Windows
-  syscall-translation overhead is a plausible source of behavioral drift that a "did it run" check alone
-  wouldn't catch.
+  the CCITT G4 fallback (mirroring `pdf-compression`'s own `_g4_embedded_size` comparison). `jbig2enc`
+  is deterministic, so any size divergence from the native-Linux baseline would point to a real bug —
+  an unimplemented/incompatible syscall silently changing behavior, a different build of
+  `jbig2enc`/Leptonica in the packaged artifact, or an outright execution error — not to syscall-
+  translation overhead, which affects latency and resource use, not the bytes a deterministic encoder
+  produces.
 
 Until that exists, treat LiteBox-for-jbig2enc as something to *suggest and evaluate*, not something to
 wire up as an automatic code path.
@@ -140,7 +150,9 @@ wire up as an automatic code path.
   point it at an arbitrary Linux binary with zero preparation.
 - Syscall coverage is not guaranteed to be complete — verify the actual application output, not just
   successful execution.
-- Not a hard security boundary in userland mode (see caveat above).
+- Isolation strength of the Windows-userland runner specifically is undocumented/unvalidated (see
+  caveat above) — don't assume it's either as strong as the hardware-backed targets or provides no
+  real boundary at all; verify before relying on it for untrusted code.
 - x86-64 Windows was the only architecture found described in this skill's research; other
   architectures (ARM64) were not confirmed either way — check the current repo.
 - Should never fully replace a working native install or a mature virtualization path (WSL2, Hyper-V,
@@ -149,4 +161,5 @@ wire up as an automatic code path.
 ## References
 
 - Canonical source, always check for current specifics: https://github.com/microsoft/litebox
-- Worked-example context: [`pdf-compression/references/jbig2enc-licensing.md`](../pdf-compression/references/jbig2enc-licensing.md)
+- Worked-example context: [`pdf-compression/SKILL.md`](../pdf-compression/SKILL.md) (Licensing and
+  Format Alternatives sections)
