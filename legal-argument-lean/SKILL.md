@@ -57,6 +57,31 @@ The fourth is the real prize: comparing axiom sets across alternative
 proofs reveals which precedent is *load-bearing* and which is
 rhetorical reinforcement.
 
+## Safety, privacy, and legal-validation boundaries
+
+Lean verifies derivability from the declared axioms; it does **not**
+verify that a factual claim is true, that a quotation is accurate, that
+a precedent remains controlling, or that the chosen formalization is
+the legally best interpretation. A compiling theorem is therefore an
+argument audit, never a legal-validity certificate.
+
+Before relying on any output:
+
+1. Verify statutes, súmulas, precedents, holdings, dates, and quotations
+   against current official sources.
+2. Distinguish verbatim authority from the formalizer's paraphrase.
+3. Treat every case-specific axiom as an assertion requiring a record
+   citation, not as an established fact.
+4. Have a qualified human review the legal conclusions and the final
+   peça.
+
+Do not send sealed, confidential, privileged, or personally sensitive
+case material to a second model or external service without the USER's
+explicit authorization and an appropriate data-handling basis. Prefer
+local processing, redaction, or synthetic placeholders. If independent
+review would expose protected material, keep both analytical roles in
+the same authorized environment and disclose that limitation.
+
 ## The six-layer architecture
 
 Map every legal element to one of six layers. Use the comment headers
@@ -226,21 +251,48 @@ workspace.
 Fase 2 → voltar à Fase 1 e revisar. Nunca ajustar axiomas para forçar
 compilação — isso contamina a Fase 3 e invalida o pipeline.
 
-**5 — Duas LLMs, contextos separados.** A LLM-formalizadora (Fase 2)
-busca compilar; a LLM-analista (Fase 3) avalia honestamente — idealmente
-em contextos distintos, para que a análise não opere como justificativa
-do que a mesma LLM formalizou.
+**5 — Revisão independente quando autorizada.** A LLM-formalizadora
+(Fase 2) busca compilar; uma segunda revisão (Fase 3) avalia
+honestamente, idealmente em contexto distinto para reduzir viés de
+confirmação. Isso não autoriza enviar autos ou dados pessoais a outro
+modelo, provedor ou serviço. Use outro contexto somente quando ele
+estiver dentro do ambiente e da política de dados autorizados pelo USER;
+caso contrário, faça a revisão no mesmo ambiente e registre a limitação.
 
 ## Lean 4 setup
 
-If `lean` is not on the path:
+First check whether Lean is already available:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
-  | sh -s -- -y --default-toolchain leanprover/lean4:v4.14.0
-export PATH="$HOME/.elan/bin:$PATH"
 lean --version
 ```
+
+If it is unavailable, **do not install it automatically** and never pipe
+a remote script directly into a shell. Ask the USER for permission,
+then direct them to the official installation instructions:
+<https://lean-lang.org/install/>.
+
+After an authorized Elan installation, pin and install the expected
+toolchain explicitly:
+
+```bash
+elan toolchain install leanprover/lean4:v4.14.0
+elan default leanprover/lean4:v4.14.0
+lean --version
+```
+
+For reproducible project-local selection, prefer a `lean-toolchain`
+file containing:
+
+```text
+leanprover/lean4:v4.14.0
+```
+
+Before running any downloaded installer, identify its official release
+source and verify any publisher signature or checksum the release
+provides. `npx` and `uvx` are not substitutes for Elan: wrappers from
+the npm or Python ecosystems merely add another supply-chain layer
+around the same native toolchain download.
 
 Mathlib is **not** needed — the logic is pure first-order with axioms;
 a single `.lean` file compiled with `lean file.lean` is enough. Avoid
@@ -299,6 +351,12 @@ lose.
   docstrings (`/-- ... -/`) for citations.
 - **Never fabricate precedents or claims.** Use only what the peça
   itself invokes; if something is missing, flag it to the USER.
+- **Verify legal authority before reliance.** Confirm every material
+  citation and proposition in a current official source; library
+  docstrings and model memory are not authoritative sources.
+- **Never present compilation as legal correctness.** Report separately
+  what Lean established and what remains a factual, interpretive, or
+  precedential assumption.
 - **Never simplify the argument.** Preserve every step the peça takes;
   reducing fidelity defeats the audit.
 - **Always end with `#print axioms`** for each theorem.
@@ -437,12 +495,14 @@ legal-argument-lean/references --out docs/references` (only available
 from a full repo checkout, same caveat as `axiom_graph.py` above) — or
 read the `/-- ... -/` docstrings in the `.lean` files directly.
 
-Always use art. 489 axioms as the canonical hooks for any nulidade por
-ausência de fundamentação; always use `art_927_cpc`'s
+Use the art. 489 modules as the repository's default modeling hooks for
+an alleged ausência de fundamentação; consider `art_927_cpc`'s
 `fora_do_espaco_legitimo_nao_fundamentada` for challenges to selective
-precedent application; always use `tema_1306_stj` for art. 489, §1º, IV
-copy-paste (per relationem) reasoning. These are the required library
-for their respective argument type, not optional suggestions.
+precedent application; and consider `tema_1306_stj` for art. 489, §1º,
+IV per relationem reasoning. These modules are reusable formalization
+templates, not legal authorities. Inspect their axioms, verify their
+legal premises against current official sources, and adapt or decline
+them when the concrete case does not fit.
 
 ### Combining libraries in a peça
 
@@ -474,11 +534,13 @@ not one's own argument, via steelman-by-sorry-replacement applied
 descartable readings are filtered before formalization; the rest get
 3–5 steelman variants each, refuted by one of five strategies.
 
-**One step is MANDATORY and never skipped: the art. 489, §1º, III
-trivialness check.** A steelman that would justify literally any
-outcome — provable by finding a counterexample case the steelman's
-logic also "proves" — fails as a matter of law, not just of formal
-elegance, and is usually the cheapest refutation available.
+For an adversarial analysis that actually alleges generic reasoning
+under art. 489, §1º, III, include the trivialness check unless the USER
+chooses a narrower scope. A steelman that would justify literally any
+outcome is a strong warning that the premise is underconstrained. Report
+that result as a formal and argumentative finding; do not state that it
+automatically establishes a legal violation without validating the
+applicable law and the concrete record.
 
 **Read `references/adversarial.md` in full before any adversarial
 formalization** — it has the full loop, the filtro, the variant
