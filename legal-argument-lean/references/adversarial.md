@@ -20,6 +20,10 @@ The methodology is *steelmanning via sorry-replacement*, applied
 2. **Steelman**: replace each `sorry` with the *most charitable and
    strongest* axiom that would justify the move. Do not pick the
    weakest version — pick the most defensible one.
+   Every replacement must also receive a `ClaimMeta.SteelMeta` record:
+   who would need to accept it, its textual basis, whether the
+   reconstruction is textual/reconstructive/purely charitable, its support
+   status, and a falsification condition.
 3. Compile until the acórdão's conclusion derives.
 4. **Audit with `#print axioms`**: each axiom not corresponding to
    actually-cited authority is an implicit move. Each is a vício
@@ -35,6 +39,26 @@ proper response is to enumerate **all plausible steelmans in
 ascending order of deference to the court** and refute each by its
 own strategy. This is the case-analysis-exhaustivo technique applied
 to legal argument.
+
+Compilation does not upgrade a `STEEL_n` from hypothesis to finding. In
+particular, `semSuporte` and `puramenteCaridosa` premises must remain visibly
+labelled in the Phase 3 report and may not be described as the court's actual
+reasoning.
+
+Example metadata:
+
+```lean
+import ClaimMeta
+
+axiom STEEL_1 : RegraImplicita caso
+axiom meta_STEEL_1 :
+  ClaimMeta.TemSteelMeta STEEL_1
+    { atribuivelA := "órgão julgador"
+      baseTextual := "nenhuma identificada"
+      tipo := .puramenteCaridosa
+      status := .semSuporte
+      condicaoFalsificacao := "precedente citado distingue expressamente o caso" }
+```
 
 ## Pre-step: filtro de trivialidade
 

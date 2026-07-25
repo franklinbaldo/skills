@@ -58,6 +58,7 @@ Imports obrigatórios (ordem topológica):
 
 ```lean
 import Tipos
+import ClaimMeta       -- obrigatório no pipeline complexo
 import Saidas.Aplicar
 import Saidas.Distinguir
 import Saidas.Superar
@@ -70,6 +71,12 @@ import art_5_e_6_cpc   -- se há boa-fé objetiva ou cooperação
 ```
 
 Importar apenas os módulos relevantes ao caso.
+
+No pipeline complexo, cada axioma da Camada 5 deve ter axiomas-companheiros
+`TemProveniencia`, `TemStatus` e `TemLocalizador`. A ficha não altera a prova,
+mas impede que `#print axioms` seja lido sem contexto epistemológico. O
+cabeçalho do arquivo também deve registrar o commit das bibliotecas e os
+rótulos de estabilidade conforme `references/VERSIONING.md`.
 
 ## Auditoria automática
 

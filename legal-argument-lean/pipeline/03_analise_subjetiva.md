@@ -15,7 +15,7 @@ abaixo. O ciclo Fase 2 ↔ Fase 3 encerra quando todos os axiomas centrais de
 todos os teoremas relevantes passam nos três critérios — ou quando se conclui
 que um ataque não é sustentável e deve ser descartado.
 
-## Critérios de parada (quatro condições por axioma central)
+## Critérios de parada (seis condições por axioma central)
 
 Para cada axioma que sustenta um teorema relevante, verificar:
 
@@ -38,6 +38,20 @@ Para cada axioma que sustenta um teorema relevante, verificar:
    recomendar verificação antes de protocolar a peça. Axioma pendente não
    trava o pipeline — mas derrota marcada com base em axioma pendente é
    derrota condicional, não definitiva.
+
+5. **Qualificação cognitiva da omissão**: para ataques por omissão, confirmar
+   o resultado do gate da Fase 1. Se os compromissos anteriores determinam
+   univocamente a resposta, registrar integração recognitiva. Se apenas
+   direcionam ou deixam alternativas compatíveis, registrar cognição
+   geratória e evitar descrever a conclusão como consequência já contida no
+   acórdão. Rejeição implícita plausível deve ser enfrentada como
+   contra-argumento.
+
+6. **Ficha epistemológica de STEEL_n**: toda premissa steelman deve indicar
+   ator, base textual, tipo de reconstrução, status de suporte e condição de
+   falsificação. `semSuporte` ou `puramenteCaridosa` não significa derrota
+   automática, mas impede apresentar a premissa como descrição do que o
+   tribunal efetivamente decidiu.
 
 Se algum critério falha, retornar à Fase 2 com instrução específica de
 refinamento. Não ajustar o axioma dentro desta fase — a reformulação ocorre

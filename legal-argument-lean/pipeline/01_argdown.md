@@ -40,6 +40,31 @@ Se o acórdão invoca um precedente com ressalva e opera com versão truncada,
 o `[W-A*]` registra o Warrant completo. A discrepância entre o Warrant
 registrado e o Warrant operado pelo acórdão é a substância do ataque de P*.
 
+## Gate de qualificação da omissão
+
+Não representar automaticamente toda ausência textual como omissão. Antes de
+criar uma claim `[P*: omissão ...]`, responder em ordem:
+
+1. **Enfrentamento expresso:** o argumento foi respondido diretamente? Se sim,
+   não há omissão quanto a ele; avaliar erro, incoerência ou insuficiência.
+2. **Rejeição implícita:** a estrutura fundamentativa descarta logicamente o
+   argumento? Se sim, registrar a inferência e testar sua validade antes de
+   classificar como omissão.
+3. **Decisividade:** o argumento era capaz, em tese, de infirmar a conclusão?
+   Se não, não usar o art. 489, §1º, IV como atalho.
+4. **Determinabilidade:** os compromissos já assumidos pelo tribunal determinam
+   **univocamente** a resposta ao ponto omitido?
+   - `recognitiva`: a integração recupera consequência já determinada;
+   - `geratoria`: o tribunal ainda precisa escolher entre respostas compatíveis;
+   - `direcionamento_sem_unicidade`: os compromissos orientam, mas não
+     determinam uma única resposta; tratar como subtipo geratório.
+
+Anotar claims de omissão com `cognicao: "recognitiva"`, `"geratoria"` ou
+`"direcionamento_sem_unicidade"`. Se o material não permite classificar, usar
+`cognicao: "pendente"` e levar a dúvida à Fase 3. A classificação descreve a
+estrutura cognitiva do saneamento; não cria, por si só, regra autônoma de
+admissibilidade.
+
 ## Template de arquivo Argdown
 
 ```argdown
@@ -76,10 +101,12 @@ title: [Caso] — Decomposição Argumentativa
   - [A1: claim central]
 ```
 
-## Anotações de proveniência e status (opcional)
+## Anotações de proveniência e status
 
-Claims de dados (`[D-*]`, `[F-*]`, `[W-*]`) podem ser anotadas com
-proveniência e status usando a sintaxe de dados do Argdown (`{ }`).
+No pipeline complexo, claims de dados (`[D-*]`, `[F-*]`, `[W-*]`) devem ser
+anotadas com proveniência, status e localização usando a sintaxe de dados do
+Argdown (`{ }`). No workflow direto, a anotação pode ser abreviada apenas
+quando a fonte estiver transcrita inequivocamente no docstring Lean.
 Essas anotações são lidas pela LLM-formalizadora ao produzir axiomas da
 Camada 5 no Lean e pela Fase 3 (análise subjetiva) para avaliar ônus
 argumentativo.
@@ -94,6 +121,8 @@ argumentativo.
 | | `confirmada` | Fonte inferida confirmada pelo procurador |
 | | `pendente` | Não determinado — estado honesto, não trava o pipeline |
 | `fonte` | string livre | Identificação da fonte quando `prov=fonte_declarada` ou `fonte_inferida` |
+| `local` | string livre | Página, folha, ID, evento, item ou timestamp exato |
+| `autor` | string livre | Pessoa, parte, órgão ou tribunal responsável pela afirmação |
 | `status` | `necessaria` | Sem esta claim o efeito do ato não ocorreria |
 | | `contingente` | Presente no documento mas não load-bearing — "dito de passagem" |
 | | `pendente` | Não determinável com o material disponível |
@@ -101,7 +130,7 @@ argumentativo.
 **Exemplo anotado:**
 
 ```argdown
-[F-P1: cargo originário de M.B.] {prov: "fonte_declarada", fonte: "Decreto 7.999/1997", status: "necessaria"}:
+[F-P1: cargo originário de M.B.] {prov: "fonte_declarada", fonte: "Decreto 7.999/1997", local: "art. 1º", autor: "Estado de Rondônia", status: "necessaria"}:
 O cargo originário de M.B. é Especialista em Supervisão Escolar.
 
 [D-P4: regimes constitucionais distintos] {prov: "fonte_inferida", fonte: "apelação — a confirmar", status: "pendente"}:
@@ -148,7 +177,8 @@ Um arquivo `.argdown` (ou bloco `argdown` em Markdown) com:
 - Todas as claims do acórdão (A*), instrumentais incluídas
 - Todas as claims da peça (P*), uma por vício identificado
 - Todos os argumentos `<arg-A*>` e `<arg-P*>`, com Warrants completos
-- Claims de dados anotadas com `prov` e `status` quando determinável
+- Claims de dados anotadas com `prov`, `fonte`, `local`, `autor` e `status`
+- Claims de omissão anotadas com `cognicao`
 
 O arquivo serve de insumo direto para a Fase 2 (Lean). Cada linha de ataque
 na topologia Argdown corresponde a um teorema candidato na Fase 2.

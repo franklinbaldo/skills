@@ -26,7 +26,9 @@ of arguments, or translating a formal exercise into a forensic peça.
 
 Especially well-suited to:
 
-- **Embargos de declaração** — reclamação metalógica por excelência (omissão = falta de passo; contradição = `⊢ ⊥` literal)
+- **Embargos de declaração** — reclamação metalógica por excelência, após
+  distinguir ausência textual, rejeição implícita e omissão genuína;
+  contradição interna pode ser modelada como `⊢ ⊥`
 - **Aderência a precedente vinculante** — axiomas nomeados aplicados ao caso; violação = fora do espaço legítimo do art. 927
 - **Aplicação seletiva de ratio decidendi** — ressalva ignorada = Warrant incompleto (formalizável via ADI + fato do caso)
 - **Reductio** — assume a tese contrária + derive `False`
@@ -213,6 +215,12 @@ For simple cases with a single obvious vício and a clear argumentative target.
 6. **Report** the audit: which proof is most economical, which
    precedent is load-bearing, which factual claims are critical.
 
+For an alleged omission, run the Phase 1 omission gate before writing a
+theorem: express treatment → implicit rejection → decisiveness →
+univocal determinability. Classify genuine omissions as recognitive,
+generative, or direction-without-unicity; do not equate every missing
+sentence with a missing derivation.
+
 ### Pipeline workflow
 
 For complex cases with multiple competing arguments or multiple
@@ -338,7 +346,10 @@ All five Saidas compound definitions are tagged `@[simp]`.
 follow; Lean compiles with warnings and `sorry`s are greppable.
 **Phase 2 — steelman**: replace each `sorry` with the most charitable
 axiom (`STEEL_n`); the file compiles cleanly and `#print axioms` lists
-every STEEL axiom — each an implicit premise of the acórdão. Never use
+every STEEL axiom — each a candidate reconstruction, not automatically
+an implicit premise actually adopted by the acórdão. Attach a
+`ClaimMeta.SteelMeta` record with actor, textual basis, reconstruction
+type, support status, and falsification condition. Never use
 comment `-- sorry` as a substitute: invisible to the compiler, easy to
 lose.
 
@@ -367,7 +378,9 @@ lose.
 
 **Maps well:**
 - Inadmissibilidade (Súmulas 279, 280, 282, 283, 284): clean syllogism
-- Omissão em ED: literally "no derivation exists for X"
+- Omissão em ED: a missing step only after excluding express treatment
+  and plausible implicit rejection; distinguish recognitive from
+  generative integration
 - Contradição interna: literally `theorem ... : False`
 - Aderência a precedente vinculante (RG, SV): named axiom + application
 - Reductio: `intro h_contraria; ... ; exact absurd ... ...`
@@ -433,8 +446,11 @@ dump of axiom names.
 
 Reusable axiom libraries for high-frequency Brazilian procedural law.
 They populate Camadas 1–4, ready to combine with the case-specific
-Camadas 5–6. Treat them as **immutable**: peças declare new precedents
-as Camada 4 axioms in their own file.
+Camadas 5–6. Treat published revisions as **reproducible**, not
+immutable: never silently change the meaning of an axiom used by an
+earlier artifact. Version, label, deprecate, and replace declarations
+under `references/VERSIONING.md`. Peças still declare case-specific new
+precedents as Camada 4 axioms in their own file.
 
 ### Modular architecture: traits de saída + módulos de regime
 
@@ -473,7 +489,11 @@ LEAN_PATH=. lean acordao_marilene.lean   # peça concreta
 ### Library modules in `references/`
 
 - `Tipos.lean` — shared basic types (Decisao, Precedente, Caso, Tribunal)
-- `ClaimMeta.lean` — optional provenance/status metadata for Camada 5 axioms
+- `ClaimMeta.lean` — provenance/status/location metadata for Camada 5
+  axioms (mandatory in new complex-pipeline cases) plus epistemic metadata
+  for `STEEL_n`
+- `VERSIONING.md` — stability labels and compatibility policy for evolving
+  legal axiom libraries
 - `Saidas/Aplicar.lean` — `AplicaCorretamente` trait (art. 489, §1º, V)
 - `Saidas/Distinguir.lean` — `DistingueCorretamente` trait (art. 489, §1º, VI)
 - `Saidas/Superar.lean` — three superação modes + competence restriction
