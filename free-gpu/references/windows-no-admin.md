@@ -1,8 +1,9 @@
 # Windows without WSL or administrator rights
 
-The official Colab CLI states that Windows is unsupported. Prefer Kaggle on
-native Windows. Use the compatibility launcher only for non-interactive Colab
-commands and revalidate it after every Colab CLI upgrade.
+The directly installed `google-colab-cli` 0.6.0 is known to fail on Windows
+while importing Unix-only `termios` and `tty`. Do not run `uvx colab` directly
+as a discovery step. Prefer Kaggle natively or follow the sibling `litebox`
+skill to host the Linux Colab client.
 
 ## Install uv in the user profile
 
@@ -32,9 +33,12 @@ uvx --from kaggle kaggle auth login
 OAuth persists an access credential in the user profile. Do not paste it into
 source files or command history.
 
-## Colab compatibility launcher
+## Deliberate Colab compatibility shim
 
-Validate the current package before authentication:
+The bundled shim has been verified only for `version` and non-interactive help;
+an authenticated Windows resource run was not validated. Use it only when the
+user explicitly chooses to evaluate that workaround, not as the default
+Windows route:
 
 ```powershell
 uv run --no-project --with google-colab-cli python `
@@ -43,7 +47,8 @@ uv run --no-project --with google-colab-cli python `
   <skill-dir>\scripts\colab_windows.py run --help
 ```
 
-Use the same prefix for supported non-interactive commands:
+Only after that explicit choice, use the same prefix for a non-interactive
+command:
 
 ```powershell
 uv run --no-project --with google-colab-cli python `
@@ -52,6 +57,8 @@ uv run --no-project --with google-colab-cli python `
 
 Do not use `console` or `ssh`; they require Unix terminal facilities. The
 launcher does not patch the installed package and stores no credentials itself.
+Do not describe a successful help command as proof that OAuth, VM allocation,
+WebSockets, upload, download, or cleanup work on Windows.
 
 Official references:
 

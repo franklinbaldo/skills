@@ -70,8 +70,14 @@ arquivo, baixa os resultados e encerra a VM. A entrada é enviada para a
 infraestrutura do Google; obter autorização antes de usar o Colab com material
 sigiloso ou restrito.
 
-No Windows sem WSL e sem direitos de administrador, instalar também a skill
-`free-gpu` como diretório irmão e usar o launcher compatível:
+O `google-colab-cli` 0.6.0 instalado diretamente no Windows é sabidamente
+incompatível porque importa os módulos Unix `termios` e `tty`. Não mandar o
+agente repetir esse caminho. Sem WSL, consultar
+[`free-gpu`](../free-gpu/SKILL.md): usar Kaggle nativo ou adaptar o cliente
+Linux do Colab pela aula [`litebox`](../litebox/SKILL.md).
+
+O wrapper PowerShell abaixo usa deliberadamente um shim limitado a comandos
+não interativos; ele não é uma instalação Windows nativa:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File `
@@ -79,10 +85,9 @@ powershell -ExecutionPolicy Bypass -File `
   -InputPath documento.md -OutputPrefix .\documento
 ```
 
-Esse caminho usa somente comandos não interativos do Colab CLI. A camada de
-compatibilidade está documentada em
-[`free-gpu`](../free-gpu/SKILL.md) e não transforma o suporte experimental do
-CLI no Windows em suporte oficial.
+Usar esse wrapper somente quando o fluxo escolher explicitamente o shim. Para
+uma adaptação geral do cliente Linux, seguir a
+[receita Colab do LiteBox](../litebox/references/task-recipes.md).
 
 O checkpoint é público e não requer token. Se `HF_TOKEN` estiver salvo nos
 Colab Secrets, o script tenta lê-lo com `google.colab.userdata` sem imprimir ou
