@@ -7,12 +7,14 @@ Usage:
   run_colab.sh INPUT_AUDIO [OUTPUT_PREFIX] [options]
 
 Options:
-  --session NAME   Colab session name (default: generated)
-  --reuse          Reuse an existing named session
-  --keep           Keep the session after downloads
-  --threads N      Inference threads; 0 selects automatically (default: 0)
-  --context TEXT   Hotwords/context passed to asr_infer
-  -h, --help       Show this help
+  --session NAME          Colab session name (default: generated)
+  --reuse                 Reuse an existing named session
+  --keep                  Keep the session after downloads
+  --threads N             Inference threads; 0 selects automatically (default: 0)
+  --context TEXT          Hotwords/context passed to asr_infer
+  --upload-format FORMAT  mp3 or original (default: mp3)
+  --mp3-bitrate RATE      MP3 bitrate used for upload staging (default: 128k)
+  -h, --help              Show this help
 USAGE
 }
 
@@ -46,6 +48,8 @@ reuse=0
 keep=0
 threads=0
 context=""
+upload_format="mp3"
+mp3_bitrate="128k"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -72,6 +76,24 @@ while [[ $# -gt 0 ]]; do
     --context)
       [[ $# -ge 2 ]] || { echo "--context requires a value" >&2; exit 2; }
       context=$2
+      shift 2
+      ;;
+    --upload-format)
+      [[ $# -ge 2 ]] || { echo "--upload-format requires a value" >&2; exit 2; }
+      upload_format=$2
+      [[ $upload_format == "mp3" || $upload_format == "original" ]] || {
+        echo "--upload-format must be 'mp3' or 'original'" >&2
+        exit 2
+      }
+      shift 2
+      ;;
+    --mp3-bitrate)
+      [[ $# -ge 2 ]] || { echo "--mp3-bitrate requires a value" >&2; exit 2; }
+      mp3_bitrate=$2
+      [[ $mp3_bitrate =~ ^[0-9]+k$ ]] || {
+        echo "--mp3-bitrate must look like 96k or 128k" >&2
+        exit 2
+      }
       shift 2
       ;;
     -h|--help)
@@ -103,27 +125,55 @@ fi
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 mkdir -p -- "$(dirname -- "$output_prefix")"
 
-config_file=$(mktemp)
+temp_dir=$(mktemp -d)
+config_file="$temp_dir/job.json"
 input_name=$(basename -- "$input")
-ext=""
-if [[ $input_name == *.* ]]; then
-  raw_ext=${input_name##*.}
-  if [[ $raw_ext =~ ^[A-Za-z0-9]+$ ]]; then
-    ext=".$raw_ext"
-  fi
-fi
-remote_input="/content/vibevoice-input${ext}"
+upload_file=$input
+upload_encoding="original"
+remote_input=""
 
-python3 - "$config_file" "$remote_input" "$threads" "$context" <<'PY'
+lower_name=${input_name,,}
+if [[ $upload_format == "mp3" ]]; then
+  remote_input="/content/vibevoice-input.mp3"
+  if [[ $lower_name == *.mp3 ]]; then
+    upload_encoding="existing-mp3"
+  else
+    if ! command -v ffmpeg >/dev/null 2>&1; then
+      echo "ffmpeg is required for the default MP3 upload staging." >&2
+      echo "Install ffmpeg or pass --upload-format original." >&2
+      exit 2
+    fi
+    upload_file="$temp_dir/vibevoice-upload.mp3"
+    ffmpeg -hide_banner -loglevel error -y \
+      -i "$input" -vn -ac 1 -ar 24000 \
+      -c:a libmp3lame -b:a "$mp3_bitrate" \
+      "$upload_file"
+    upload_encoding="mp3-${mp3_bitrate}-mono-24khz"
+  fi
+else
+  ext=""
+  if [[ $input_name == *.* ]]; then
+    raw_ext=${input_name##*.}
+    if [[ $raw_ext =~ ^[A-Za-z0-9]+$ ]]; then
+      ext=".$raw_ext"
+    fi
+  fi
+  remote_input="/content/vibevoice-input${ext}"
+fi
+
+python3 - "$config_file" "$remote_input" "$threads" "$context" \
+  "$input_name" "$upload_encoding" <<'PY'
 import json
 import sys
 
-path, audio, threads, context = sys.argv[1:]
+path, audio, threads, context, source_name, upload_encoding = sys.argv[1:]
 config = {
     "audio": audio,
     "threads": int(threads),
     "context": context,
     "greedy": True,
+    "source_input_name": source_name,
+    "upload_encoding": upload_encoding,
 }
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(config, handle, ensure_ascii=False)
@@ -133,7 +183,7 @@ created=0
 cleanup() {
   status=$?
   trap - EXIT INT TERM
-  rm -f -- "$config_file"
+  rm -rf -- "$temp_dir"
   if [[ $created -eq 1 && $keep -eq 0 ]]; then
     colab_cli stop -s "$session" >/dev/null 2>&1 || true
   fi
@@ -149,7 +199,8 @@ else
   created=1
 fi
 
-colab_cli upload -s "$session" "$input" "$remote_input"
+printf 'Upload audio: %s (%s)\n' "$upload_file" "$upload_encoding"
+colab_cli upload -s "$session" "$upload_file" "$remote_input"
 colab_cli upload -s "$session" "$config_file" /content/vibevoice-job.json
 colab_cli exec -s "$session" -f "$script_dir/colab_job.py"
 
