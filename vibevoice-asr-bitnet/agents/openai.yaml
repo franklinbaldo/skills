@@ -1,0 +1,4 @@
+interface:
+  display_name: "VibeVoice ASR BitNet"
+  short_description: "Transcreva áudio por CPU via Colab CLI"
+  default_prompt: "Use $vibevoice-asr-bitnet para transcrever este áudio numa sessão Colab CPU e recuperar texto, métricas e log."
