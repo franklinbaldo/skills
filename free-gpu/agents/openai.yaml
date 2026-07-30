@@ -1,0 +1,4 @@
+interface:
+  display_name: "Free GPU"
+  short_description: "Use Colab or Kaggle GPUs from any machine"
+  default_prompt: "Use $free-gpu to run this GPU workload remotely and retrieve its artifacts."

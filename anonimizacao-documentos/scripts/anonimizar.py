@@ -1,112 +1,161 @@
-"""Script de Anonimização Determinística de Documentos (LGPD/OKF).
-
-Realiza a substituição de tags `<pii tipo='...' ref='...'>conteudo</pii>` pelos marcadores
-canônicos em caixa alta `_TIPO_REF_` e valida os 5 invariantes mecânicos.
-"""
+"""Replace reviewed PII tags with deterministic canonical markers."""
 
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import sys
 from pathlib import Path
 
-# Tipos suportados e seus substitutos canônicos
 CANONICAL_TYPES = {
-    "nome_pessoa": "NOME_PESSOA",
     "assinatura_signatario": "ASSINATURA_SIGNATARIO",
-    "cpf": "CPF",
-    "rg": "RG",
-    "matricula_servidor": "MATRICULA_SERVIDOR",
-    "processo_judicial": "PROCESSO_JUDICIAL",
-    "data_nascimento": "DATA_NASCIMENTO",
-    "dado_saude": "DADO_SAUDE",
-    "oab": "OAB",
     "contato": "CONTATO",
+    "contato_email": "CONTATO_EMAIL",
+    "contato_telefone": "CONTATO_TELEFONE",
+    "cpf": "CPF",
+    "dado_saude": "DADO_SAUDE",
+    "data_nascimento": "DATA_NASCIMENTO",
+    "data_privada": "DATA_PRIVADA",
     "endereco": "ENDERECO",
+    "identificador_conta": "IDENTIFICADOR_CONTA",
+    "matricula_servidor": "MATRICULA_SERVIDOR",
+    "nome_pessoa": "NOME_PESSOA",
+    "oab": "OAB",
+    "processo_judicial": "PROCESSO_JUDICIAL",
+    "rg": "RG",
+    "segredo": "SEGREDO",
+    "url_privada": "URL_PRIVADA",
 }
+TAG_TOKEN_PATTERN = re.compile(r"</?pii\b[^>]*>", re.IGNORECASE)
+PII_PATTERN = re.compile(
+    r"<pii\b(?P<attrs>[^>]*)>(?P<value>.*?)</pii\s*>",
+    re.DOTALL | re.IGNORECASE,
+)
+ATTRIBUTE_PATTERN = re.compile(
+    r"\b(?P<name>tipo|ref)\s*=\s*['\"](?P<value>[^'\"]+)['\"]",
+    re.IGNORECASE,
+)
 
-class ErroAnonimizacaoError(Exception):
-    """Erro de violação de invariante mecânico durante a anonimização."""
 
-def normalizar_tipo(tipo: str) -> str:
-    """Retorna a forma canônica do tipo de PII."""
-    t_clean = tipo.strip().lower()
-    if t_clean in CANONICAL_TYPES:
-        return CANONICAL_TYPES[t_clean]
-    return t_clean.upper()
+class AnonymizationError(ValueError):
+    """Raised when reviewed PII markup is structurally unsafe."""
 
-def anonimizar(conteudo_md: str) -> tuple[str, int]:
-    """Substitui tags <pii> por marcadores canônicos e valida isolamento sem aninhamento."""
-    
-    # Check Invariante 3: Nenhuma tag <pii> aninhada
-    tag_matches = list(re.finditer(r'</?pii\b[^>]*>', conteudo_md, re.IGNORECASE))
-    stack = []
-    for m in tag_matches:
-        is_close = m.group(0).startswith('</')
-        if not is_close:
-            stack.append(m)
-            if len(stack) > 1:
-                raise ErroAnonimizacaoError(
-                    "1 tag(s) <pii> aninhada(s) — uma PII dentro de outra torna a substituição ambígua."
-                )
+
+def normalize_type(raw_type: str) -> str:
+    """Return the canonical uppercase marker type."""
+    normalized = raw_type.strip().lower()
+    if normalized in CANONICAL_TYPES:
+        return CANONICAL_TYPES[normalized]
+    return re.sub(r"[^A-Z0-9]+", "_", normalized.upper()).strip("_") or "PII"
+
+
+def validate_tag_structure(text: str) -> None:
+    """Reject nested, unbalanced, or incomplete PII tags."""
+    open_tag: re.Match[str] | None = None
+    for token in TAG_TOKEN_PATTERN.finditer(text):
+        is_closing = token.group(0).lower().startswith("</")
+        if is_closing:
+            if open_tag is None:
+                raise AnonymizationError("Found a closing PII tag without an opener.")
+            open_tag = None
+        elif open_tag is not None:
+            raise AnonymizationError("Nested PII tags are not allowed.")
         else:
-            if stack:
-                stack.pop()
+            open_tag = token
+    if open_tag is not None:
+        raise AnonymizationError("Found an opening PII tag without a closing tag.")
 
-    count = 0
-    ref_map: dict[tuple[str, str], str] = {}
+
+def anonymize_tagged_text(text: str) -> tuple[str, int]:
+    """Replace PII tags while keeping type/reference assignments consistent."""
+    validate_tag_structure(text)
+    marker_by_key: dict[tuple[str, str], str] = {}
     counters: dict[str, int] = {}
 
-    def _replace_tag(match: re.Match) -> str:
-        nonlocal count
-        count += 1
-        full_tag = match.group(0)
-        
-        tipo_match = re.search(r"tipo=['\"]([^'\"]+)['\"]", full_tag, re.IGNORECASE)
-        ref_match = re.search(r"ref=['\"]([^'\"]+)['\"]", full_tag, re.IGNORECASE)
-        
-        tipo = tipo_match.group(1) if tipo_match else "PII"
-        ref = ref_match.group(1) if ref_match else "1"
-        
-        tipo_canon = normalizar_tipo(tipo)
-        key = (tipo_canon, ref)
-        
-        if key not in ref_map:
-            counters[tipo_canon] = counters.get(tipo_canon, 0) + 1
-            ref_map[key] = f"_{tipo_canon}_{counters[tipo_canon]}_"
-            
-        return ref_map[key]
+    def replace_tag(match: re.Match[str]) -> str:
+        attributes = {
+            item.group("name").lower(): item.group("value")
+            for item in ATTRIBUTE_PATTERN.finditer(match.group("attrs"))
+        }
+        raw_type = attributes.get("tipo")
+        reference = attributes.get("ref")
+        if not raw_type or not reference:
+            raise AnonymizationError(
+                "Every PII tag requires quoted tipo and ref attributes."
+            )
 
-    # Substitui tags <pii tipo='...' ref='...'>conteudo</pii>
-    pattern = re.compile(r"<pii\b[^>]*>(.*?)</pii\s*>", re.DOTALL | re.IGNORECASE)
-    texto_anon = pattern.sub(_replace_tag, conteudo_md)
-    
-    return texto_anon, count
+        canonical_type = normalize_type(raw_type)
+        key = (canonical_type, reference.strip())
+        if key not in marker_by_key:
+            counters[canonical_type] = counters.get(canonical_type, 0) + 1
+            marker_by_key[key] = f"_{canonical_type}_{counters[canonical_type]}_"
+        return marker_by_key[key]
+
+    anonymized, count = PII_PATTERN.subn(replace_tag, text)
+    if TAG_TOKEN_PATTERN.search(anonymized):
+        raise AnonymizationError("At least one malformed PII tag was not replaced.")
+    return anonymized, count
+
+
+def default_output_path(input_path: Path) -> Path:
+    """Build a non-destructive .anon.md sibling path."""
+    name = input_path.name
+    if name.endswith(".tagged.md"):
+        return input_path.with_name(f"{name.removesuffix('.tagged.md')}.anon.md")
+    if name.endswith(".md"):
+        return input_path.with_name(f"{name.removesuffix('.md')}.anon.md")
+    return input_path.with_name(f"{name}.anon.md")
+
+
+def input_files(input_path: Path) -> list[Path]:
+    """Resolve one file or all reviewed tagged Markdown files in a directory."""
+    if input_path.is_file():
+        return [input_path]
+    if input_path.is_dir():
+        return sorted(input_path.rglob("*.tagged.md"))
+    raise FileNotFoundError(input_path)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Replace reviewed PII tags with deterministic markers."
+    )
+    parser.add_argument("--input", required=True, type=Path)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Output path; valid only when --input is one file.",
+    )
+    parser.add_argument("--force", action="store_true")
+    return parser.parse_args()
+
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Anonimização determinística de arquivos Markdown.")
-    parser.add_argument("--input", required=True, help="Arquivo .md ou diretório contendo arquivos .md")
-    args = parser.parse_args()
+    args = parse_args()
+    files = input_files(args.input)
+    if args.output and len(files) != 1:
+        raise AnonymizationError("--output requires a single input file.")
+    if not files:
+        raise AnonymizationError("No *.tagged.md files found.")
 
-    input_path = Path(args.input)
-    files = [input_path] if input_path.is_file() else list(input_path.glob("**/*.md"))
+    for input_path in files:
+        output_path = args.output or default_output_path(input_path)
+        if input_path.resolve() == output_path.resolve():
+            raise AnonymizationError("Refusing to overwrite the input file.")
+        if output_path.exists() and not args.force:
+            raise FileExistsError(f"Output already exists: {output_path}")
 
-    print(f"Processando {len(files)} arquivo(s)...")
-    for f in files:
-        if f.name.endswith(".anon.md"):
-            continue
-        try:
-            content = f.read_text(encoding="utf-8")
-            anon_text, substitutions = anonimizar(content)
-            out_file = f.with_name(f.stem + ".anon.md")
-            out_file.write_text(anon_text, encoding="utf-8")
-            print(f"  [OK] {f.name} -> {out_file.name} ({substitutions} substituições)")
-        except Exception as e:
-            print(f"  [ERRO] {f.name}: {e}")
-
+        text = input_path.read_text(encoding="utf-8")
+        anonymized, substitutions = anonymize_tagged_text(text)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(anonymized, encoding="utf-8")
+        print(f"{input_path} -> {output_path} ({substitutions} substitutions)")
     return 0
 
+
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except (AnonymizationError, FileExistsError, FileNotFoundError, OSError) as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        sys.exit(1)

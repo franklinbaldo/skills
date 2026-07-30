@@ -143,6 +143,36 @@ build** before it's an operational fallback rather than a hint:
 Until that exists, treat LiteBox-for-jbig2enc as something to *suggest and evaluate*, not something to
 wire up as an automatic code path.
 
+## Worked example: Ghostscript for PDF/A on locked-down Windows
+
+The [`convert-to-pdfa`](../convert-to-pdfa/SKILL.md) skill uses Ghostscript for
+standards-aware PDF/A generation. On x86-64 Windows without WSL and without
+permission to install the native build, packaging Linux Ghostscript for
+`litebox_runner_linux_on_windows_userland` is a plausible experimental route.
+It is a better LiteBox candidate than a full Python/cloud CLI because it is a
+bounded batch process, but it still depends on shared libraries, fonts,
+`PDFA_def.ps`, an ICC profile and substantial file I/O.
+
+Do not wire it into the converter until a reproducible artifact exists:
+
+1. Pin the LiteBox commit, Ghostscript version, Linux distribution and all
+   shared-library/font packages.
+2. Package `gs`, its dependency closure, `PDFA_def.ps` and the exact sRGB ICC
+   profile with fixed paths.
+3. Publish or record a SHA-256 for the packaged artifact.
+4. Convert fixtures for PDF/A-1b, PDF/A-2b and PDF/A-3b through both native
+   Linux Ghostscript and LiteBox.
+5. Compare page count, geometry, extracted text and rendered pages.
+6. Require veraPDF conformance for the requested part/level. An XMP declaration
+   or a zero exit code is not sufficient validation.
+7. Test paths containing spaces and non-ASCII characters and confirm temporary
+   files do not leak outside the intended working directory.
+8. Fall back to native Windows Ghostscript, WSL or a remote Colab/Kaggle job on
+   any packaging, execution or validation failure.
+
+Until those checks pass on a Windows host without Hyper-V, describe this as a
+candidate solution, not a supported backend.
+
 ## Limitations (general)
 
 - Pre-1.0, evolving API — pin a specific commit for anything beyond one-off experimentation.
