@@ -1,0 +1,4 @@
+interface:
+  display_name: "Anonimização de documentos"
+  short_description: "Reduza PII localmente ou em GPU do Colab"
+  default_prompt: "Use $anonimizacao-documentos para detectar, revisar e substituir PII sem alterar o arquivo original."

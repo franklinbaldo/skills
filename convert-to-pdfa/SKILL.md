@@ -78,6 +78,14 @@ available:
 - Windows: install the official 64-bit Ghostscript build and add
   `gswin64c.exe` to `PATH`, or install `ghostscript` inside WSL.
 
+On locked-down x86-64 Windows without WSL or permission to install software,
+LiteBox is a plausible experimental host for a packaged Linux Ghostscript.
+It is not currently wired into `convert_to_pdfa.py`. Use it only after pinning
+the LiteBox and Ghostscript builds, bundling `PDFA_def.ps`, fonts and the sRGB
+ICC profile, and validating the produced file with veraPDF. See
+[`litebox`](../litebox/SKILL.md). Prefer a portable native Windows Ghostscript
+build when available because it has a smaller compatibility risk.
+
 For normative validation, install the official Java-based veraPDF CLI and add
 `verapdf` (`verapdf.bat` on Windows) to `PATH`. `uvx pdfa-parser` is a
 third-party Alpha wrapper, not the official veraPDF distribution; do not use it
