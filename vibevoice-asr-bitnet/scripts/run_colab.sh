@@ -126,13 +126,25 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 mkdir -p -- "$(dirname -- "$output_prefix")"
 
 temp_dir=$(mktemp -d)
+created=0
+cleanup() {
+  status=$?
+  trap - EXIT INT TERM
+  rm -rf -- "$temp_dir"
+  if [[ $created -eq 1 && $keep -eq 0 ]]; then
+    colab_cli stop -s "$session" >/dev/null 2>&1 || true
+  fi
+  exit "$status"
+}
+trap cleanup EXIT INT TERM
+
 config_file="$temp_dir/job.json"
 input_name=$(basename -- "$input")
 upload_file=$input
 upload_encoding="original"
 remote_input=""
 
-lower_name=${input_name,,}
+lower_name=$(printf '%s' "$input_name" | tr '[:upper:]' '[:lower:]')
 if [[ $upload_format == "mp3" ]]; then
   remote_input="/content/vibevoice-input.mp3"
   if [[ $lower_name == *.mp3 ]]; then
@@ -178,18 +190,6 @@ config = {
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(config, handle, ensure_ascii=False)
 PY
-
-created=0
-cleanup() {
-  status=$?
-  trap - EXIT INT TERM
-  rm -rf -- "$temp_dir"
-  if [[ $created -eq 1 && $keep -eq 0 ]]; then
-    colab_cli stop -s "$session" >/dev/null 2>&1 || true
-  fi
-  exit "$status"
-}
-trap cleanup EXIT INT TERM
 
 if [[ $reuse -eq 0 ]]; then
   colab_cli new -s "$session"
