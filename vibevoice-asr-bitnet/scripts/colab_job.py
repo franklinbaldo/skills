@@ -42,11 +42,9 @@ def run(
 ) -> subprocess.CompletedProcess[str]:
     """Run a command, echoing a shell-like representation first."""
     shown = [
-        (
-            "<redacted-context>"
-            if index > 0 and command[index - 1] == "--context"
-            else part
-        )
+        "<redacted-context>"
+        if index > 0 and command[index - 1] == "--context"
+        else part
         for index, part in enumerate(command)
     ]
     print("+", " ".join(shown), flush=True)
@@ -80,18 +78,13 @@ def ensure_system_tools() -> None:
 
 def ensure_repo() -> None:
     if not (REPO_DIR / ".git").exists():
-        run(
-            [
-                "git",
-                "clone",
-                "--recursive",
-                REPO_URL,
-                str(REPO_DIR),
-            ]
-        )
+        run(["git", "clone", "--recursive", REPO_URL, str(REPO_DIR)])
     run(["git", "fetch", "--depth", "1", "origin", REPO_REF], cwd=REPO_DIR)
     run(["git", "checkout", "--detach", REPO_REF], cwd=REPO_DIR)
-    run(["git", "submodule", "update", "--init", "--recursive", "--depth", "1"], cwd=REPO_DIR)
+    run(
+        ["git", "submodule", "update", "--init", "--recursive", "--depth", "1"],
+        cwd=REPO_DIR,
+    )
 
 
 def ensure_build(build_jobs: int) -> Path:
@@ -176,18 +169,7 @@ def cpu_description() -> str:
     return platform.processor() or "unknown"
 
 
-def main() -> None:
-    started = time.monotonic()
-    config = load_config()
-    ensure_system_tools()
-
-    cpu_count = os.cpu_count() or 1
-    requested_threads = int(config.get("threads", 0))
-    threads = requested_threads or min(cpu_count, 8)
-    threads = max(1, min(threads, cpu_count))
-    build_jobs = max(1, min(cpu_count, 8))
-
-    audio = Path(config["audio"])
+def normalize_audio(audio: Path) -> None:
     run(
         [
             "ffmpeg",
@@ -207,6 +189,37 @@ def main() -> None:
         ]
     )
 
+
+def probe_duration() -> float:
+    result = run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(WAV_PATH),
+        ],
+        capture=True,
+    )
+    return float(result.stdout.strip())
+
+
+def main() -> None:
+    started = time.monotonic()
+    config = load_config()
+    ensure_system_tools()
+
+    cpu_count = os.cpu_count() or 1
+    requested_threads = int(config.get("threads", 0))
+    threads = requested_threads or min(cpu_count, 8)
+    threads = max(1, min(threads, cpu_count))
+    build_jobs = max(1, min(cpu_count, 8))
+
+    audio = Path(config["audio"])
+    normalize_audio(audio)
     ensure_repo()
     executable = ensure_build(build_jobs)
     vae, lm, model_revision = ensure_models()
@@ -230,20 +243,7 @@ def main() -> None:
 
     result = run(command, capture=True)
     transcript = result.stdout.strip()
-    probe = run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(WAV_PATH),
-        ],
-        capture=True,
-    )
-    audio_duration = float(probe.stdout.strip())
+    audio_duration = probe_duration()
     TRANSCRIPT_PATH.write_text(transcript + "\n", encoding="utf-8")
     STDERR_PATH.write_text(result.stderr, encoding="utf-8")
 
@@ -255,7 +255,9 @@ def main() -> None:
         "cpu": cpu_description(),
         "cpu_count": cpu_count,
         "threads": threads,
-        "input_name": audio.name,
+        "source_input_name": str(config.get("source_input_name", audio.name)),
+        "uploaded_audio": audio.name,
+        "upload_encoding": str(config.get("upload_encoding", "original")),
         "normalized_audio": str(WAV_PATH),
         "audio_duration_seconds": round(audio_duration, 3),
         "context_supplied": bool(context),
