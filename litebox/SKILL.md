@@ -1,195 +1,119 @@
 ---
 name: litebox
 description: >-
-  Guidance on when and how to consider Microsoft's LiteBox (github.com/microsoft/litebox) — an
-  experimental, MIT-licensed Rust library OS for sandboxing Linux apps and running unmodified Linux
-  ELF binaries on Windows userland (no full Linux VM), plus SEV-SNP/OP-TEE/LVBS targets. Use when a
-  Linux-only CLI tool needs to run on Windows without installing WSL/Hyper-V, when reducing a Linux
-  app's attack surface matters, or when the user mentions LiteBox by name. Always treats it as a
-  conditional, verify-before-trusting fallback, not a default path — WSL2/Hyper-V/containers remain
-  the default for anything that doesn't specifically need LiteBox's properties.
+  Adapt Linux-only CLI workflows to Windows x86-64 userland with Microsoft's experimental LiteBox
+  when native execution, WSL, containers, virtual machines, or administrator installation are
+  unavailable. Use when another skill points here, the user mentions LiteBox, or an agent must
+  improvise around a Linux ELF on a locked-down Windows machine. Teaches the build-package-run-bridge
+  workflow and application-level validation; it is not a support matrix.
 ---
 
-# LiteBox
+# LiteBox escape hatch
 
-## Overview
+Use LiteBox as an **adaptation lesson**: work out how to carry one bounded Linux
+program across a constrained Windows environment. Do not treat it as a Linux
+distribution or require a prebuilt bundle before attempting the task.
 
-[LiteBox](https://github.com/microsoft/litebox) is a Microsoft-published, MIT-licensed **library OS**
-written in Rust. Instead of a full kernel, an application links against LiteBox, which exposes a
-Linux/rustix-like syscall interface on its "North" side and maps that onto one of several "South"
-platform backends:
+LiteBox currently describes itself as actively evolving, without a stable
+release. Its Windows userland runner targets Windows x86-64, runs a rewritten
+Linux ELF from an in-memory initial filesystem, and does not boot Linux,
+Hyper-V, or WSL.
 
-- **`litebox_runner_linux_on_windows_userland`** — runs unmodified Linux x86-64 ELF binaries directly
-  on Windows, in ordinary Windows userland (Win32 APIs), without booting a Linux kernel or a full
-  Linux VM.
-- Sandboxing Linux applications on Linux itself (reduced syscall surface vs. the host kernel).
-- Running on AMD SEV-SNP confidential-compute hardware.
-- Hosting OP-TEE trusted applications.
-- Running within Linux Virtualization Based Security (LVBS).
-- **`litebox_packager`** — the tool that prepares/rewrites a target ELF binary and its dependencies
-  for one of these runners.
+## Work the escape
 
-**Maturity: pre-release and evolving.** As of this writing LiteBox has not declared a stable release;
-the project's own docs state APIs and interfaces may change as the design matures. Treat every command,
-flag, and exact component name here as a starting point to re-verify against the live repo, not as a
-frozen interface — this file will go stale faster than the code does.
+1. **Map the constraint.** Establish:
+   - Windows architecture;
+   - why native execution, WSL, containers, a VM, and normal installation are
+     unavailable;
+   - the Linux entrypoint and its shared libraries;
+   - required files, stdout/stderr, network, credentials, persistence, TTY, and
+     GPU behavior.
 
-**Security-boundary status: undocumented, unvalidated for the Windows-userland runner.** LiteBox is
-marketed broadly as a "security-focused library OS" that "drastically cuts down the interface to the
-host, reducing attack surface," and the Windows-userland runner reportedly uses an in-memory initial
-filesystem — the absence of a hypervisor does *not* by itself mean there's no boundary; a userland
-sandbox can still constrain the syscall/memory/filesystem interface meaningfully. But the official docs
-don't publish a threat model for this specific runner, so neither "it's as strong as the hardware-backed
-targets" nor "it provides no real isolation" is something this skill can back with a primary source.
-Treat the isolation strength of this runner as **unverified** — don't assume it's safe for genuinely
-untrusted/adversarial code until that's confirmed against LiteBox's own documentation or an independent
-security review, and don't assume the opposite either without evidence.
+   Continue when the workload boundary and every input/output channel are
+   explicit. LiteBox is strongest for bounded CPU CLIs. A workload that needs
+   local CUDA, kernel modules, namespaces, arbitrary host mounts, or a rich
+   interactive terminal is a poor candidate.
 
-## When to consider it
+2. **Pin the moving parts.** Read the current upstream source before copying
+   commands. Record the LiteBox commit, target program version, architecture,
+   and dependency source. Never build reproducible automation from floating
+   `main` or an unpinned container tag.
 
-- A Linux-only CLI tool (a compiled binary, not source you can rebuild for Windows) needs to run on a
-  Windows host, and installing WSL2 or enabling Hyper-V is undesirable — e.g. a locked-down or
-  minimal-footprint machine, an environment where virtualization features are disabled by policy, or a
-  CI runner where spinning up a VM per job is too slow/expensive.
-- The workload is small and syscall-simple (a single-purpose encoder/converter/CLI tool is a much
-  better fit than a full application stack) — narrow syscall surface means fewer chances of hitting an
-  unimplemented syscall.
-- Reducing a Linux app's attack surface matters more than raw compatibility, especially via LiteBox's
-  hardware-backed targets (SEV-SNP, LVBS), where isolation is hardware-rooted and easier to reason
-  about. For the Windows-userland runner specifically, treat any attack-surface reduction as a plausible
-  bonus, not a documented guarantee (see the security-boundary status note above).
-- The user explicitly asks about LiteBox, or asks to run a specific Linux binary on Windows without a
-  VM.
+3. **Design the bridges before packaging.** The Windows runner receives a TAR
+   as its initial filesystem; do not assume that an arbitrary host path will
+   appear inside it or that files written there will survive exit.
 
-## When *not* to use it
+   Prefer, in order:
 
-- WSL2, Hyper-V, or a container already work and there's no concrete reason (footprint, policy,
-  latency) to avoid them — those are mature, broadly-compatible, and don't require pre-verifying
-  syscall coverage per binary.
-- The target binary is large, syscall-diverse, or depends on kernel features (namespaces, complex
-  networking, GPU access, etc.) that a userland syscall-rewriting layer is unlikely to cover completely.
-- Production-critical stability is required and the "no stable release yet, APIs may change" caveat
-  above is disqualifying on its own.
-- The task needs a *confirmed* security boundary against untrusted/adversarial code and only the
-  Windows-userland runner is available — its isolation strength is undocumented (see caveat above), so
-  use a real VM or container sandbox instead unless and until that's independently verified.
-- ARM64 Windows, or any architecture other than x86-64, is a hard requirement — this was not confirmed
-  as supported during this skill's research; check the current repo before assuming otherwise.
+   - stdin/stdout for text;
+   - base64 over stdout for small binary results;
+   - an application-controlled HTTPS/object-storage transfer for large files;
+   - packaging immutable input files into the initial TAR.
 
-## How to use it (general workflow)
+   Pass secrets at runtime through the narrowest supported channel. Never put a
+   Drive credential, Hugging Face token, Colab token, Kaggle token, or private
+   key into a reusable TAR, repository, CI artifact, log, or command transcript.
 
-LiteBox's own docs are the source of truth for exact commands — this is the shape of the workflow, not
-a copy-pasteable script:
+4. **Produce both sides of the bridge.**
+   - On Linux, use `litebox_packager` to discover dependencies, rewrite ELF
+     syscall sites, and create the initial TAR. It can package local ELF files
+     or a public OCI image.
+   - On Windows x86-64, build or obtain
+     `litebox_runner_linux_on_windows_userland.exe`.
 
-1. **Identify the target binary and its shared-library dependencies** (`ldd <binary>` on Linux gives
-   you the dependency closure).
-2. **Package it** with `litebox_packager`, which rewrites the ELF's syscall instructions so they can be
-   intercepted and routed through LiteBox's compatibility layer, bundling the binary with whatever
-   shared libraries it needs.
-3. **Run it** through the appropriate runner crate for your target platform (e.g.
-   `litebox_runner_linux_on_windows_userland` for the Windows-without-Hyper-V case).
-4. **Verify application-level correctness**, not just "it ran without crashing." Syscall coverage may
-   be incomplete — confirm the actual output is correct for your use case (see the worked example
-   below for a concrete, bit-exact way to do this for a deterministic encoder).
-5. **Always keep a native/mature fallback path** or exit code and fall back to it on any packaging,
-   execution, or verification failure. Don't let a LiteBox failure become a hard error in a pipeline
-   that has a perfectly good non-LiteBox path.
+   When the Windows host has no Linux environment, use an authorized,
+   disposable Linux builder such as an existing CI job or temporary cloud
+   runtime, then download only the TAR. A Windows CI job can build the runner
+   when the host also lacks a usable Rust/MSVC toolchain. Do not upload private
+   task inputs merely to bootstrap the generic binaries.
 
-## Worked example: jbig2enc on Windows without Hyper-V
+   Read [the Windows userland workflow](references/windows-userland-workflow.md)
+   before building or running either side.
 
-This scenario motivated writing this skill, and illustrates the decision tree concretely. The
-[`pdf-compression`](../pdf-compression/SKILL.md) skill's `--jbig2` flag calls the `jbig2` Linux binary
-for lossless bitonal PDF compression (see that skill's Licensing and Format Alternatives sections). On
-Linux and macOS that's a normal package-manager install; on Windows, without WSL/Hyper-V, LiteBox is a
-plausible experimental path — but it is **not currently wired into `compress.py`**, and shouldn't be
-until proven out per the checklist below.
+5. **Run the smallest probe.** Start with `--version`, `--help`, or a
+   deterministic one-line transformation. Then exercise, separately:
+   filesystem reads, stdout, DNS/TLS, authentication, WebSockets, and output
+   extraction as required by the real application. A successful process start
+   proves only that the probe ran.
 
-```
-1. Try the native `jbig2` encoder first (Debian/Ubuntu apt, Homebrew, or a native Windows build if one
-   exists) — that remains the primary path everywhere, including Windows.
-2. Only if on Windows x86-64 AND no native install is viable AND enabling Hyper-V/WSL is undesirable,
-   evaluate LiteBox.
-3. Use it only if the jbig2enc Linux ELF and *all* its shared-library dependencies (Leptonica, libpng,
-   libjpeg, libtiff, libwebp, openjpeg, zlib, ...) can actually be packaged and run through
-   litebox_packager + litebox_runner_linux_on_windows_userland.
-4. Mandatory: the resulting JBIG2 stream must still pass the same bit-exact MuPDF roundtrip check the
-   native path uses (see pdf-compression/scripts/compress.py's _verify_and_measure_jbig2).
-5. On any packaging, execution, or verification failure, fall back to CCITT G4 — same as the native
-   path already does when the binary is simply missing.
-6. Do not install or enable Hyper-V to make this work — the point of the Windows-userland runner is
-   that it doesn't need it; if Hyper-V ends up required, WSL2 is the simpler choice instead of LiteBox.
-```
+6. **Grow one capability at a time.** On failure, classify it before changing
+   the package:
+   - missing ELF/shared library or loader;
+   - missing CA certificate, locale, font, profile, or data file;
+   - unsupported syscall or kernel behavior;
+   - incorrect path/environment;
+   - absent input/output bridge;
+   - application-level incompatibility.
 
-**Why this isn't shipped yet:** there is no ready-made LiteBox artifact bundling jbig2enc today.
-Instructing an agent to *evaluate* LiteBox when it looks viable is reasonable; instructing it to
-assemble the whole packaging chain from scratch on every run would trade portability for variability —
-one run's packaged binary might behave differently from another's. This needs a **pinned, reproducible
-build** before it's an operational fallback rather than a hint:
+   Repackage only the missing dependency or change one bridge at a time. Keep
+   the smallest passing probe as a regression check.
 
-- Pinned Dockerfile/OCI image used to build the jbig2enc ELF and its dependency closure.
-- Pinned LiteBox commit (given the "APIs may change" caveat, floating on `main` is not acceptable here).
-- A checked-in packaging script (calling `litebox_packager` with fixed arguments).
-- The SHA-256 of the resulting packaged artifact, checked into the repo or a release, so "the same
-  jbig2 you tested is the jbig2 that runs" is verifiable.
-- A real test run on Windows *without* Hyper-V enabled.
-- A real test proving both the bit-exact roundtrip **and** that the final embedded size actually beats
-  the CCITT G4 fallback (mirroring `pdf-compression`'s own `_g4_embedded_size` comparison). `jbig2enc`
-  is deterministic, so any size divergence from the native-Linux baseline would point to a real bug —
-  an unimplemented/incompatible syscall silently changing behavior, a different build of
-  `jbig2enc`/Leptonica in the packaged artifact, or an outright execution error — not to syscall-
-  translation overhead, which affects latency and resource use, not the bytes a deterministic encoder
-  produces.
+7. **Validate the actual task.** Use the domain skill's completion criteria:
+   veraPDF and page/text checks for PDF/A, OCR page coverage for PaddleOCR,
+   session/upload/download/stop checks for Colab, or kernel push/status/output
+   checks for Kaggle. Never report success from an exit code alone.
 
-Until that exists, treat LiteBox-for-jbig2enc as something to *suggest and evaluate*, not something to
-wire up as an automatic code path.
+8. **Leave a trail.** Record the pinned inputs, build commands, hashes, probes,
+   limitations, and validation result. Cache a working generic bundle when
+   useful, but retain the method so the next agent can rebuild or adapt it.
 
-## Worked example: Ghostscript for PDF/A on locked-down Windows
+## Choose the lesson, not a promise
 
-The [`convert-to-pdfa`](../convert-to-pdfa/SKILL.md) skill uses Ghostscript for
-standards-aware PDF/A generation. On x86-64 Windows without WSL and without
-permission to install the native build, packaging Linux Ghostscript for
-`litebox_runner_linux_on_windows_userland` is a plausible experimental route.
-It is a better LiteBox candidate than a full Python/cloud CLI because it is a
-bounded batch process, but it still depends on shared libraries, fonts,
-`PDFA_def.ps`, an ICC profile and substantial file I/O.
+- Try LiteBox even without a ready-made bundle when the user wants the agent to
+  explore this escape hatch.
+- Stop when evidence shows that the required syscall, local GPU, persistence,
+  or I/O bridge cannot be supplied safely. Explain the exact boundary reached.
+- Prefer a simpler native path when it exists, but do not mistake “not the
+  default” for “not worth attempting.”
+- Treat isolation strength on the Windows-userland runner as unverified for
+  adversarial code unless a current threat model or security review establishes
+  otherwise.
 
-Do not wire it into the converter until a reproducible artifact exists:
+For task-shaped examples, read
+[Ghostscript, Colab CLI, and Kaggle CLI recipes](references/task-recipes.md).
 
-1. Pin the LiteBox commit, Ghostscript version, Linux distribution and all
-   shared-library/font packages.
-2. Package `gs`, its dependency closure, `PDFA_def.ps` and the exact sRGB ICC
-   profile with fixed paths.
-3. Publish or record a SHA-256 for the packaged artifact.
-4. Convert fixtures for PDF/A-1b, PDF/A-2b and PDF/A-3b through both native
-   Linux Ghostscript and LiteBox.
-5. Compare page count, geometry, extracted text and rendered pages.
-6. Require veraPDF conformance for the requested part/level. An XMP declaration
-   or a zero exit code is not sufficient validation.
-7. Test paths containing spaces and non-ASCII characters and confirm temporary
-   files do not leak outside the intended working directory.
-8. Fall back to native Windows Ghostscript, WSL or a remote Colab/Kaggle job on
-   any packaging, execution or validation failure.
+## Sources
 
-Until those checks pass on a Windows host without Hyper-V, describe this as a
-candidate solution, not a supported backend.
-
-## Limitations (general)
-
-- Pre-1.0, evolving API — pin a specific commit for anything beyond one-off experimentation.
-- The Windows-userland runner needs the target ELF pre-processed by `litebox_packager`; you can't just
-  point it at an arbitrary Linux binary with zero preparation.
-- Syscall coverage is not guaranteed to be complete — verify the actual application output, not just
-  successful execution.
-- Isolation strength of the Windows-userland runner specifically is undocumented/unvalidated (see
-  caveat above) — don't assume it's either as strong as the hardware-backed targets or provides no
-  real boundary at all; verify before relying on it for untrusted code.
-- x86-64 Windows was the only architecture found described in this skill's research; other
-  architectures (ARM64) were not confirmed either way — check the current repo.
-- Should never fully replace a working native install or a mature virtualization path (WSL2, Hyper-V,
-  containers) — it's a narrow-case fallback, not a general substitute.
-
-## References
-
-- Canonical source, always check for current specifics: https://github.com/microsoft/litebox
-- Worked-example context: [`pdf-compression/SKILL.md`](../pdf-compression/SKILL.md) (Licensing and
-  Format Alternatives sections)
+- https://github.com/microsoft/litebox
+- https://github.com/microsoft/litebox/tree/main/litebox_packager
+- https://github.com/microsoft/litebox/tree/main/litebox_runner_linux_on_windows_userland

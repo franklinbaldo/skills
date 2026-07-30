@@ -2,14 +2,23 @@
 
 ## Supported host
 
-The official CLI supports Linux and macOS. On Windows, prefer WSL:
+The official CLI supports Linux and macOS. The directly installed
+`google-colab-cli` 0.6.0 is known not to run on Windows because it imports the
+Unix-only `termios` and `tty` modules. Do not spend a task retrying the direct
+Windows command. Recheck this conclusion only when a newer release explicitly
+adds Windows support.
+
+On Windows, use WSL when available:
 
 ```powershell
 wsl -d Debian -- bash -lc 'uvx --from google-colab-cli colab version'
 ```
 
-Without WSL, use the compatibility launcher documented in
-`windows-no-admin.md`, limited to non-interactive commands.
+Without WSL, choose native Kaggle or follow the
+[`litebox`](../../litebox/SKILL.md) lesson to package the Linux Colab client.
+The compatibility launcher documented in `windows-no-admin.md` is a deliberate
+shim limited to non-interactive commands; it does not make the direct Windows
+installation compatible.
 
 ## Authentication
 

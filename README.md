@@ -21,7 +21,7 @@ Each skill is installed as a directory under `~/.claude/skills/<name>/`, with it
 | [free-gpu](free-gpu/SKILL.md) | Run GPU workloads through Colab or Kaggle CLIs, including native Windows without WSL or administrator rights. |
 | [juris-tjro](juris-tjro/SKILL.md) | Search TJRO (Rondonia court) case law via the JURIS system. |
 | [legal-argument-lean](legal-argument-lean/SKILL.md) | Formalize Brazilian legal arguments (CPC-anchored vicios) in Lean 4. |
-| [litebox](litebox/SKILL.md) | When and how to consider Microsoft's experimental LiteBox for sandboxing/running Linux binaries on Windows without WSL/Hyper-V. |
+| [litebox](litebox/SKILL.md) | Adapt Linux-only CLI workflows to locked-down Windows with LiteBox when native Linux, WSL, containers, VMs, or admin installation are unavailable. |
 | [llm-work-via-subagents](llm-work-via-subagents/SKILL.md) | Do bulk LLM work with parallel subagents instead of API-key scripts. |
 | [meme-image](meme-image/SKILL.md) | Generate image memes via the memegen.link API for markdown content. |
 | [notebooklm-processos](notebooklm-processos/SKILL.md) | Draft grounded NotebookLM question blocks to verify case-file facts before drafting. |

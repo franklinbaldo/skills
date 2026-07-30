@@ -15,18 +15,20 @@ capacity vary.
 | --- | --- |
 | Linux or macOS | Colab CLI for one-shot or interactive jobs |
 | Windows with WSL | Colab CLI inside WSL |
-| Windows without WSL/admin | Kaggle nativo; launcher Colab não interativo; LiteBox somente com artefato previamente validado |
+| Windows without WSL/admin | Kaggle nativo; para Colab, adaptar o cliente Linux com LiteBox |
 | Long asynchronous job | Kaggle Kernel |
 | Fast iteration and file transfer | Named Colab session |
 
-The official Colab CLI currently supports Linux and macOS, not Windows. The
-bundled `scripts/colab_windows.py` only bypasses its unconditional Unix TTY
-imports for non-interactive commands; it is a compatibility layer, not official
-Windows support. Fall back to Kaggle if it breaks after a CLI update.
-LiteBox can host packaged Linux programs in Windows userland, but it does not
-provide a GPU: it would only host the local Colab client while computation
-remains remote. Read [references/litebox.md](references/litebox.md) before
-considering that experimental route.
+The directly installed `google-colab-cli` 0.6.0 is known not to run on Windows:
+it imports Unix-only `termios` and `tty` modules. Do not instruct the agent to
+retry the direct Windows command. Reconsider only after a newer release's
+source or release notes explicitly add Windows support.
+
+The bundled `scripts/colab_windows.py` is a deliberate shim for selected
+non-interactive commands, not native compatibility and not a reason to probe
+the broken direct route. For a general Linux-client path without WSL, use the
+[`litebox`](../litebox/SKILL.md) adaptation lesson. LiteBox hosts only the local
+client; computation and GPU allocation remain remote in Colab.
 
 ## Install without administrator rights
 
@@ -69,8 +71,8 @@ uvx --from google-colab-cli colab stop -s gpu-job
 
 Wrap named-session automation in cleanup so failures still call `colab stop`.
 Do not use `--keep` unless the user explicitly wants a persistent session.
-Read [references/colab.md](references/colab.md) for Windows/WSL commands,
-authentication and the compatibility launcher.
+Read [references/colab.md](references/colab.md) for WSL commands,
+authentication, the known Windows incompatibility, and the limited shim.
 
 ## Kaggle workflow
 
