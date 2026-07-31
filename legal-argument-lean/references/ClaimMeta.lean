@@ -3,16 +3,19 @@
   CLAIM METADATA — proveniência e status de claims da Camada 5
   ============================================================
 
+  Stability: experimental
+
   Módulo standalone (sem imports). Define dois tipos para
   anotar axiomas da Camada 5 (fatos do caso) com metadados
   de rastreabilidade.
 
-  Uso é OPCIONAL: as anotações não afetam derivabilidade.
-  Seu valor está na auditoria: `#print axioms` não distingue
-  axioma sólido de axioma pendente — este módulo torna a
-  diferença explícita no arquivo Lean.
+  As anotações não afetam derivabilidade. Seu valor está na
+  auditoria: `#print axioms` não distingue axioma sólido de
+  axioma pendente — este módulo torna a diferença explícita no
+  arquivo Lean.
 
-  Importar quando o caso envolver:
+  Uso obrigatório em novos casos do pipeline complexo. No workflow
+  direto, importar quando o caso envolver:
   - Claims com fonte incerta ou inferida
   - Workflow de inferência regressiva (acórdão → documentos
     anteriores)
@@ -61,8 +64,18 @@ inductive StatusClaim
   | contingente
   | pendente
 
+/-- Localização auditável da claim no material do caso. Strings são
+    intencionais: sistemas judiciais variam entre página, folha, ID,
+    evento, item e timestamp. -/
+structure Localizador where
+  documento : String
+  localizacao : String
+  autorOuOrgao : String
+  deriving Repr
+
 /-- Associa um axioma da Camada 5 à sua proveniência.
-    Uso opcional; não afeta derivabilidade.
+    Obrigatório em novos casos do pipeline complexo; não afeta
+    derivabilidade.
 
     Exemplo de uso em um arquivo de peça:
     ```lean
@@ -74,10 +87,51 @@ inductive StatusClaim
 axiom TemProveniencia : ∀ {P : Prop}, P → Proveniencia → Prop
 
 /-- Associa um axioma da Camada 5 ao seu status de necessidade.
-    Uso opcional; não afeta derivabilidade.
+    Obrigatório em novos casos do pipeline complexo; não afeta
+    derivabilidade.
 
     Axiomas com `StatusClaim.pendente` têm ônus argumentativo
     adicional na Fase 3 (análise subjetiva). -/
 axiom TemStatus : ∀ {P : Prop}, P → StatusClaim → Prop
+
+/-- Associa um axioma da Camada 5 ao documento e ao ponto exato
+    de onde foi extraído. -/
+axiom TemLocalizador : ∀ {P : Prop}, P → Localizador → Prop
+
+/- Metadados próprios de premissas STEEL_n. -/
+
+/-- Natureza da reconstrução caridosa do passo ausente. -/
+inductive TipoReconstrucao
+  | textual
+  | reconstrutiva
+  | puramenteCaridosa
+
+/-- Grau de apoio material encontrado para a premissa reconstruída. -/
+inductive StatusSuporte
+  | semSuporte
+  | plausivel
+  | ancoradaNosAutos
+
+/-- Ficha auditável de uma premissa STEEL_n.
+
+    - `atribuivelA`: ator cuja posição precisaria aceitar a premissa.
+    - `baseTextual`: trecho/localizador que pode sustentá-la; usar
+      "nenhuma identificada" quando inexistente.
+    - `tipo`: textual, reconstrutiva ou puramente caridosa.
+    - `status`: força do apoio material efetivamente encontrado.
+    - `condicaoFalsificacao`: observação que derrotaria a premissa.
+-/
+structure SteelMeta where
+  atribuivelA : String
+  baseTextual : String
+  tipo : TipoReconstrucao
+  status : StatusSuporte
+  condicaoFalsificacao : String
+  deriving Repr
+
+/-- Associa uma premissa STEEL_n à sua ficha epistemológica.
+    Obrigatório para novos steelmans. Não torna a premissa mais
+    verdadeira nem altera derivabilidade. -/
+axiom TemSteelMeta : ∀ {P : Prop}, P → SteelMeta → Prop
 
 end ClaimMeta
