@@ -1,7 +1,30 @@
+# Lean compilation outputs and packages
 *.olean
+.lake/
+lake-packages/
+lakefile.olean
+
+# Python artifacts
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
 .venv/
-.ruff_cache/
+venv/
+env/
+.env
+
+# Node/JS artifacts
 node_modules/
-suno-profile/scripts/.chrome-login-profile/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.svelte-kit/
+.astro/
+dist/
+
+# OS/System files
+.DS_Store
+Thumbs.db
