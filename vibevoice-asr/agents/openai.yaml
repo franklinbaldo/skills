@@ -1,0 +1,4 @@
+interface:
+  display_name: "VibeVoice ASR"
+  short_description: "Transcreva no Colab com BitNet CPU ou modelo 7B em GPU"
+  default_prompt: "Use $vibevoice-asr para transcrever este áudio no Colab, escolhendo conscientemente entre BitNet e o modelo completo."
