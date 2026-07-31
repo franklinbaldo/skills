@@ -35,7 +35,7 @@ Each skill is installed as a directory under `~/.claude/skills/<name>/`, with it
 | [suno-profile](suno-profile/SKILL.md) | Manage Franklin's Suno profile as a whole — bio, tags, pinned songs, playlists — via an authorized write API, SEO/taste guidance, and a living curation plan. |
 | [text-meme-injection](text-meme-injection/SKILL.md) | Inject text memes (EN and PT-BR) into long-form prose without breaking voice. |
 | [verne-orchestration](verne-orchestration/SKILL.md) | Orchestrate Jules coding sessions via the Verne CLI (uvx verne). |
-| [vibevoice-asr-bitnet](vibevoice-asr-bitnet/SKILL.md) | Transcribe audio with Microsoft's CPU-optimized VibeVoice ASR BitNet through the Colab CLI. |
+| [vibevoice-asr](vibevoice-asr/SKILL.md) | Transcribe audio through Colab CLI with BitNet on CPU or the full VibeVoice ASR 7B model on GPU. |
 
 ## Repo-level scripts
 
