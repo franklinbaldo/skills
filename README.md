@@ -14,13 +14,14 @@ Each skill is installed as a directory under `~/.claude/skills/<name>/`, with it
 
 | Skill | Description |
 | --- | --- |
-| [anonimizacao-documentos](anonimizacao-documentos/SKILL.md) | Anonimização de documentos jurídicos e SEI em duas etapas (tagging + substituição canônica) com validação de 5 invariantes e auditoria adversarial LLM. |
+| [anonimizacao-documentos](anonimizacao-documentos/SKILL.md) | Detect PII with OpenAI Privacy Filter locally or on Colab, review tagged spans, and generate deterministic anonymized Markdown copies. |
 | [convert-to-pdfa](convert-to-pdfa/SKILL.md) | Convert PDFs to PDF/A-1b, PDF/A-2b, or PDF/A-3b and validate the archival result. |
 | [datajud](datajud/SKILL.md) | Query case metadata (docket + movements) from any Brazilian court via the CNJ DataJud public API. |
 | [franklin-blog](franklin-blog/SKILL.md) | Write posts for Franklin's blog, preserving his voice via draft-and-react workflow. |
+| [free-gpu](free-gpu/SKILL.md) | Run GPU workloads through Colab or Kaggle CLIs, including native Windows without WSL or administrator rights. |
 | [juris-tjro](juris-tjro/SKILL.md) | Search TJRO (Rondonia court) case law via the JURIS system. |
 | [legal-argument-lean](legal-argument-lean/SKILL.md) | Formalize Brazilian legal arguments (CPC-anchored vicios) in Lean 4. |
-| [litebox](litebox/SKILL.md) | When and how to consider Microsoft's experimental LiteBox for sandboxing/running Linux binaries on Windows without WSL/Hyper-V. |
+| [litebox](litebox/SKILL.md) | Adapt Linux-only CLI workflows to locked-down Windows with LiteBox when native Linux, WSL, containers, VMs, or admin installation are unavailable. |
 | [llm-work-via-subagents](llm-work-via-subagents/SKILL.md) | Do bulk LLM work with parallel subagents instead of API-key scripts. |
 | [meme-image](meme-image/SKILL.md) | Generate image memes via the memegen.link API for markdown content. |
 | [notebooklm-processos](notebooklm-processos/SKILL.md) | Draft grounded NotebookLM question blocks to verify case-file facts before drafting. |

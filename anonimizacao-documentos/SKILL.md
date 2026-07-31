@@ -1,107 +1,152 @@
 ---
 name: anonimizacao-documentos
-description: |
-  Anonimiza documentos jurídicos e administrativos (do SEI, PJe ou relatórios) segundo o padrão OKF/LGPD
-  desenvolvido no projeto. Marca PIIs com a tag `<pii tipo='...' ref='...'>` e as substitui deterministicamente por
-  marcadores canônicos (`_NOME_PESSOA_1_`, `_CPF_1_`, `_MATRICULA_SERVIDOR_1_`, `_RG_1_`, `_PROCESSO_JUDICIAL_1_`,
-  `_DATA_NASCIMENTO_1_`, `_DADO_SAUDE_1_`), validando 5 invariantes mecânicos e rodando auditoria adversarial com LLM.
+description: Anonimiza textos e documentos Markdown jurídicos ou administrativos para publicação, revisão ou formação de corpus. Use para detectar PII com OpenAI Privacy Filter localmente ou em GPU do Google Colab, revisar marcações semânticas, substituir dados por marcadores canônicos e auditar resíduos segundo a política LGPD do projeto.
 ---
 
-# Anonimização de Documentos Jurídicos e Administrativos (Padrão LGPD/OKF)
+# Anonimização de documentos
 
-Esta skill codifica o fluxo completo de anonimização e auditoria adversarial de documentos jurídicos, informações técnicas e pareceres administrativos (SEI/PJe) desenvolvido e validado em produção.
+Trate este fluxo como redução de risco, não como garantia automática de
+anonimização ou conformidade. Preserve o original, mantenha revisão humana e
+registre as limitações da detecção.
 
----
+## Escolher o fluxo
 
-## 🎯 Quando Usar esta Skill
+- Usar `scripts/anonimizar_opf.py` para detectar PII em texto ainda não
+  marcado com `openai/privacy-filter`.
+- Usar `scripts/anonimizar.py` quando o texto já contém tags `pii` revisadas e
+  só falta gerar marcadores determinísticos.
+- Usar GPU local ou Colab para o modelo. Não iniciar OPF neste laptop sem GPU.
+  O modo CPU existe apenas como override explícito para diagnóstico e pode ser
+  impraticavelmente lento.
+- Para documentos jurídicos, governamentais, médicos ou de RH, revisar
+  manualmente tanto falsos negativos quanto remoções excessivas.
 
-Dispare esta skill sempre que o usuário pedir:
-- "Anonimize estes documentos/pareceres"
-- "Higienize o processo X para LGPD/dados abertos"
-- "Remova PIIs deste arquivo mantendo o contexto jurídico"
-- "Prepare o corpus de documentos para publicação sem dados pessoais"
-- "Rode o pipeline de anonimização e validação de invariantes"
+O modelo padrão reconhece apenas oito classes: número de conta, endereço,
+e-mail, pessoa, telefone, URL, data privada e segredo. Ele é principalmente
+treinado em inglês. O script complementa o modelo com padrões mecânicos para
+CPF e número CNJ, mas RG, matrícula, OAB, saúde e outras categorias brasileiras
+continuam exigindo revisão ou ajuste específico.
 
----
+## Fluxo recomendado
 
-## 📐 Padrão de Anonimização em Duas Etapas (Two-Pass Architecture)
+1. Extrair o documento para Markdown ou texto sem sobrescrever o original.
+2. Rodar a detecção assistida em uma GPU. Sem GPU local, usar diretamente o
+   wrapper Colab da seção seguinte. Em uma máquina com NVIDIA configurada:
 
-### 1. Etapa de Marcação (Tagging Pass)
-Envolve todas as entidades identificáveis no texto com marcadores semânticos `<pii tipo='...' ref='...'>`:
+   ```bash
+   uv run --no-project \
+     --with "opf @ git+https://github.com/openai/privacy-filter.git@f7f00ca7fb869683eb732c010299d901457f19c3" \
+     python <skill-dir>/scripts/anonimizar_opf.py \
+     --input documento.md --device cuda
+   ```
 
-```xml
-O requerimento formulado por <pii tipo='nome_pessoa' ref='1'>JOÃO DA SILVA</pii>, 
-portador do CPF <pii tipo='cpf' ref='1'>123.456.789-00</pii> e RG <pii tipo='rg' ref='1'>123456 SSP/RO</pii>...
-```
+3. Inspecionar `documento.tagged.md`. Corrigir spans, categorias e referências
+   antes de liberar a versão anonimizada.
+4. Gerar novamente a versão determinística após qualquer correção:
 
-**Tipos de PII Suportados:**
-- `nome_pessoa`: Requerentes, falecidos, dependentes, menores (incluindo iniciais `T. D. R.`), advogados, procuradores, auditores e signatários.
-- `cpf`: CPFs formatados (`123.456.789-00`), parcialmente mascarados pelo SEI (`***.455.532.**`) ou de 11 dígitos em rodapés (`Criado por 03579099256`).
-- `rg`: Números de RG com ou sem órgão emissor (`18052197 SSP/SP`, `268877SSP/RO`).
-- `matricula_servidor`: Matrículas funcionais completas (`300017166`) ou parcialmente mascaradas pelo SEI (`******249`).
-- `processo_judicial`: Números CNJ de processos judiciais (`7005781-78.2017.8.22.0007`).
-- `data_nascimento`: Datas de nascimento ou falecimento completas (`nasceu em 18 de maio de 1959`).
-- `dado_saude`: Diagnósticos médicos, CIDs e laudos (`CID10: M500`, `Transtorno do disco cervical`).
-- `oab`: Número da OAB de advogados (`OAB n. 1046`).
-- `contato` / `endereco`: Endereços particulares de rua/bairro e telefones pessoais.
+   ```bash
+   uv run --no-project python <skill-dir>/scripts/anonimizar.py \
+     --input documento.tagged.md
+   ```
 
-### 2. Etapa de Substituição Determinística (Replacement Pass)
-Substitui as tags pelos marcadores canônicos em caixa alta:
-- `<pii tipo='nome_pessoa' ref='1'>JOÃO DA SILVA</pii>` $\rightarrow$ `_NOME_PESSOA_1_`
-- `<pii tipo='cpf' ref='1'>123.456.789-00</pii>` $\rightarrow$ `_CPF_1_`
-- `<pii tipo='processo_judicial' ref='1'>...</pii>` $\rightarrow$ `_PROCESSO_JUDICIAL_1_`
+5. Revisar `documento.anon.md` contra o original. Procurar especialmente
+   nomes parciais, iniciais, rodapés, URLs, metadados, RG, matrícula, OAB,
+   diagnósticos e combinações que permitam reidentificação.
 
-Os arquivos anonimizados são salvos em paralelo com extensão **`.anon.md`**, garantindo a rastreabilidade e a não-destruição do original.
+Os relatórios `.opf-report.json` contêm somente contagens, configuração e
+avisos; não persistir os spans originais com PII.
 
----
+## Google Colab CLI com GPU
 
-## 🏛️ Fronteira LGPD: O que REMOVER vs O que MANTER
-
-### ❌ REMOVER (Dados Pessoais / PII):
-- Nomes próprios de pessoas físicas e iniciais.
-- CPFs, RGs, Matrículas e Processos Judiciais de partes/interessados.
-- Datas exatas de nascimento/óbito de servidores e dependentes.
-- Endereços residenciais particulares, telefones e e-mails pessoais.
-- Diagnósticos médicos e CIDs específicos.
-
-### 📌 MANTER (Contexto Jurídico de Acesso Aberto):
-- **Municípios e Estados**: `Porto Velho`, `Vilhena`, `Cacoal`, `Guarapari/ES` *(Município é dado geográfico de interesse público)*.
-- **Órgãos e Secretarias**: `SEDUC`, `SESAU`, `IPERON`, `SEJUS`, `HICD`.
-- **Processos Administrativos / SEI**: `0016.004052/2023-81` *(Números NUP de processos públicos)*.
-- **Precedentes de Tribunais Superiores**: `REsp 1.767.955/RJ`, `ARE 1.246.685/STF`, `RE 630.501/RS` *(Fundamentação de direito pública)*.
-
----
-
-## 🛡️ Os 5 Invariantes Mecânicos Obligatórios (`anonimizar.py`)
-
-Todo documento anonimizado **DEVE** satisfazer 100% dos 5 invariantes mecânicos:
-
-1. **Invariante 1 (Extensão Paralela `.anon.md`)**: O arquivo gerado tem extensão `.anon.md` e preserva o original intacto.
-2. **Invariante 2 (Estabilidade do Fingerprint P2)**: A canonicalização de campos operacionais históricos (`status_operacional`) é feita antes do hash para não alterar a impressão digital.
-3. **Invariante 3 (Isolamento de Tags - Zero Aninhamento)**: Nenhuma tag `<pii>` pode ficar contida dentro de outra tag `<pii>`.
-4. **Invariante 4 (Fidelidade do Hash e Frontmatter)**: A estrutura em Markdown, títulos, tabelas e metadados do documento mantêm fidelidade exata.
-5. **Invariante 5 (Invariante de Resíduos / Consistência Global)**: Se uma PII é anonimizada em um ponto do documento, ela **NÃO PODE** ser esquecida em outro trecho do mesmo texto (ex.: URLs, tabelas ou notas de rodapé).
-
----
-
-## 🤖 Auditoria Adversarial com Múltiplos Prompts LLM
-
-Após a anonimização mecânica, o corpus concatenado é submetido a auditoria adversarial contra modelos LLM (Gemini 2.5 Flash / 2.0 Flash) utilizando dois papéis especializados:
-
-1. **Prompt `Strict_Hunter`**: Atua como caçador hiper-rigoroso procurando nomes parciais, iniciais, idades de menores e dados de contato residuais.
-2. **Prompt `Forensic_LGPD`**: Atua como perito forense de LGPD buscando vulnerabilidades de reidentificação por combinação de metadados ou vazamentos em rodapés.
-
----
-
-## 🚀 Como Executar o Pipeline
+Executar a partir do WSL onde `colab` está autenticado:
 
 ```bash
-# 1. Executar a marcação e substituição determinística dos documentos
-uv run python scripts/anonimizar.py --input "caminho/para/pasta_md"
-
-# 2. Validar os 5 invariantes mecânicos
-uv run python scripts/process_pii_batch.py
-
-# 3. Executar a auditoria adversarial concatenada via Gemini
-uv run --with litellm python scripts/auditar_pii.py
+bash <skill-dir>/scripts/run_colab_opf.sh documento.md ./documento
 ```
+
+Este é o caminho padrão quando a máquina local não tem GPU. O wrapper cria uma
+sessão T4, instala o pacote oficial com `uv`, envia um único
+arquivo, baixa os resultados e encerra a VM. A entrada é enviada para a
+infraestrutura do Google; obter autorização antes de usar o Colab com material
+sigiloso ou restrito.
+
+O `google-colab-cli` 0.6.0 instalado diretamente no Windows é sabidamente
+incompatível porque importa os módulos Unix `termios` e `tty`. Não mandar o
+agente repetir esse caminho. Sem WSL, consultar
+[`free-gpu`](../free-gpu/SKILL.md): usar Kaggle nativo ou adaptar o cliente
+Linux do Colab pela aula [`litebox`](../litebox/SKILL.md).
+
+O wrapper PowerShell abaixo usa deliberadamente um shim limitado a comandos
+não interativos; ele não é uma instalação Windows nativa:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File `
+  <skill-dir>\scripts\run_colab_opf.ps1 `
+  -InputPath documento.md -OutputPrefix .\documento
+```
+
+Usar esse wrapper somente quando o fluxo escolher explicitamente o shim. Para
+uma adaptação geral do cliente Linux, seguir a
+[receita Colab do LiteBox](../litebox/references/task-recipes.md).
+
+O checkpoint é público e não requer token. Se `HF_TOKEN` estiver salvo nos
+Colab Secrets, o script tenta lê-lo com `google.colab.userdata` sem imprimir ou
+persistir o valor. Não colocar tokens em argumentos, notebooks, scripts ou no
+Google Drive.
+
+Para reutilizar o checkpoint entre sessões, montar o Drive de forma explícita:
+
+```bash
+COLAB_DRIVE_CACHE=1 \
+  bash <skill-dir>/scripts/run_colab_opf.sh documento.md ./documento
+```
+
+Isso usa a autenticação OAuth do Drive, não um segredo contendo credenciais do
+Drive. O primeiro uso ainda baixa o modelo e grava uma cópia em
+`MyDrive/.cache/openai/privacy-filter`; em sessões posteriores, o script usa
+essa cópia. Medir antes de manter essa opção: ler vários gigabytes do Drive
+pode não ser mais rápido que baixar o checkpoint.
+
+## Política de substituição
+
+Marcar spans revisados neste formato:
+
+```xml
+<pii tipo='nome_pessoa' ref='1'>JOÃO DA SILVA</pii>
+<pii tipo='cpf' ref='1'>123.456.789-00</pii>
+```
+
+O passe determinístico gera `_NOME_PESSOA_1_`, `_CPF_1_` e equivalentes.
+Repetições com o mesmo tipo e `ref` recebem o mesmo marcador. Não aninhar tags.
+
+Remover, conforme a finalidade e base legal:
+
+- nomes e iniciais de pessoas físicas;
+- CPF, RG, matrícula, conta e identificadores de partes;
+- endereço, telefone, e-mail e URL privada;
+- datas pessoais, saúde, segredos e credenciais;
+- números CNJ que identifiquem partes ou permitam reidentificação.
+
+Não remover automaticamente municípios, órgãos públicos, processos
+administrativos públicos ou precedentes apenas por parecerem identificadores.
+A decisão depende da finalidade, do acesso e do risco de combinação.
+
+## Auditoria externa opcional
+
+`scripts/auditar_pii.py` envia o texto a um provedor LLM. Usar somente com
+autorização explícita para a transferência a terceiro e nunca tratar a resposta
+como prova de ausência de PII. O fluxo local com OPF e revisão humana é o
+padrão.
+
+## Validação mínima
+
+- Confirmar que o original permanece intacto.
+- Confirmar que não restaram tags abertas, fechadas sem par ou aninhadas.
+- Revisar cada span do `.tagged.md` e cada marcador do `.anon.md`.
+- Executar busca mecânica por identificadores brasileiros conhecidos.
+- Informar modelo, dispositivo, arquivos produzidos e limitações.
+
+Referências oficiais:
+
+- <https://huggingface.co/openai/privacy-filter>
+- <https://github.com/openai/privacy-filter>

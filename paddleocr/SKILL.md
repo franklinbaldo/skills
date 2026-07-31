@@ -18,6 +18,9 @@ device, timings, page count, and confidence. Prefer GPU for multi-page work.
      warning that CPU is much slower.
    - No local GPU and a multi-page document: prefer
      `scripts/run_colab.sh`, which creates and releases a Colab GPU.
+   - Locked-down Windows without WSL: do not invoke the known-incompatible
+     native Colab CLI. Consult [`litebox`](../litebox/SKILL.md) to adapt its
+     Linux client; PaddleOCR still runs on the remote Colab GPU.
 3. Read [references/installation.md](references/installation.md) before the
    local branch or when diagnosing CUDA/package compatibility.
 
@@ -31,6 +34,11 @@ On Windows, invoke the wrapper from WSL:
 cd /mnt/c/path/to/skills/paddleocr
 bash scripts/run_colab.sh /mnt/c/path/document.pdf /mnt/c/path/document-ocr.md
 ```
+
+The directly installed `google-colab-cli` 0.6.0 does not run on Windows because
+it imports Unix-only `termios` and `tty`. Without WSL, use the
+[`litebox` Colab recipe](../litebox/references/task-recipes.md); do not direct
+the agent to retry the native package.
 
 Optional variables:
 

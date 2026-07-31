@@ -78,6 +78,13 @@ available:
 - Windows: install the official 64-bit Ghostscript build and add
   `gswin64c.exe` to `PATH`, or install `ghostscript` inside WSL.
 
+On locked-down x86-64 Windows without WSL or permission to install software,
+consult the [`litebox`](../litebox/SKILL.md) adaptation lesson and its
+[Ghostscript recipe](../litebox/references/task-recipes.md). It teaches the
+agent to package Linux Ghostscript, bridge the source and result, and validate
+the PDF/A output. LiteBox changes how Ghostscript runs; it does not relax any
+conformance check.
+
 For normative validation, install the official Java-based veraPDF CLI and add
 `verapdf` (`verapdf.bat` on Windows) to `PATH`. `uvx pdfa-parser` is a
 third-party Alpha wrapper, not the official veraPDF distribution; do not use it
