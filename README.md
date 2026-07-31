@@ -14,7 +14,6 @@ Each skill is installed as a directory under `~/.claude/skills/<name>/`, with it
 
 | Skill | Description |
 | --- | --- |
-| [anonimizacao-documentos](anonimizacao-documentos/SKILL.md) | Anonimização de documentos jurídicos e SEI em duas etapas (tagging + substituição canônica) com validação de 5 invariantes e auditoria adversarial LLM. |
 | [convert-to-pdfa](convert-to-pdfa/SKILL.md) | Convert PDFs to PDF/A-1b, PDF/A-2b, or PDF/A-3b and validate the archival result. |
 | [datajud](datajud/SKILL.md) | Query case metadata (docket + movements) from any Brazilian court via the CNJ DataJud public API. |
 | [franklin-blog](franklin-blog/SKILL.md) | Write posts for Franklin's blog, preserving his voice via draft-and-react workflow. |
