@@ -1,0 +1,5 @@
+interface:
+  display_name: "PaddleOCR"
+  short_description: "OCR local ou no Colab com GPU e CPU"
+  default_prompt: "Use $paddleocr para extrair este PDF em Markdown e medir o desempenho."
+

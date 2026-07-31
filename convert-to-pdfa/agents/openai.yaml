@@ -1,0 +1,4 @@
+interface:
+  display_name: "Convert to PDF/A"
+  short_description: "Convert and validate archival PDF/A files"
+  default_prompt: "Use $convert-to-pdfa to convert this PDF into a validated PDF/A copy."

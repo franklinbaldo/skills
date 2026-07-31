@@ -7,6 +7,10 @@ description: >-
 
 # PDF Compression
 
+For PDF/A or ISO 19005 conversion, use
+[`convert-to-pdfa`](../convert-to-pdfa/SKILL.md). Compression and archival
+conformance are separate workflows.
+
 ## Overview
 This skill allows the agent to compress and optimize large, scanned, or image-heavy PDF files. It works by extracting images from the PDF, downscaling them to a reasonable resolution for reading, and re-encoding them with high-efficiency formats (specifically 1-bit CCITT Group 4 TIFF for black & white text, or compressed JPEG for grayscale and color images).
 
