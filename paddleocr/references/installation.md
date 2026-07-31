@@ -63,4 +63,3 @@ The current official references are:
 - <https://www.paddleocr.ai/main/en/version3.x/pipeline_usage/OCR.html>
 
 Check them before changing pinned Paddle or CUDA versions.
-
