@@ -9,8 +9,7 @@ description: |
   template populated with custom text. Also use when adding visual rhythm
   to a long post — the screen heuristic below codifies how often. Do not use
   this for SVG illustrations, diagrams, or visual explainers — those are
-  different (frontend-design, or the SVG guidance in franklin-essay, a
-  separate optional skill that may not be installed). This skill is
+  different (frontend-design, franklin-essay's SVG section). This skill is
   specifically for the recognizable meme templates that carry humor in their
   format.
 ---
@@ -70,21 +69,25 @@ That element doesn't have to be a meme. It can be:
 - a section header
 
 But it has to be *something* — a moment where the reading eye gets a
-break before the next paragraph block. Mobile is the binding
-constraint — desktop fits more words per screen, but design for the
-tighter reader. Posts that violate this rhythm (walls of prose for
-800+ words) feel enfadonhos on mobile no matter how good the writing.
-Posts that overdo it (visual every 100 words without breathing room)
-feel like content marketing.
+break before the next paragraph block. Posts that violate this rhythm
+(walls of prose for 800+ words) feel enfadonhos on mobile no matter
+how good the writing. Posts that overdo it (visual every 100 words
+without breathing room) feel like content marketing.
 
-For a 2,000-word post, the 400–500-word cadence means ~4–5 visual
-rests; for 2,500 words, ~5–6. This is the same cadence the
-text-meme-injection skill uses for inline memes in non-serious
-registers — the two skills share one rhythm. Image memes are heavier
-than other rest types and should account for roughly 1/4 to 1/3 of
-the rests in a meme-friendly register; the remaining rests are text
-memes, diagrams, SVGs, maps, footnotes, pull quotes, and section
-headers.
+The screen heuristic, as a rule of thumb:
+
+> **Roughly every 200 words of prose, the reader should hit a visual
+> rest before the next paragraph block.**
+
+200 words is approximately one mobile screen of comfortable reading.
+On desktop the count is higher per screen, but mobile is the binding
+constraint — design for the tighter reader.
+
+For a 2,000-word post, that means ~8–10 visual rests. For 2,500
+words, ~10–12. Image memes are heavier than other rest types and
+should account for roughly 1/4 to 1/3 of the rests in a meme-friendly
+register; the remaining rests are text memes, diagrams, SVGs, maps,
+footnotes, pull quotes, and section headers.
 
 ## Default register
 
@@ -194,15 +197,14 @@ https://api.memegen.link/images/cmm/Sócrates_was_the_first_red-teamer.png?width
 The memegen.link template catalog grows. New templates appear; old
 ones occasionally get reorganized. Hardcoded lists go stale. **Always
 read the full live catalog before choosing a template — every time,
-not only when you're unsure one exists.** The shortlist reference
-file is a memory aid, not the menu, and memory is exactly where
+not only when you're unsure one exists.** The shortlist further down
+is a memory aid, not the menu, and memory is exactly where
 template-default bias lives: the reflex reaches for the half-dozen
 templates that come to mind, and "comes to mind" is the bias, not a
-fit signal. Reading the full list first puts the non-obvious
-templates back in play.
+fit signal. Reading all ~215 first puts the non-obvious templates
+back in play.
 
-Full list (a couple hundred templates; always read the live catalog
-for the current list):
+Full list (~210 templates as of mid-2026):
 
 ```bash
 curl -s https://api.memegen.link/templates/ | python3 -c "
@@ -244,14 +246,14 @@ doesn't match (e.g., they say "expanding brain" → try `gb`; they say
 
 ## Draw against your defaults
 
-Reading the catalog is necessary but not sufficient. Even with the
-full couple-hundred-template list in front of you, the hand still
-drifts to the marquee templates (`drake`, `gb`, `tb`, `db`, `fine`,
-`cmm`) — and a post whose central move *is* a reject/prefer binary
-will pull `drake` like a magnet, which is exactly when the obvious
-choice is least examined. So after reading the catalog and before
-settling on a template, **draw a random handful and look at them.**
-The draw is mandatory to *perform*. It is never mandatory to *use*.
+Reading the catalog is necessary but not sufficient. Even with all
+215 in front of you, the hand still drifts to the marquee templates
+(`drake`, `gb`, `tb`, `db`, `fine`, `cmm`) — and a post whose central
+move *is* a reject/prefer binary will pull `drake` like a magnet,
+which is exactly when the obvious choice is least examined. So after
+reading the catalog and before settling on a template, **draw a random
+handful and look at them.** The draw is mandatory to *perform*. It is
+never mandatory to *use*.
 
 ```bash
 curl -s https://api.memegen.link/templates/ | python3 -c "
@@ -265,11 +267,19 @@ for t in random.sample(d, 12):
 For each drawn template ask one question only: *does it carry a real
 beat in this specific post?* Most won't — a draw of 12 might yield two
 fits or zero, and that is the expected outcome, not a failed draw.
-Never use a template just because it came up; function-first still
-governs, so if the beat is a clean comparison and `drake` carries it
-best, `drake` wins even against everything the draw surfaced. When
-presenting options, report the draw honestly — say which drawn
-templates fit and which didn't; the discards show the search was real.
+
+- **Drawn ≠ obligatory.** Never use a template because it came up.
+  Forcing a drawn template that doesn't fit is worse than ignoring the
+  draw entirely — it is the precise failure the draw is meant to
+  prevent, arrived at from the other side.
+- **Function-first still governs.** If the beat is a clean comparison
+  and `drake` carries it best, `drake` wins — even against everything
+  the draw surfaced. The draw exists to guarantee the alternatives
+  were *considered*, not to override fit.
+- **Report the draw honestly.** When presenting options, say which
+  drawn templates fit and which didn't. The discards are signal: they
+  show the search was real, and they stop "I drew it" from quietly
+  becoming "so I used it."
 
 The payoff is debiasing, not randomness. A draw that ends with the
 obvious template is a success *if* you confirmed it beat the
@@ -277,15 +287,74 @@ alternatives; a draw that surfaces a better non-obvious fit — `rollsafe`
 over `drake` for a "found the loophole" beat — is the case the rule
 exists for.
 
-## Template shortlist (reference file)
+## Template catalog — known-good shortlist
 
-A non-exhaustive shortlist of known-good templates for essay-style
-posts — grouped by function (comparison and duality, escalation,
-single thesis, reaction, choice, stonks) — lives in
-`references/shortlists.md`, relative to this skill's directory. It is
-a memory aid, not the menu: always treat the live API catalog as
-canonical. For specific cultural references not in the shortlist, run
-the keyword-filtered catalog command above.
+This is a **non-exhaustive** list of templates that are commonly
+useful for essay-style posts. Always treat the live API as canonical;
+this table is a starting point.
+
+### Comparison & duality
+
+| ID | Name | Lines | Best for |
+|---|---|---|---|
+| `drake` | Drakeposting | 2 | Reject A, accept B |
+| `bus` | Two Guys on a Bus | 2 | Surface vs depth |
+| `pooh` | Tuxedo Winnie the Pooh | 2 | Casual vs sophisticated register of same idea |
+| `spiderman` | Spider-Man Pointing | 2 | Two things being identical |
+| `db` / `dg` | Distracted Boyfriend / Girlfriend | 3 | Three-way attraction |
+| `agnes` | Agnes Harkness Winking | 2 | Knowing wink at the cliché |
+
+### Escalation & accumulation
+
+| ID | Name | Lines | Best for |
+|---|---|---|---|
+| `gb` | Galaxy Brain | 4 | Progressive escalation toward absurd |
+| `gru` | Gru's Plan | 4 | Plan with one disastrous step |
+| `right` | Anakin and Padmé | 5 | Idealism → realization → horror |
+| `iw` | Insanity Wolf | 2 | Aggressive escalation |
+| `panik` | Panik Kalm Panik | 3 | Three-stage emotional progression |
+
+### Single thesis
+
+| ID | Name | Lines | Best for |
+|---|---|---|---|
+| `cmm` | Change My Mind | 1 | Provocative thesis stated baldly |
+| `philosoraptor` | Philosoraptor | 2 | Mock-philosophical question |
+| `cbg` | Confession Bear | 2 | Awkward admission |
+| `fwp` | First World Problems | 2 | Trivial complaint as catastrophe |
+
+### Reaction & framing
+
+| ID | Name | Lines | Best for |
+|---|---|---|---|
+| `fine` | This Is Fine | 2 | Catastrophe framed as normal |
+| `fry` | Futurama Fry | 2 | "Not sure if X or Y" |
+| `interesting` | Most Interesting Man | 2 | "I don't always X, but when I do…" |
+| `success` | Success Kid | 2 | Small win celebrated |
+| `condescending` | Condescending Wonka | 2 | Sarcastic dismissal |
+| `oprah` | Oprah You Get A | 2 | "Everyone gets X!" |
+
+### Choice & decision
+
+| ID | Name | Lines | Best for |
+|---|---|---|---|
+| `tb` | Two Buttons | 2 | Impossible choice / both buttons same |
+| `kombucha` | Kombucha Girl | 2 | Initial reaction → reconsideration |
+| `winter` | Winter Is Coming | 2 | "X is coming" |
+| `friends` | Are You Two Friends | 3 | Misidentified relationship |
+
+### Stonks & corporate
+
+| ID | Name | Lines | Best for |
+|---|---|---|---|
+| `stonks` | Stonks | 2 | Counterintuitive value claim |
+| `notstonks` | Not Stonks | 2 | Counterintuitive loss |
+| `buzz` | X Everywhere | 2 | "It's everywhere" |
+| `disastergirl` | Disaster Girl | 2 | Smug satisfaction at disaster |
+| `same` | Pam Same Picture | 2 | "These are the same image" |
+
+For specific cultural references not in the lists above, run the
+keyword-filtered catalog command above.
 
 ## How to embed in markdown
 
@@ -321,9 +390,11 @@ When the user asks for a meme or when adding visual rhythm:
    philosoraptor), a categorical confusion (fry, spiderman), a "this
    is fine" framing, a reaction? The template carries half the joke;
    pick wrong and the line text won't save it.
-2. **Read the full live catalog, then run the random draw** per "Draw
-   against your defaults" above. Don't rely on the shortlist or on
-   memory, and don't guess template IDs.
+2. **Read the full catalog, then draw against your defaults.** Always
+   list all ~215 templates — don't rely on the shortlist or on memory
+   — then run the mandatory random draw and check each drawn template
+   for fit. The draw is required to perform, never required to use
+   (see "Draw against your defaults"). Don't guess template IDs.
 3. **Compose the lines.** Keep each line short — 3 to 8 words is
    ideal, anything over 12 words breaks layout. Memegen wraps text
    but doesn't shrink fonts dramatically; long text just looks
