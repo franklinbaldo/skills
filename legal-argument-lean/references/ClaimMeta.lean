@@ -105,14 +105,12 @@ inductive TipoReconstrucao
   | textual
   | reconstrutiva
   | puramenteCaridosa
-  deriving Repr
 
 /-- Grau de apoio material encontrado para a premissa reconstruída. -/
 inductive StatusSuporte
   | semSuporte
   | plausivel
   | ancoradaNosAutos
-  deriving Repr
 
 /-- Ficha auditável de uma premissa STEEL_n.
 
