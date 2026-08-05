@@ -6,10 +6,15 @@ description: >-
   difference. Use whenever the target is an existing artifact that has accreted layers and
   the question is "what should this be?" rather than "what line should I patch?" — CLAUDE.md
   and agent instructions, README and docs, prompts, schemas, config, CI pipelines, module
-  boundaries, team process. Triggers on "exercício greenfield", "greenfield exercise",
+  boundaries, team process. NOT limited to software: applies to legal strategy and any other
+  accumulated artifact — teoria do caso, tese ou modelo de peça do setor, ato normativo,
+  edital, contrato-modelo, fluxo institucional de análise e aprovação, política pública,
+  organograma, grade curricular. Triggers on "exercício greenfield", "greenfield exercise",
   "reescreve do zero", "do zero", "blank sheet", "folha em branco", "zero-based",
   "from first principles", "redesenha isso", "start over", "rewrite this file from scratch",
-  "esse arquivo virou uma colcha de retalhos", "if we were writing this today". Also use
+  "esse arquivo virou uma colcha de retalhos", "if we were writing this today",
+  "repensa essa tese do zero", "esse modelo do setor não faz mais sentido",
+  "qual seria a teoria do caso ideal", "reformula esse fluxo". Also use
   when a rewrite is already underway and is about to drop hard-won constraints. Do NOT use
   for genuine greenfield work (nothing exists yet — just design it), for ordinary edits with
   a known target, or for code refactors where behavior must be preserved exactly.
@@ -128,6 +133,24 @@ be able to argue with a bucket assignment, which is much cheaper than arguing wi
   swap in a from-scratch implementation.
 - **Big-bang delivery.** A correct v3 that lands as one unreviewable commit will be reverted
   or, worse, ignored.
+
+## Beyond software
+
+Nothing above is software-specific: the technique applies wherever an artifact has accreted
+and its current form became a premise — legal strategy, normative acts, contract templates,
+institutional workflows, public policy, org charts, curricula.
+
+The transfer is not free, though. In software almost every past decision is revocable. In
+law, some brownfield constraints are **irreversible regardless of merit** — preclusão, coisa
+julgada, revelia, a tese já sustentada nos autos, competência. The blank sheet operates only
+on the *inertial* constraints, and mistaking one kind for the other is costly in both
+directions: treating preclusion as inertia loses the case; treating inertia as preclusion
+means nothing ever improves.
+
+Read `<skill-dir>/references/estrategia-juridica.md` before applying this to legal work. It
+adds the preclusive/inertial split, an extra classification bucket, the legal version of the
+step-6 task tests, and the non-negotiables (never cite an unverified precedent, never
+describe a fabricated institutional act, never let analysis pass for approval).
 
 ## Lineage
 
