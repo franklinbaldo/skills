@@ -1,6 +1,10 @@
 ---
 name: anonimizacao-documentos
 description: Anonimiza textos e documentos Markdown jurídicos ou administrativos para publicação, revisão ou formação de corpus. Use para detectar PII com OpenAI Privacy Filter localmente ou em GPU do Google Colab, revisar marcações semânticas, substituir dados por marcadores canônicos e auditar resíduos segundo a política LGPD do projeto.
+compatibility: >-
+  Requires Python/uv. OPF detection needs a CUDA-capable local GPU or an
+  authenticated Google Colab path; CPU is diagnostic-only and may be impractical.
+  Colab transfers source data to Google infrastructure.
 ---
 
 # Anonimização de documentos
