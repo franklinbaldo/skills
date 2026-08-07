@@ -1,6 +1,10 @@
 ---
 name: free-gpu
 description: Execute Python, OCR, ML, inference, or training workloads on Google Colab or Kaggle GPUs from a local terminal. Use when the local machine lacks a GPU, including Windows machines without WSL or administrator rights, and the agent must install CLIs with uv, authenticate securely, upload code or data, monitor remote execution, retrieve artifacts, and release resources.
+compatibility: >-
+  Requires network access, Python/uv, and an authenticated Google Colab or Kaggle
+  account for remote execution. Colab CLI is supported on Linux/macOS or WSL;
+  locked-down native Windows uses Kaggle or the documented LiteBox/shim route.
 ---
 
 # Free GPU
