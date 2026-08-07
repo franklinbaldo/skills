@@ -1,6 +1,10 @@
 ---
 name: vibevoice-asr
 description: Transcreve áudio com VibeVoice ASR pelo Google Colab CLI, escolhendo entre o BitNet econômico em CPU e o modelo completo VibeVoice-ASR-HF em GPU de alta memória. Use para converter o upload temporariamente em MP3, fornecer hotwords, executar transcrição estruturada com falantes e timestamps, comparar qualidade e custo, recuperar artefatos e encerrar ou reutilizar a sessão.
+compatibility: >-
+  Requires network access, Python/uv and an authenticated Google Colab CLI on
+  Linux/macOS or WSL. BitNet runs remotely on CPU; the full 7B model requires a
+  high-memory CUDA GPU such as A100/H100. Audio is transferred to Google Colab.
 ---
 
 # VibeVoice ASR no Colab CLI
