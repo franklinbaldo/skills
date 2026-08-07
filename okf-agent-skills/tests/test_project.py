@@ -47,22 +47,27 @@ class UnifiedProjectionTests(unittest.TestCase):
 
             contract_dir = output / ".okf" / "contracts"
             expected = {
-                "agent-skills-projection.schema.sql",
+                "agentskillsprojection.schema.sql",
                 "skill.schema.sql",
-                "skill-resource.schema.sql",
-                "skill-relation.schema.sql",
-                "skill-eval.schema.sql",
-                "skill-mention.schema.sql",
+                "skillresource.schema.sql",
+                "skillrelation.schema.sql",
+                "skilleval.schema.sql",
+                "skillmention.schema.sql",
             }
             self.assertEqual({path.name for path in contract_dir.glob("*.sql")}, expected)
             self.assertIn(
                 'CREATE TABLE "SkillEval"',
-                (contract_dir / "skill-eval.schema.sql").read_text(encoding="utf-8"),
+                (contract_dir / "skilleval.schema.sql").read_text(encoding="utf-8"),
             )
             self.assertIn(
                 "should_trigger BOOLEAN",
-                (contract_dir / "skill-eval.schema.sql").read_text(encoding="utf-8"),
+                (contract_dir / "skilleval.schema.sql").read_text(encoding="utf-8"),
             )
+
+    def test_slug_matches_okf_parser_camelcase_behavior(self) -> None:
+        self.assertEqual(project._slug("SkillEval"), "skilleval")
+        self.assertEqual(project._slug("AgentSkillsProjection"), "agentskillsprojection")
+        self.assertEqual(project._slug("Revisão Ciência"), "revisao-ciencia")
 
     def test_spec_template_matches_contract_location(self) -> None:
         self.assertEqual(project.SPEC_TEMPLATE, ".okf/contracts/{slug}.md")
