@@ -1,0 +1,14 @@
+[
+  {"query":"estou com um processo de 900 páginas e só consegui te mandar alguns trechos; preciso preparar a defesa","should_trigger":true},
+  {"query":"neste caso concreto eu nem sei por que a PGE-IPERON recebeu os autos; como descubro a tarefa antes de redigir?","should_trigger":true},
+  {"query":"os autos estão no NotebookLM; monta o primeiro bloco de perguntas para entender o que cada órgão afirmou","should_trigger":true},
+  {"query":"tenho um PDF enorme do processo e quero confirmar datas, IDs e o último ato antes de escrever memoriais","should_trigger":true},
+  {"query":"quero testar minha tese contra os próprios autos; prepara perguntas que possam derrubá-la","should_trigger":true},
+  {"query":"este processo administrativo tem dezenas de ofícios e laudos fora do contexto; me ajuda a extrair os fatos com fonte","should_trigger":true},
+  {"query":"qual é a jurisprudência atual do STF sobre coisa julgada inconstitucional?","should_trigger":false},
+  {"query":"pesquise no DataJud a movimentação mais recente deste CNJ","should_trigger":false},
+  {"query":"os cinco documentos relevantes já estão completos aqui na conversa; resume o que aconteceu","should_trigger":false},
+  {"query":"me explica em abstrato quando cabem embargos de declaração com efeitos infringentes","should_trigger":false},
+  {"query":"a assessoria já entregou a minuta pronta; quero saber se posso protocolar e quais erros corrigir","should_trigger":false},
+  {"query":"escreva um post para meu blog contando essa história judicial de forma pessoal","should_trigger":false}
+]
