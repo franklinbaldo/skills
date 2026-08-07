@@ -1,153 +1,161 @@
 ---
 name: datajud
 description: >-
-  Consulta METADADOS processuais na API Publica do DataJud/CNJ — capa (classe,
-  assuntos, orgao julgador, grau, datas) e LINHA DE MOVIMENTACAO de processos de
-  qualquer tribunal brasileiro (padrao TJRO; tambem STJ, STF, TRFs, outros TJs).
-  Use SEMPRE que Franklin quiser: acompanhar a tramitacao/andamento de um
-  processo por numero CNJ; dimensionar ou levantar acervo por classe, assunto,
-  orgao, grau ou periodo de ajuizamento ("quantos / quais processos de execucao
-  fiscal ajuizados em 2025", "distribuicao por vara"); ou um panorama estatistico
-  do acervo (quantos por classe/assunto/orgao). Dispare mesmo sem a palavra
-  "DataJud" — basta o pedido ser sobre andamento processual, contagem ou
-  distribuicao de processos. NAO use para TEOR de decisao, ementa, voto ou
-  fundamentacao (o DataJud NAO tem inteiro teor): para jurisprudencia e teor do
-  TJRO use a skill juris-tjro.
+  Consulta metadados processuais oficiais no DataJud/CNJ: capa, classe, assuntos,
+  órgão, grau, datas, contagens, facetas e linha de movimentação. Use para saber
+  quais processos existem, quantos são, onde tramitam e o que aconteceu na linha
+  processual. Não use para afirmar o teor, fundamento ou ratio de sentença,
+  decisão, voto ou acórdão. Para teor do TJRO, use juris-tjro; para autos
+  carregados e reconstrução documental, use notebooklm-processos.
 compatibility: >-
   Requires Python 3 and outbound HTTPS access to the public DataJud/CNJ API.
   No private credential is required; the bundled stdlib client carries the CNJ
   public API key and handles retry/backoff.
 ---
 
-## O que esta skill faz
+# DataJud — metadados e movimentação
 
-Consulta a API Publica do DataJud (CNJ), que expoe **metadados** dos processos
-de todos os tribunais brasileiros, indexados em Elasticsearch — um indice por
-tribunal (`api_publica_tjro`, `api_publica_stj`, `api_publica_trf1`, etc.). Cada
-documento traz a **capa** (numero CNJ, classe, assuntos, orgao julgador, grau,
-sistema, formato, data de ajuizamento, ultima atualizacao, nivel de sigilo) e a
-**linha de movimentacao** (tabelas processuais unificadas do CNJ, com codigo,
-nome e complementos tabelados de cada movimento).
+A função desta skill é responder perguntas sobre a **existência, classificação,
+volume e trajetória processual** de casos registrados no DataJud.
 
-Limite conceitual central: **o DataJud NAO tem inteiro teor**. Nada de texto de
-decisao, ementa, voto ou fundamentacao. Ele responde "quais/quantos processos de
-tal classe/assunto/orgao/periodo" e "qual a tramitacao de tal processo" — nao "o
-que o tribunal decidiu". Para teor de acordao/voto/sentenca do TJRO, use a skill
-**juris-tjro**.
+Contrato da fonte:
 
-Toda a interacao acontece pelo script `scripts/datajud.py` (Python 3, so
-stdlib). Ele ja encapsula a chave publica, o retry/backoff do rate limit e as
-armadilhas de campo descritas abaixo — nao refaca as chamadas HTTP a mao.
-
-## Como usar o script
-
-Assuma rede liberada. Comece pelo `-h` de cada modo se precisar.
-
-Tramitacao de um processo (traz todos os graus; aceita CNJ com ou sem mascara):
-
+```text
+DataJud sabe:   processo, capa, classe, assunto, órgão, grau, datas, movimentos
+DataJud não sabe: fundamento jurídico, ratio, argumento, conteúdo integral do ato
 ```
+
+Nunca preencha o segundo conjunto por inferência a partir do primeiro.
+
+## Regra de roteamento
+
+Escolha a fonte pela proposição que precisa ser provada:
+
+- “o processo existe / em que grau está / qual foi o último movimento?” → DataJud;
+- “quantos processos com classe/assunto/órgão/período?” → DataJud;
+- “o TJRO decidiu X por causa de Y?” → [`juris-tjro`](../juris-tjro/SKILL.md);
+- “o que os documentos deste processo dizem, inclusive peças e anexos?” →
+  [`notebooklm-processos`](../notebooklm-processos/SKILL.md) quando o corpus estiver
+  carregado;
+- “a jurisprudência atual do STJ/STF/outro tribunal diz X?” → pesquisa externa/
+  fonte oficial adequada.
+
+Um movimento chamado “Sentença”, “Decisão” ou “Provimento” prova que o ato foi
+registrado, não o que o ato fundamentou.
+
+## Fluxo
+
+1. Defina se a pergunta é sobre **um processo**, **uma lista**, **uma contagem** ou
+   **uma distribuição**.
+2. Use o modo mais barato que resolve a pergunta.
+3. Não puxe movimentos completos quando capa/último estado bastarem.
+4. Quando o próximo passo depender do conteúdo de um ato, pare e roteie para a
+   fonte de teor.
+5. Apresente apenas os movimentos/metadados que mudam a conclusão.
+
+## CLI
+
+Toda interação deve passar por `scripts/datajud.py`.
+
+Processo:
+
+```bash
 python scripts/datajud.py processo 7027457-61.2021.8.22.0001
 python scripts/datajud.py processo 7027457-61.2021.8.22.0001 --movimentos
 ```
 
-Descobrir o codigo de uma classe ou assunto pelo nome (via agregacao na propria
-API — nao precisa decorar tabela):
+Descobrir códigos:
 
-```
+```bash
 python scripts/datajud.py codigos "execucao fiscal" --por classe
 python scripts/datajud.py codigos "aposentadoria" --por assunto
 ```
 
-Listar processos que casam com filtros:
+Buscar:
 
-```
+```bash
 python scripts/datajud.py buscar \
-    [--classe COD] [--assunto TEXTO] [--assunto-codigo COD] \
-    [--orgao TEXTO] [--grau G1|G2|JE|TR|SUP] \
-    [--de DD/MM/AAAA] [--ate DD/MM/AAAA] \
-    [--recentes] [--tamanho N] [--tribunal tjro] [--json]
+  [--classe COD] [--assunto TEXTO] [--assunto-codigo COD] \
+  [--orgao TEXTO] [--grau G1|G2|JE|TR|SUP] \
+  [--de DD/MM/AAAA] [--ate DD/MM/AAAA] \
+  [--recentes] [--tamanho N] [--tribunal tjro] [--json]
 ```
 
-Contar (total real, barato — use para dimensionar antes de puxar):
+Contar e agregar:
 
-```
+```bash
 python scripts/datajud.py contar --classe 1116 --de 01/01/2025 --ate 31/12/2025
-```
-
-Panorama por dimensao (agregacao):
-
-```
-python scripts/datajud.py facetas --por classe        # ou assunto|orgao|grau|sistema
+python scripts/datajud.py facetas --por classe
 python scripts/datajud.py facetas --classe 1116 --por orgao --limite 10
 ```
 
-Outro tribunal: acrescente `--tribunal` em qualquer modo (`stj`, `stf`, `trf1`,
-`tjsp`, ...). O padrao e `tjro`. Franklin litiga em materia previdenciaria/INSS,
-entao TRF1 e STJ encostam com frequencia.
+Use `--tribunal stj|stf|trf1|tjsp|...` quando necessário. O padrão é TJRO.
 
-Acrescente `--json` a qualquer modo para processar o resultado (planilha, tabela,
-recurso repetitivo).
+## Escolha econômica do modo
 
-## Armadilhas da API — leia antes de consultar
+- **“qual o andamento?”** → `processo`;
+- **“quantos?”** → `contar`;
+- **“quais?”** → `buscar`;
+- **“como se distribuem?”** → `facetas`;
+- **“qual o código da classe/assunto?”** → `codigos`.
 
-Rate limit e a armadilha PRINCIPAL, e tem **dois sabores** (ambos ja tratados
-pelo script com backoff exponencial, ate 5 tentativas):
+Não faça `buscar` grande para depois contar localmente quando `contar` responde
+sem transferir o corpus.
 
-- **HTTP 429** no gateway quando as requisicoes vem rapido demais.
-- **HTTP 200 com `es_rejected_execution_exception` no corpo** quando a fila de
-  busca do Elasticsearch enche. O status e 200; o erro esta no JSON. Se o script
-  esgotar as tentativas, ele avisa — espere alguns segundos e repita. Ao rodar
-  varias consultas em sequencia, **de um respiro entre elas** (~5s).
+## Composição com juris-tjro
 
-Outras pegadinhas ja resolvidas pelo script (nao as recrie):
+DataJud e JURIS são complementares, não concorrentes.
 
-- **Contagem**: sem `track_total_hits: true` o total satura em 10.000
-  (`"relation": "gte"`). O script sempre pede a contagem real em `buscar`,
-  `contar` e `facetas`.
-- **Sort/filtro por `grau`**: o campo bruto e `text` (sem fielddata; sort/term
-  cru -> HTTP 400). Use sempre `grau.keyword` — o script ja faz. O mesmo vale
-  para agregacoes de campos textuais (`classe.nome.keyword`,
-  `assuntos.nome.keyword`, `orgaoJulgador.nome.keyword`).
-- **Data de ajuizamento** e string `AAAAMMDDHHMMSS` (14 digitos). Range com
-  data de 8 digitos casa zero. O script normaliza `--de/--ate` (DD/MM/AAAA) para
-  os 14 digitos, cobrindo o dia inteiro.
-- **Multi-grau**: o MESMO numero de processo aparece em documentos separados por
-  grau (1o grau, Juizado, Turma Recursal, 2o grau). O `_id` codifica
-  `{TRIBUNAL}_{classe}_{grau}_{orgao}_{numero}`. O modo `processo` lista todos.
-- **`codigos --por assunto`**: um processo tem varios assuntos, entao a
-  agregacao traria assuntos "vizinhos". O script filtra os buckets para os nomes
-  que de fato contem o termo e ordena por volume.
-- **Chave publica**: e a MESMA para todos, embutida no script. O CNJ pode
-  troca-la a qualquer momento; se comecar a dar HTTP 401, pegue a atual em
-  https://datajud-wiki.cnj.jus.br/api-publica/acesso/ e atualize `APIKEY` no
-  topo de `scripts/datajud.py`.
-- **Sem inteiro teor** (repetindo porque importa): nao adianta procurar texto de
-  decisao aqui. Para isso -> juris-tjro.
+Um fluxo útil para caso do TJRO pode ser:
 
-## Como apresentar os resultados a Franklin
+```text
+DataJud: localizar processo/grau/movimento/data
+→ JURIS: localizar o documento correspondente e ler o teor
+→ análise: separar o que veio do metadata do que veio do texto
+```
 
-Sintetize, nao despeje (o array de movimentos de um processo pode ter centenas
-de itens; nunca jogue o JSON cru no contexto). Fluxo recomendado:
+Quando apresentar uma conclusão composta, mantenha a proveniência explícita:
+“DataJud registra movimento X em data Y; o inteiro teor no JURIS afirma Z”. Não
+fundir as duas evidências numa frase sem origem.
 
-1. Se o pedido cita classe/assunto por nome, rode `codigos` primeiro para achar
-   o codigo, depois filtre por `--classe`/`--assunto-codigo` (mais preciso que
-   `--assunto`, que e match textual).
-2. Para "quantos", `contar` resolve num tiro. Para "quais", `buscar`. Para
-   "distribuicao/panorama", `facetas`.
-3. Ao acompanhar UM processo, use `processo`; so acrescente `--movimentos`
-   quando o andamento fino importar, e ao relatar destaque os movimentos
-   relevantes (remessa, baixa, transito em julgado, sentenca, decisao) em vez de
-   listar os "Decurso de Prazo"/"Publicacao" repetidos.
-4. Deixe claro que sao metadados oficiais do CNJ (capa + movimentacao), sem teor,
-   e ofereca o proximo passo util: puxar a integra do teor via juris-tjro (TJRO),
-   exportar a lista (`--json`), refinar por orgao/periodo, ou dimensionar com
-   `contar` antes de puxar um recorte grande.
+## Armadilhas que continuam load-bearing
 
-## Campos uteis em cada resultado
+O script já trata:
 
-`numeroProcesso` (20 digitos), `classe{codigo,nome}`, `assuntos[]{codigo,nome}`,
-`orgaoJulgador{codigo,nome,codigoMunicipioIBGE}`, `grau` (G1=1o grau, JE=juizado,
-G2=2o grau, TR=turma recursal, SUP=superior), `sistema{nome}` (PJe etc.),
-`formato{nome}`, `dataAjuizamento` (AAAAMMDDHHMMSS), `dataHoraUltimaAtualizacao`
-(ISO), `nivelSigilo`, `movimentos[]{codigo,nome,dataHora,complementosTabelados,
-orgaoJulgador}`.
+- HTTP 429 e `es_rejected_execution_exception` em HTTP 200;
+- `track_total_hits: true` para não saturar contagens em 10.000;
+- `.keyword` em `grau`/campos textuais de agregação;
+- datas de ajuizamento `AAAAMMDDHHMMSS`;
+- múltiplos documentos do mesmo CNJ por grau;
+- filtragem de assuntos vizinhos em `codigos`;
+- chave pública do CNJ.
+
+Se houver HTTP 401, confira a chave pública atual na documentação oficial do
+DataJud antes de concluir que o serviço caiu.
+
+## Como apresentar
+
+Sintetize. Para um processo, destaque apenas eventos que mudam o estado útil:
+distribuição, decisão, sentença, remessa, julgamento, trânsito, baixa e outros
+marcos pertinentes ao pedido.
+
+Para listas/estatísticas, mostre o recorte e a dimensão usada. Não despeje JSON
+nem centenas de movimentos.
+
+Sempre deixe claro quando a resposta é **metadado oficial sem inteiro teor**.
+
+## Definition of Done
+
+A consulta termina quando:
+
+- a pergunta foi resolvida pelo modo mais econômico;
+- o tribunal/grau/período usados estão claros quando relevantes;
+- movimentos irrelevantes não ocupam a resposta;
+- nenhuma conclusão de fundamento foi inferida de metadata;
+- quando teor se tornou necessário, a investigação foi roteada para a fonte
+  correta;
+- em respostas compostas, metadata e teor permanecem distinguíveis por
+  proveniência.
+
+A skill é bem-sucedida quando responde rapidamente **onde, quando, quantos e
+qual movimento** — e sabe parar antes de fingir saber **por quê**.
