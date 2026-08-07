@@ -1,6 +1,10 @@
 ---
 name: convert-to-pdfa
 description: Convert PDFs to archival PDF/A-1b, PDF/A-2b, or PDF/A-3b across Windows, WSL, macOS, and Linux. Use when a user asks for PDF/A, archival PDF, ISO 19005 conversion, or a PDF accepted by SEI, PJe, courts, and document-management validators.
+compatibility: >-
+  Requires Python/uv and Ghostscript (native or WSL) for conversion. Official
+  veraPDF CLI is optional unless normative validation is required. Locked-down
+  Windows without Ghostscript/WSL needs the documented LiteBox adaptation route.
 ---
 
 # Convert to PDF/A
