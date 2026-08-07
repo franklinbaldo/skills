@@ -3,6 +3,12 @@ name: OKF Agent Skills dogfood
 on:
   pull_request:
     paths:
+      - '*/SKILL.md'
+      - '*/references/**'
+      - '*/scripts/**'
+      - '*/assets/**'
+      - '*/examples/**'
+      - '*/evals/**'
       - 'okf-agent-skills/**'
       - '.github/workflows/okf-agent-skills-dogfood.yml'
   workflow_dispatch:
@@ -63,7 +69,7 @@ jobs:
           print(f'skills={len(skills)}')
           print(f'resources={len(resources)}')
           print(f'relations={len(relations)}')
-          print(f'resolved_skill_relations={resolved}')
+          print(f'resolved_projected_relations={resolved}')
           print(f'unresolved_local_relations={unresolved}')
           print('largest_skills:')
           for count, source in sorted(line_counts, reverse=True)[:10]:
