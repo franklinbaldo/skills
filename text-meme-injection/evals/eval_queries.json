@@ -1,0 +1,14 @@
+[
+  {"query":"esse ensaio está acadêmico demais; injeta um pouco de humor meme sem reescrever a tese","should_trigger":true},
+  {"query":"deixa esse post mais leve com alguns memes de texto, mas sem virar listicle","should_trigger":true},
+  {"query":"quero 2 ou 3 opções de meme inline para estes trechos e talvez um greentext se couber","should_trigger":true},
+  {"query":"o texto está duro; coloca umas respiradas de internet em PT-BR e mostra só o diff","should_trigger":true},
+  {"query":"revisa este draft e marca onde um 'it's giving' ou outro formato estrutural realmente faria trabalho","should_trigger":true},
+  {"query":"adicione humor meme a este post longo, respeitando a voz e sem usar nada que envelheça amanhã","should_trigger":true},
+  {"query":"escreva um post inteiro para o meu blog sobre memória e Borges","should_trigger":false},
+  {"query":"gera um Drake meme com duas frases para eu embutir no Markdown","should_trigger":false},
+  {"query":"deixa esta petição mais engraçada e menos formal","should_trigger":false},
+  {"query":"melhora a clareza deste README técnico sem piadas","should_trigger":false},
+  {"query":"este texto já está engraçado; só corrija a gramática e não acrescente humor","should_trigger":false},
+  {"query":"faça uma mensagem de condolências mais calorosa","should_trigger":false}
+]

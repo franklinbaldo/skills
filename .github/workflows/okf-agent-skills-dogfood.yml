@@ -25,6 +25,7 @@ jobs:
         run: |
           mkdir -p dogfood
           python okf-agent-skills/scripts/project_agent_skills.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/projector.txt
+          python okf-agent-skills/scripts/project_skill_evals.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/eval-projector.txt
           cp -R "$RUNNER_TEMP/skills-okf" dogfood/projection
 
       - name: Inspect projection with current okf-parser
@@ -41,6 +42,7 @@ jobs:
       - name: Summarize projected corpus
         run: |
           python - <<'PY' | tee dogfood/summary.txt
+          from collections import defaultdict
           from pathlib import Path
           import re
 
@@ -48,6 +50,7 @@ jobs:
           skills = sorted((root / 'skills').glob('*.md'))
           resources = sorted((root / 'resources').glob('*.md'))
           relations = sorted((root / 'relations').glob('*.md'))
+          evals = sorted((root / 'evals').glob('*.md'))
 
           resolved = 0
           unresolved = 0
@@ -66,11 +69,27 @@ jobs:
               if match and source:
                   line_counts.append((int(match.group(1)), source.group(1)))
 
+          coverage = defaultdict(lambda: {'positive': 0, 'negative': 0})
+          for path in evals:
+              text = path.read_text(encoding='utf-8')
+              skill = re.search(r'^skill: "([^"]+)"$', text, re.M)
+              trigger = re.search(r'^should_trigger: (true|false)$', text, re.M)
+              if skill and trigger:
+                  key = 'positive' if trigger.group(1) == 'true' else 'negative'
+                  coverage[skill.group(1)][key] += 1
+
           print(f'skills={len(skills)}')
           print(f'resources={len(resources)}')
           print(f'relations={len(relations)}')
+          print(f'evals={len(evals)}')
+          print(f'eval_covered_skills={len(coverage)}')
+          print(f'eval_uncovered_skills={len(skills) - len(coverage)}')
           print(f'resolved_projected_relations={resolved}')
           print(f'unresolved_local_relations={unresolved}')
+          print('routing_eval_coverage:')
+          for skill in sorted(coverage):
+              counts = coverage[skill]
+              print(f"  {skill}: +{counts['positive']} / -{counts['negative']}")
           print('largest_skills:')
           for count, source in sorted(line_counts, reverse=True)[:10]:
               print(f'  {count:4d}  {source}')

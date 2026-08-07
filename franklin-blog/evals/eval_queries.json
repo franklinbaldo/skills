@@ -1,0 +1,14 @@
+[
+  {"query":"quero escrever um post pro blog sobre a sensação estranha de conversar com modelos que lembram demais de você","should_trigger":true},
+  {"query":"faz um primeiro rascunho pro franklinbaldo.github.io sobre por que todo software acaba virando arquivo","should_trigger":true},
+  {"query":"esse post ficou correto mas parece escrito por um estranho competente; traz de volta minha voz","should_trigger":true},
+  {"query":"continua aquele texto do blog em português; quero mais confissão e menos tese fechada","should_trigger":true},
+  {"query":"tenho uma ideia meio torta ligando Borges, banco de dados e memória; transforma em post sem amarrar demais","should_trigger":true},
+  {"query":"revisa este draft do blog sem deixar ele mais acadêmico nem completar as incertezas que eu deixei abertas","should_trigger":true},
+  {"query":"escreva uma contestação para o IPERON com preliminar de prescrição","should_trigger":false},
+  {"query":"quero um paper formal defendendo esta tese para submissão em conferência","should_trigger":false},
+  {"query":"faz um README técnico explicando como rodar este pacote Python","should_trigger":false},
+  {"query":"adiciona três memes neste texto que já está pronto, sem reescrever o resto","should_trigger":false},
+  {"query":"gera uma imagem Drake com 'parser manual' versus 'DuckDB fazendo o trabalho'","should_trigger":false},
+  {"query":"me ajuda a revisar uma minuta judicial da assessoria e dizer se posso protocolar","should_trigger":false}
+]
