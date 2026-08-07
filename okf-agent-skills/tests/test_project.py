@@ -38,11 +38,14 @@ class UnifiedProjectionTests(unittest.TestCase):
             self.assertEqual(counts["relations"], 1)
             self.assertEqual(counts["resolved_relations"], 1)
             self.assertEqual(counts["evals"], 1)
+            self.assertEqual(counts["routing_runs"], 5)
+            self.assertEqual(counts["observed_routing_runs"], 0)
             self.assertGreaterEqual(counts["mentions"], 2)
-            self.assertEqual(counts["declared_types"], 6)
+            self.assertEqual(counts["declared_types"], 7)
 
             self.assertTrue((output / "skills" / "alpha.md").is_file())
             self.assertTrue((output / "evals" / "alpha--trigger--001.md").is_file())
+            self.assertTrue((output / "routing-runs" / "alpha--case-001--run-01.md").is_file())
             self.assertTrue((output / "mentions").is_dir())
 
             contract_dir = output / ".okf" / "contracts"
@@ -53,6 +56,7 @@ class UnifiedProjectionTests(unittest.TestCase):
                 "skillrelation.schema.sql",
                 "skilleval.schema.sql",
                 "skillmention.schema.sql",
+                "skillroutingrun.schema.sql",
             }
             self.assertEqual({path.name for path in contract_dir.glob("*.sql")}, expected)
             self.assertIn(
@@ -63,9 +67,14 @@ class UnifiedProjectionTests(unittest.TestCase):
                 "should_trigger BOOLEAN",
                 (contract_dir / "skilleval.schema.sql").read_text(encoding="utf-8"),
             )
+            self.assertIn(
+                "observed_trigger BOOLEAN",
+                (contract_dir / "skillroutingrun.schema.sql").read_text(encoding="utf-8"),
+            )
 
     def test_slug_matches_okf_parser_camelcase_behavior(self) -> None:
         self.assertEqual(project._slug("SkillEval"), "skilleval")
+        self.assertEqual(project._slug("SkillRoutingRun"), "skillroutingrun")
         self.assertEqual(project._slug("AgentSkillsProjection"), "agentskillsprojection")
         self.assertEqual(project._slug("Revisão Ciência"), "revisao-ciencia")
 

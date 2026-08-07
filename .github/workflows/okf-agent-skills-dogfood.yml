@@ -9,6 +9,7 @@ on:
       - '*/assets/**'
       - '*/examples/**'
       - '*/evals/**'
+      - '.okf/**'
       - 'okf-agent-skills/**'
       - '.github/workflows/okf-agent-skills-dogfood.yml'
   workflow_dispatch:
@@ -65,6 +66,10 @@ jobs:
               ('SkillEval', 'case_index'): 'INTEGER',
               ('SkillEval', 'should_trigger'): 'BOOLEAN',
               ('SkillMention', 'source_line'): 'INTEGER',
+              ('SkillRoutingRun', 'case_index'): 'INTEGER',
+              ('SkillRoutingRun', 'repetition'): 'INTEGER',
+              ('SkillRoutingRun', 'should_trigger'): 'BOOLEAN',
+              ('SkillRoutingRun', 'observed_trigger'): 'BOOLEAN',
           }
           missing = {key: value for key, value in expected.items() if types.get(key) != value}
           if missing:
@@ -90,9 +95,26 @@ jobs:
           uncovered = [row for row in coverage if not row['has_routing_evals']]
           if not covered or not uncovered:
               raise SystemExit('routing coverage audit must distinguish covered and uncovered skills')
+
+          run_coverage = report['routing_run_coverage']
+          if len(run_coverage) != len(covered):
+              raise SystemExit(f'expected routing-run rows for {len(covered)} covered skills, got {len(run_coverage)}')
+          planned = sum(row['planned_runs'] for row in run_coverage)
+          observed = sum(row['observed_runs'] for row in run_coverage)
+          pending = sum(row['pending_runs'] for row in run_coverage)
+          if planned != 300 or observed + pending != planned:
+              raise SystemExit(f'expected coherent 300-run manifest, got planned={planned} observed={observed} pending={pending}')
+          if len(report['routing_case_results']) != 60:
+              raise SystemExit(f'expected 60 routing case rows, got {len(report["routing_case_results"])}')
+          if len(report['routing_skill_results']) != len(covered):
+              raise SystemExit('routing skill results must cover every skill with routing evals')
+
           print(f'audit_views={len(report)}')
           print(f'eval_covered_skills={len(covered)}')
           print(f'eval_uncovered_skills={len(uncovered)}')
+          print(f'routing_runs_planned={planned}')
+          print(f'routing_runs_observed={observed}')
+          print(f'routing_runs_pending={pending}')
           print(f'mentions_without_edge={len(report["mentions_without_edge"])}')
           print(f'isolated_skills={len(report["isolated_skills"])}')
           PY
@@ -110,6 +132,7 @@ jobs:
           resources = sorted((root / 'resources').glob('*.md'))
           relations = sorted((root / 'relations').glob('*.md'))
           evals = sorted((root / 'evals').glob('*.md'))
+          routing_runs = sorted((root / 'routing-runs').glob('*.md'))
           mentions = sorted((root / 'mentions').glob('*.md'))
           contracts = sorted((root / '.okf' / 'contracts').glob('*.schema.sql'))
 
@@ -139,6 +162,11 @@ jobs:
                   key = 'positive' if trigger.group(1) == 'true' else 'negative'
                   coverage[skill.group(1)][key] += 1
 
+          observed_runs = 0
+          for path in routing_runs:
+              if re.search(r'^observed_trigger: (true|false)$', path.read_text(encoding='utf-8'), re.M):
+                  observed_runs += 1
+
           mention_pairs = set()
           for path in mentions:
               text = path.read_text(encoding='utf-8')
@@ -157,6 +185,8 @@ jobs:
           print(f'resources={len(resources)}')
           print(f'relations={len(relations)}')
           print(f'evals={len(evals)}')
+          print(f'routing_runs={len(routing_runs)}')
+          print(f'observed_routing_runs={observed_runs}')
           print(f'eval_resources={eval_resources}')
           print(f'mentions={len(mentions)}')
           print(f'mention_pairs={len(mention_pairs)}')
