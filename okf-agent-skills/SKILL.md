@@ -10,9 +10,10 @@ when_to_use: >-
   Use for repository-wide Agent Skills analysis, current best-practice audits, dependency
   graphs, relational checks, or experiments that combine Claude Code skills with OKF.
 compatibility: >-
-  Bundled projectors require Python 3 only. Full relational inspection requires a current
-  okf-parser installation; if it is not installed, the documented uvx-from-GitHub path
-  additionally requires uv and outbound network access.
+  The projection frontend requires Python 3 only. Full relational inspection requires a
+  current okf-parser installation; typed audit views additionally require DuckDB. If
+  okf-parser is invoked through the documented uvx-from-GitHub path, uv and outbound network
+  access are also required.
 ---
 
 # Use OKF as the inspection layer for Agent Skills
@@ -25,7 +26,11 @@ from this integration.
 The default architecture is:
 
 ```text
-Agent Skills → this skill / deterministic helper → derived OKF → okf-parser → SQL / graph / diagnostics
+Agent Skills
+  → deterministic domain frontend
+  → derived OKF + RFC 0006 .schema.sql contracts
+  → okf-parser TypeContract / graph / DuckDB
+  → canonical audit queries + behavioral evidence
 ```
 
 The integration is deliberately **skill-first**. Keep domain knowledge here. Move stable
@@ -66,23 +71,21 @@ Do not mutate source skills during inspection.
 
 Authored facts include frontmatter values and file contents actually present in the source.
 Derived facts include line counts, file sizes, resolved links, resource kind, graph degree,
-and other deterministic measurements.
+routing eval cases, semantic mentions, and other deterministic measurements.
 
 Never silently fill an absent upstream field with a guessed value. If an upstream default is
 material to a query, retain whether the value was authored or derived.
 
-### 3. Build a disposable OKF projection
+### 3. Build the disposable typed OKF projection
 
-For normal filesystem-backed audits, prefer the bundled deterministic projector rather than
-hand-authoring the IR:
+For normal filesystem-backed audits, use the single public projection frontend:
 
 ```bash
-python <skill-dir>/scripts/project_agent_skills.py <skills-root> <derived-bundle>
+python <skill-dir>/scripts/project.py <skills-root> <derived-bundle>
 ```
 
-The helper is stdlib-only. It performs static discovery, resource inventory, source hashing,
-local Markdown-link resolution, source→derived target rewriting, and relation provenance. It
-never executes scripts from the audited skills.
+The frontend is stdlib-only and composes the specialized deterministic helpers. It never
+executes scripts from the audited skills.
 
 The derived bundle contains:
 
@@ -90,24 +93,34 @@ The derived bundle contains:
 - one `SkillResource` concept per bundled supporting file;
 - one `SkillRelation` provenance concept per local Markdown relation considered by the
   projector;
-- **derived Markdown links between projected `Skill` concepts** for source relations that
-  resolve to another skill in the audited corpus;
-- a projection manifest with aggregate counts.
+- ordinary derived Markdown links for resolved source relations;
+- `SkillEval` concepts for supported routing-eval files;
+- `SkillMention` observations for semantic mentions of known sibling skills;
+- an `AgentSkillsProjection` manifest;
+- RFC 0006 DuckDB declarations under `.okf/contracts/*.schema.sql` for the projection's
+  concept types.
 
-Do **not** add `type: Skill` to the original `SKILL.md`. Put OKF metadata only in the derived
-bundle or in supporting documents that are intentionally authored as OKF concepts.
+The `.schema.sql` files are generated projection metadata, not authored Agent Skills
+requirements. They remain outside the concept walk and are addressed through:
 
-The helper intentionally does not implement a complete YAML parser. It derives skill identity
-from a simple scalar `name:` when present and otherwise falls back to the containing directory.
-Use the source documents directly when an audit depends on richer frontmatter semantics.
+```text
+.okf/contracts/{slug}.md
+```
 
-### 4. Materialize source relations inside the derived bundle
+as the `--spec-template`; current `okf-parser` derives the sibling `.schema.sql` path from
+that template.
 
-A source link is evidence, not yet an edge in the derived OKF graph. `okf-parser graph` and
-DuckDB only see links that exist in the bundle being parsed.
+Do **not** add `type: Skill` or OKF schema fields to the original `SKILL.md` files.
 
-Therefore, when a source skill relation resolves to another projected artifact, rewrite the
-relation into the derived namespace while preserving its provenance.
+The source projector intentionally does not implement a complete YAML parser. Use source
+documents directly when an audit depends on richer frontmatter semantics that the projection
+does not yet model.
+
+### 4. Materialize source relations without overstating them
+
+A source Markdown link is stronger evidence than a semantic mention. `okf-parser graph` and
+the hard relation layer should contain only relations actually materialized in the derived
+bundle.
 
 Example:
 
@@ -116,59 +129,81 @@ source:  A/SKILL.md -> ../datajud/SKILL.md
 derived: skills/a.md -> skills/datajud.md
 ```
 
-The bundled projector implements this contract. The derived concept for `A` contains an
-ordinary Markdown link to the derived `datajud` concept, while a separate `SkillRelation`
-concept records at least the source file, original link target, source line, and derived
-source/target identities.
+A separate `SkillRelation` concept preserves the source path, original target, line and
+derived endpoint. A phrase such as “use the datajud skill” without a link may become a
+`SkillMention`, but must not silently become the same kind of graph edge.
 
-Do **not** leave the derived link pointing back to `../datajud/SKILL.md`: that may escape the
-projection root and would make the graph depend on the source tree rather than the derived
-bundle.
+Do not add a duplicate authored `dependencies:` field merely to make analysis easier.
 
-Do not add a duplicate authored `dependencies:` field. The dependency remains derived from
-the source link; only its target is translated so the relation exists inside the OKF IR.
+### 5. Use current `okf-parser` as the generic compiler
 
-A semantic mention such as “use the datajud skill” without a link may be reported as a
-candidate relation, but do not silently upgrade heuristic extraction to the same certainty as
-a resolved authored link.
-
-### 5. Use `okf-parser` as the generic engine
-
-Use the existing surfaces to validate and inspect the derived bundle:
+For typed inspection, keep one spec template and pass it to schema/DuckDB consumers:
 
 ```bash
+SPEC='.okf/contracts/{slug}.md'
+
 okf-parser check <derived-bundle>
 okf-parser inventory <derived-bundle>
 okf-parser graph <derived-bundle>
-okf-parser duckdb <derived-bundle> <output.duckdb>
+okf-parser schema <derived-bundle> --format json --spec-template "$SPEC"
+okf-parser duckdb <derived-bundle> <output.duckdb> okf --overwrite --spec-template "$SPEC"
 ```
 
-When `okf-parser` is not installed locally, a current checkout can be invoked directly with
-`uvx`, for example:
+The RFC 0006 declarations preserve intended physical types such as booleans, integers and
+unsigned byte counts instead of forcing every projected scalar through a string-shaped query
+surface. Persistent DuckDB keeps the compiler-owned raw carrier beside the typed snapshot.
+
+When `okf-parser` is not installed locally, a current checkout can be invoked with `uvx`, for
+example:
 
 ```bash
 uvx --from 'git+https://github.com/franklinbaldo/okf-parser.git' \
   okf-parser check <derived-bundle>
 ```
 
-Use `apply`, Ibis, DuckDB SQL, schema export, or MCP surfaces when they are available and
-fit the task. Do not create a second parser or linter for facts already represented by OKF.
+Treat `.schema.sql` as trusted executable DuckDB SQL, following `okf-parser`'s trust model.
+Do not create a second parser or type system for facts already represented by `TypeContract`.
 
-### 6. Express measurable policy relationally
+### 6. Query architecture through the canonical audit layer
+
+After producing the typed DuckDB artifact, materialize the bundled audit views:
+
+```bash
+python <skill-dir>/scripts/run_typed_audit.py <output.duckdb> --output audit.json
+```
+
+The canonical SQL lives at `queries/typed-audit.sql` and creates an `audit` schema with views
+for:
+
+- routing-eval coverage per skill;
+- resolved skill-to-skill relations;
+- semantic mentions that do not currently have a hard edge;
+- skills isolated from the hard skill graph;
+- resource/reference/script/eval surface per skill.
+
+These views are **review queues and observations**, not lint errors. A mention without an
+edge, an isolated skill, or a skill without evals can all be legitimate states.
+
+Prefer extending this relational layer when a repeated audit question can be answered from
+facts already in the projection. Do not add another text scraper for the same fact.
+
+### 7. Express measurable policy relationally
 
 Good checks operate on facts the projection can establish, for example:
 
 - entry-point line count;
 - broken local links;
 - reference depth;
-- unreferenced bundled scripts;
+- bundled script/resource surface;
 - dependency hubs or cycles;
-- coverage by repository eval concepts;
-- presence and values of current frontmatter fields.
+- routing-eval coverage;
+- semantic mentions without hard relations;
+- presence and values of projected frontmatter facts.
 
-Treat graph statistics as architecture information, not defects by default.
+Treat graph statistics and coverage statistics as architecture information, not defects by
+default.
 
-### 7. Classify every finding
+### 8. Classify every finding
 
 Every check must say what kind of rule it represents:
 
@@ -179,32 +214,34 @@ Every check must say what kind of rule it represents:
 
 Do not promote recommendations such as “keep the main skill concise” into normative errors.
 
-### 8. Trace findings back to source
+### 9. Trace findings back to source
 
 Reports must identify the authoritative `SKILL.md` or bundled resource that caused the
 finding. For a derived relation, report both the derived endpoints and the source evidence
-that produced the edge. The derived OKF document is infrastructure, not the artifact the
-author edits.
+that produced the edge. The derived OKF document and typed DuckDB artifact are infrastructure,
+not the artifacts the author edits.
 
-### 9. Keep behavioral claims separate
+### 10. Keep behavioral claims separate
 
-Static structure cannot prove that a model routes or follows a skill correctly. If routing or
-behavior matters, inspect or create behavioral evals. OKF may store and query the eval corpus;
-the model run remains a separate evaluation step.
+Static structure cannot prove that a model routes or follows a skill correctly. Routing eval
+concepts express expected behavior; actual model runs are separate evidence. Use the bundled
+routing benchmark harness to aggregate observed triggers, but do not infer behavioral success
+from static presence of an eval case.
 
-### 10. Reassess the architecture after real use
+### 11. Reassess the architecture after real use
 
 When a repeated step is annoying, classify it before changing `okf-parser`:
 
 ```text
 keep as skill instruction
-keep as bundled deterministic script
+keep as bundled deterministic script/query
 candidate for generic okf-parser primitive
 candidate for Agent-Skills-specific native support
 discard
 ```
 
-Prefer a generic primitive when the same abstraction benefits domains beyond Agent Skills.
+Prefer a generic primitive only when the same abstraction benefits domains beyond Agent
+Skills.
 
 ## Guardrails
 
@@ -214,8 +251,10 @@ Prefer a generic primitive when the same abstraction benefits domains beyond Age
 - Do not claim static presence of a tool/script proves harmful behavior.
 - Do not freeze current Claude Code extensions into a portable Agent Skills rule without
   checking which layer defines the field.
-- Do not version the derived bundle by default; version it only when reviewing the graph or
-  relational projection itself is useful.
+- Do not version the derived bundle or DuckDB artifact by default; version them only when
+  reviewing the projection itself is useful.
+- Do not convert observations from `audit.*` into normative failures without an explicit
+  authority or repository policy.
 - Do not add native parser support merely to save a few lines of skill instructions.
 
 ## Definition of done
@@ -223,11 +262,14 @@ Prefer a generic primitive when the same abstraction benefits domains beyond Age
 A repository-wide analysis is complete when:
 
 1. source skills remain untouched unless the user asked to change them;
-2. the OKF projection is reproducible from the source tree;
-3. source relations used for dependency analysis are materialized as links between derived
-   concepts, with provenance back to the source evidence;
-4. `okf-parser` can inspect the projection using generic surfaces;
-5. every reported rule is classified by authority;
-6. every finding traces back to source;
-7. heuristic findings are labeled as heuristic;
-8. any proposed core change explains why a skill or bundled helper is no longer enough.
+2. the full OKF projection is reproducible from the source tree through `project.py`;
+3. source relations used for dependency analysis are materialized with provenance;
+4. routing evals and semantic mentions are represented separately from hard relations;
+5. current `okf-parser` consumes the generated RFC 0006 declarations and exposes the typed
+   projection through generic schema/DuckDB surfaces;
+6. repeated architecture questions use the canonical relational audit layer when possible;
+7. every reported rule is classified by authority and traces back to source;
+8. heuristic findings remain labeled as heuristic;
+9. behavioral claims rely on model-run evidence rather than static structure alone;
+10. any proposed parser-core change explains why a skill, query, or bundled helper is no
+    longer enough.

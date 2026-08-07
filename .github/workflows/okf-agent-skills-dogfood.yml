@@ -72,6 +72,31 @@ jobs:
           print(f'asserted_declared_types={len(expected)}')
           PY
 
+      - name: Materialize canonical typed audit views
+        run: |
+          set -o pipefail
+          uv run --no-project --with duckdb python okf-agent-skills/scripts/run_typed_audit.py \
+            dogfood/skills.duckdb --output dogfood/audit.json
+          cat dogfood/audit.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path('dogfood/audit.json').read_text(encoding='utf-8'))
+          coverage = report['eval_coverage']
+          if len(coverage) != 24:
+              raise SystemExit(f'expected audit coverage row for each of 24 skills, got {len(coverage)}')
+          covered = [row for row in coverage if row['has_routing_evals']]
+          uncovered = [row for row in coverage if not row['has_routing_evals']]
+          if not covered or not uncovered:
+              raise SystemExit('routing coverage audit must distinguish covered and uncovered skills')
+          print(f'audit_views={len(report)}')
+          print(f'eval_covered_skills={len(covered)}')
+          print(f'eval_uncovered_skills={len(uncovered)}')
+          print(f'mentions_without_edge={len(report["mentions_without_edge"])}')
+          print(f'isolated_skills={len(report["isolated_skills"])}')
+          PY
+
       - name: Summarize projected corpus
         run: |
           set -o pipefail
