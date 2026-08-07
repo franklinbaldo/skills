@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import re
 import shutil
 from dataclasses import dataclass
@@ -29,9 +30,19 @@ class Skill:
 
 
 @dataclass(frozen=True)
+class Resource:
+    skill: Skill
+    source_file: Path
+    source_rel: PurePosixPath
+    derived_rel: PurePosixPath
+    kind: str
+
+
+@dataclass(frozen=True)
 class Relation:
     source_skill: str
     target_skill: str | None
+    target_kind: str | None
     source_path: str
     source_link_target: str
     source_line: int
@@ -100,51 +111,6 @@ def discover_skills(root: Path, output: Path) -> list[Skill]:
     return skills
 
 
-def _link_target_only(raw_target: str) -> str:
-    target = raw_target.strip()
-    if target.startswith("<") and target.endswith(">"):
-        target = target[1:-1]
-    target = target.split("#", 1)[0].split("?", 1)[0]
-    return target
-
-
-def extract_relations(root: Path, skills: list[Skill]) -> list[Relation]:
-    by_source = {skill.source_file.resolve(): skill for skill in skills}
-    relations: list[Relation] = []
-
-    for skill in skills:
-        text = skill.source_file.read_text(encoding="utf-8")
-        for line_no, line in enumerate(text.splitlines(), start=1):
-            for match in MARKDOWN_LINK_RE.finditer(line):
-                raw_target = match.group(1).strip()
-                target = _link_target_only(raw_target)
-                if not target or "://" in target or target.startswith(("mailto:", "#")):
-                    continue
-                candidate = (skill.source_file.parent / target).resolve()
-                target_skill = by_source.get(candidate)
-                relations.append(
-                    Relation(
-                        source_skill=skill.name,
-                        target_skill=target_skill.name if target_skill else None,
-                        source_path=skill.source_rel.as_posix(),
-                        source_link_target=raw_target,
-                        source_line=line_no,
-                        derived_source=skill.derived_rel.as_posix(),
-                        derived_target=target_skill.derived_rel.as_posix() if target_skill else None,
-                        resolved=target_skill is not None,
-                    )
-                )
-
-    return sorted(
-        relations,
-        key=lambda relation: (
-            relation.source_path,
-            relation.source_line,
-            relation.source_link_target,
-        ),
-    )
-
-
 def _resource_kind(path: Path, skill_dir: Path) -> str:
     rel_parts = path.relative_to(skill_dir).parts
     if rel_parts and rel_parts[0] == "references":
@@ -158,8 +124,8 @@ def _resource_kind(path: Path, skill_dir: Path) -> str:
     return "other"
 
 
-def discover_resources(root: Path, output: Path, skills: list[Skill]) -> list[tuple[Skill, Path, str]]:
-    resources: list[tuple[Skill, Path, str]] = []
+def discover_resources(root: Path, output: Path, skills: list[Skill]) -> list[Resource]:
+    candidates: list[tuple[Skill, Path, str]] = []
     output_resolved = output.resolve()
     for skill in skills:
         skill_dir = skill.source_file.parent
@@ -172,8 +138,97 @@ def discover_resources(root: Path, output: Path, skills: list[Skill]) -> list[tu
                 pass
             else:
                 continue
-            resources.append((skill, path, _resource_kind(path, skill_dir)))
+            candidates.append((skill, path, _resource_kind(path, skill_dir)))
+
+    resources: list[Resource] = []
+    for index, (skill, path, kind) in enumerate(candidates, start=1):
+        source_rel = PurePosixPath(path.relative_to(root).as_posix())
+        derived_rel = PurePosixPath("resources") / f"{skill.name}--{index:04d}.md"
+        resources.append(
+            Resource(
+                skill=skill,
+                source_file=path,
+                source_rel=source_rel,
+                derived_rel=derived_rel,
+                kind=kind,
+            )
+        )
     return resources
+
+
+def _link_target_only(raw_target: str) -> str:
+    target = raw_target.strip()
+    if target.startswith("<") and target.endswith(">"):
+        target = target[1:-1]
+    target = target.split("#", 1)[0].split("?", 1)[0]
+    return target
+
+
+def extract_relations(
+    root: Path,
+    skills: list[Skill],
+    resources: list[Resource],
+) -> list[Relation]:
+    skill_by_source = {skill.source_file.resolve(): skill for skill in skills}
+    resource_by_source = {resource.source_file.resolve(): resource for resource in resources}
+    relations: list[Relation] = []
+
+    for skill in skills:
+        text = skill.source_file.read_text(encoding="utf-8")
+        for line_no, line in enumerate(text.splitlines(), start=1):
+            for match in MARKDOWN_LINK_RE.finditer(line):
+                raw_target = match.group(1).strip()
+                target = _link_target_only(raw_target)
+                if not target or "://" in target or target.startswith(("mailto:", "#")):
+                    continue
+
+                candidate = (skill.source_file.parent / target).resolve()
+                target_skill = skill_by_source.get(candidate)
+                target_resource = resource_by_source.get(candidate)
+
+                derived_target: str | None = None
+                target_kind: str | None = None
+                if target_skill is not None:
+                    derived_target = target_skill.derived_rel.as_posix()
+                    target_kind = "skill"
+                elif target_resource is not None:
+                    derived_target = target_resource.derived_rel.as_posix()
+                    target_kind = "resource"
+
+                relations.append(
+                    Relation(
+                        source_skill=skill.name,
+                        target_skill=target_skill.name if target_skill else None,
+                        target_kind=target_kind,
+                        source_path=skill.source_rel.as_posix(),
+                        source_link_target=raw_target,
+                        source_line=line_no,
+                        derived_source=skill.derived_rel.as_posix(),
+                        derived_target=derived_target,
+                        resolved=derived_target is not None,
+                    )
+                )
+
+    return sorted(
+        relations,
+        key=lambda relation: (
+            relation.source_path,
+            relation.source_line,
+            relation.source_link_target,
+        ),
+    )
+
+
+def _relation_label(relation: Relation) -> str:
+    if relation.target_skill is not None:
+        return relation.target_skill
+    target = _link_target_only(relation.source_link_target)
+    return PurePosixPath(target).name or target
+
+
+def _relative_derived_target(source: str, target: str) -> str:
+    source_parent = PurePosixPath(source).parent.as_posix()
+    return PurePosixPath(os.path.relpath(target, start=source_parent)).as_posix()
 
 
 def _write_skill_concept(output: Path, skill: Skill, relations: list[Relation]) -> None:
@@ -197,8 +252,10 @@ def _write_skill_concept(output: Path, skill: Skill, relations: list[Relation]) 
         lines.extend(["", "## Derived relations", ""])
         for relation in resolved:
             assert relation.derived_target is not None
-            relative_target = PurePosixPath(relation.derived_target).relative_to("skills")
-            lines.append(f"- [{relation.target_skill}]({relative_target.as_posix()})")
+            relative_target = _relative_derived_target(
+                skill.derived_rel.as_posix(), relation.derived_target
+            )
+            lines.append(f"- [{_relation_label(relation)}]({relative_target})")
     target.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -219,32 +276,34 @@ def _write_relation_concepts(output: Path, relations: list[Relation]) -> None:
         ]
         if relation.target_skill is not None:
             fields.append(f"target_skill: {_yaml_string(relation.target_skill)}")
+        if relation.target_kind is not None:
+            fields.append(f"target_kind: {_yaml_string(relation.target_kind)}")
         if relation.derived_target is not None:
             fields.append(f"derived_target: {_yaml_string(relation.derived_target)}")
         fields.extend(["---", ""])
         (relation_dir / slug).write_text("\n".join(fields), encoding="utf-8")
 
 
-def _write_resource_concepts(output: Path, root: Path, resources: list[tuple[Skill, Path, str]]) -> None:
+def _write_resource_concepts(output: Path, resources: list[Resource]) -> None:
     resource_dir = output / "resources"
     resource_dir.mkdir(parents=True, exist_ok=True)
-    for index, (skill, path, kind) in enumerate(resources, start=1):
-        source_rel = PurePosixPath(path.relative_to(root).as_posix()).as_posix()
+    for resource in resources:
         fields = [
             "---",
             "type: SkillResource",
-            f"skill: {_yaml_string(skill.name)}",
-            f"source_path: {_yaml_string(source_rel)}",
-            f"kind: {_yaml_string(kind)}",
-            f"size_bytes: {path.stat().st_size}",
-            f"source_sha256: {_yaml_string(_sha256(path))}",
+            f"skill: {_yaml_string(resource.skill.name)}",
+            f"source_path: {_yaml_string(resource.source_rel.as_posix())}",
+            f"kind: {_yaml_string(resource.kind)}",
+            f"size_bytes: {resource.source_file.stat().st_size}",
+            f"source_sha256: {_yaml_string(_sha256(resource.source_file))}",
         ]
-        count = _line_count(path)
+        count = _line_count(resource.source_file)
         if count is not None:
             fields.append(f"line_count: {count}")
         fields.extend(["---", ""])
-        slug = f"{skill.name}--{index:04d}.md"
-        (resource_dir / slug).write_text("\n".join(fields), encoding="utf-8")
+        (output / Path(resource.derived_rel.as_posix())).write_text(
+            "\n".join(fields), encoding="utf-8"
+        )
 
 
 def project(root: Path, output: Path) -> tuple[list[Skill], list[Relation]]:
@@ -257,13 +316,13 @@ def project(root: Path, output: Path) -> tuple[list[Skill], list[Relation]]:
     output.mkdir(parents=True)
 
     skills = discover_skills(root, output)
-    relations = extract_relations(root, skills)
     resources = discover_resources(root, output, skills)
+    relations = extract_relations(root, skills, resources)
 
     for skill in skills:
         _write_skill_concept(output, skill, relations)
     _write_relation_concepts(output, relations)
-    _write_resource_concepts(output, root, resources)
+    _write_resource_concepts(output, resources)
 
     manifest = [
         "---",
@@ -291,7 +350,7 @@ def main() -> int:
 
     skills, relations = project(args.source, args.output)
     resolved = sum(relation.resolved for relation in relations)
-    print(f"projected {len(skills)} skills, {len(relations)} local links ({resolved} skill-to-skill)")
+    print(f"projected {len(skills)} skills, {len(relations)} local links ({resolved} projected)")
     print(args.output.resolve())
     return 0
 

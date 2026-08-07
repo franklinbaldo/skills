@@ -44,10 +44,29 @@ class ProjectAgentSkillsTests(unittest.TestCase):
         self.assertEqual(len(resolved), 1)
         self.assertEqual(resolved[0].source_link_target, "../b/SKILL.md")
         self.assertEqual(resolved[0].derived_target, "skills/b.md")
+        self.assertEqual(resolved[0].target_kind, "skill")
 
         derived_a = (self.output / "skills" / "a.md").read_text(encoding="utf-8")
         self.assertIn("[b](b.md)", derived_a)
         self.assertNotIn("../b/SKILL.md", derived_a)
+
+    def test_rewrites_links_to_projected_resources(self) -> None:
+        self.write(
+            "a/SKILL.md",
+            "---\nname: a\n---\n\nRead [details](references/details.md).\n",
+        )
+        self.write("a/references/details.md", "details\n")
+
+        _, relations = MODULE.project(self.root, self.output)
+
+        self.assertEqual(len(relations), 1)
+        relation = relations[0]
+        self.assertTrue(relation.resolved)
+        self.assertEqual(relation.target_kind, "resource")
+        self.assertTrue(relation.derived_target.startswith("resources/a--"))
+
+        derived_a = (self.output / "skills" / "a.md").read_text(encoding="utf-8")
+        self.assertIn("[details.md](../resources/a--0001.md)", derived_a)
 
     def test_relation_provenance_is_emitted_separately(self) -> None:
         self.write(
@@ -66,6 +85,7 @@ class ProjectAgentSkillsTests(unittest.TestCase):
         self.assertIn("source_line: 6", relation)
         self.assertIn('derived_source: "skills/a.md"', relation)
         self.assertIn('derived_target: "skills/b.md"', relation)
+        self.assertIn('target_kind: "skill"', relation)
         self.assertIn("resolved: true", relation)
 
     def test_source_scripts_are_never_executed(self) -> None:
