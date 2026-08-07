@@ -9,6 +9,10 @@ description: >-
 when_to_use: >-
   Use for repository-wide Agent Skills analysis, current best-practice audits, dependency
   graphs, relational checks, or experiments that combine Claude Code skills with OKF.
+compatibility: >-
+  Bundled projectors require Python 3 only. Full relational inspection requires a current
+  okf-parser installation; if it is not installed, the documented uvx-from-GitHub path
+  additionally requires uv and outbound network access.
 ---
 
 # Use OKF as the inspection layer for Agent Skills
