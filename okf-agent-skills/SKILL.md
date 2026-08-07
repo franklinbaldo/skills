@@ -24,10 +24,10 @@ The default architecture is:
 Agent Skills → this skill / deterministic helper → derived OKF → okf-parser → SQL / graph / diagnostics
 ```
 
-The integration is deliberately **skill-first**. Keep domain knowledge here. Move only
-stable mechanical work into bundled scripts. Propose a new `okf-parser` primitive only
-after real use shows that the behavior is repeated, deterministic, and awkward to express
-through the existing generic surfaces.
+The integration is deliberately **skill-first**. Keep domain knowledge here. Move stable
+mechanical work into bundled scripts. Propose a new `okf-parser` primitive only after real use
+shows that the behavior is repeated, deterministic, and awkward to express through the
+existing generic surfaces.
 
 ## Before starting
 
@@ -69,17 +69,33 @@ material to a query, retain whether the value was authored or derived.
 
 ### 3. Build a disposable OKF projection
 
-Create a temporary or ignored OKF bundle representing the corpus. The first version should
-stay small:
+For normal filesystem-backed audits, prefer the bundled deterministic projector rather than
+hand-authoring the IR:
+
+```bash
+python <skill-dir>/scripts/project_agent_skills.py <skills-root> <derived-bundle>
+```
+
+The helper is stdlib-only. It performs static discovery, resource inventory, source hashing,
+local Markdown-link resolution, source→derived target rewriting, and relation provenance. It
+never executes scripts from the audited skills.
+
+The derived bundle contains:
 
 - one `Skill` concept per discovered `SKILL.md`;
-- one `SkillResource` concept per relevant bundled file;
-- **derived Markdown links between projected concepts** for source relations that resolve
-  inside the audited corpus;
-- optional `SkillEval` concepts only when the repository has a real eval corpus.
+- one `SkillResource` concept per bundled supporting file;
+- one `SkillRelation` provenance concept per local Markdown relation considered by the
+  projector;
+- **derived Markdown links between projected `Skill` concepts** for source relations that
+  resolve to another skill in the audited corpus;
+- a projection manifest with aggregate counts.
 
 Do **not** add `type: Skill` to the original `SKILL.md`. Put OKF metadata only in the derived
 bundle or in supporting documents that are intentionally authored as OKF concepts.
+
+The helper intentionally does not implement a complete YAML parser. It derives skill identity
+from a simple scalar `name:` when present and otherwise falls back to the containing directory.
+Use the source documents directly when an audit depends on richer frontmatter semantics.
 
 ### 4. Materialize source relations inside the derived bundle
 
@@ -96,9 +112,10 @@ source:  A/SKILL.md -> ../datajud/SKILL.md
 derived: skills/a.md -> skills/datajud.md
 ```
 
-The derived concept for `A` should contain an ordinary Markdown link to the derived `datajud`
-concept. Store source provenance separately — at minimum the source file and original target;
-record source line/location too when the projection can obtain it deterministically.
+The bundled projector implements this contract. The derived concept for `A` contains an
+ordinary Markdown link to the derived `datajud` concept, while a separate `SkillRelation`
+concept records at least the source file, original link target, source line, and derived
+source/target identities.
 
 Do **not** leave the derived link pointing back to `../datajud/SKILL.md`: that may escape the
 projection root and would make the graph depend on the source tree rather than the derived
@@ -120,6 +137,14 @@ okf-parser check <derived-bundle>
 okf-parser inventory <derived-bundle>
 okf-parser graph <derived-bundle>
 okf-parser duckdb <derived-bundle> <output.duckdb>
+```
+
+When `okf-parser` is not installed locally, a current checkout can be invoked directly with
+`uvx`, for example:
+
+```bash
+uvx --from 'git+https://github.com/franklinbaldo/okf-parser.git' \
+  okf-parser check <derived-bundle>
 ```
 
 Use `apply`, Ibis, DuckDB SQL, schema export, or MCP surfaces when they are available and

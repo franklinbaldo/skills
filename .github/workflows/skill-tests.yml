@@ -1,0 +1,26 @@
+name: Skill helper tests
+
+on:
+  pull_request:
+    paths:
+      - "okf-agent-skills/**"
+      - ".github/workflows/skill-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "okf-agent-skills/**"
+      - ".github/workflows/skill-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run okf-agent-skills tests
+        run: python -m unittest discover -s okf-agent-skills/tests -v
