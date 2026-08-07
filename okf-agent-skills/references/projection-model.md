@@ -21,12 +21,23 @@ line_count: 420
 ---
 ```
 
-Project upstream frontmatter fields only when present or when a documented default is
-material. Useful candidates include `when_to_use`, `compatibility`, `allowed-tools`,
-`user-invocable`, `disable-model-invocation`, `context`, `agent`, `model`, and `effort`.
-Preserve whether a value was authored versus derived when that distinction matters.
+Keep portable Agent Skills fields distinct from Claude Code extensions.
 
-Do not copy the whole `SKILL.md` body into frontmatter. The source path is the authority.
+Portable Agent Skills candidates include fields defined by the open specification such as
+`name`, `description`, `license`, `compatibility`, `metadata`, and `allowed-tools` where the
+targeted specification version defines it.
+
+Claude Code may add implementation-specific fields such as `when_to_use`, `user-invocable`,
+`disable-model-invocation`, `context`, `agent`, `model`, `effort`, `paths`, `hooks`, or other
+current extensions. Verify the current Claude Code documentation before treating any such
+field as current behavior.
+
+Project fields only when present or when a documented default is material. Preserve whether a
+value was authored versus derived when that distinction matters.
+
+Do not copy the whole `SKILL.md` body into frontmatter. The source path is the authority. The
+body of a **derived** `Skill` concept may, however, contain translated Markdown links whose
+purpose is to materialize source relations inside the derived OKF bundle, as defined below.
 
 ### SkillResource
 
@@ -73,21 +84,79 @@ expected: trigger
 
 Execution outcome is separate from the eval case itself.
 
-## Relations
+## Relations are translated into the derived namespace
 
-Prefer the normal Markdown link relation already extracted by `okf-parser`.
+A link in the source corpus is evidence for a relation, but `okf-parser` cannot graph evidence
+that is not present in the bundle it is reading. Therefore the projection MUST materialize
+resolved source relations as ordinary Markdown links between the corresponding **derived**
+concepts.
 
-For example:
+For example, if the source contains:
 
-```markdown
-Use [datajud](../datajud/SKILL.md) to verify process metadata.
+```text
+A/SKILL.md -> ../datajud/SKILL.md
 ```
 
-already supplies source evidence for a skill-to-skill edge. Avoid adding a duplicate
-`dependencies:` field to the authored skill.
+and those skills project to:
+
+```text
+.okf/agent-skills/skills/a.md
+.okf/agent-skills/skills/datajud.md
+```
+
+then the derived `Skill(A)` body should contain a link equivalent to:
+
+```markdown
+Uses [datajud](datajud.md).
+```
+
+The exact anchor text is not semantically important; the resolved derived target is. This
+gives `okf-parser graph <derived-bundle>` and the bundle's `links` relation an actual edge:
+
+```text
+Skill(A) -> Skill(datajud)
+```
+
+Do not leave the target as `../datajud/SKILL.md`. That points back into the source corpus,
+may escape the derived-bundle root, and defeats the purpose of having a self-contained IR.
+
+### Provenance of a derived edge
+
+Translation changes the link target namespace, not the evidence. Preserve enough provenance
+to explain where each edge came from.
+
+At minimum record:
+
+```text
+source_path
+source_link_target
+```
+
+When available deterministically, also retain source line, span, or another stable locator.
+
+The projection may encode provenance in a companion concept/table or in deterministic metadata
+associated with the source concept. Do not encode provenance by making the derived edge point
+back to the source file: graph identity and provenance are separate concerns.
+
+Conceptually:
+
+```text
+source evidence:
+A/SKILL.md --../datajud/SKILL.md--> datajud/SKILL.md
+
+compiled relation:
+Skill(A) ---------------------------> Skill(datajud)
+        provenance: source A + original target
+```
+
+### No duplicate dependency declaration
+
+The translation does not justify adding an authored `dependencies:` field to source skills.
+The dependency is still derived from the real source link. The projection merely recompiles
+that relation into the namespace that `okf-parser` can execute over.
 
 A semantic mention without a link may be reported separately as a candidate relation, but it
-must not be silently upgraded to the same certainty as a resolved link.
+must not be silently upgraded to the same certainty as a resolved authored link.
 
 ## Physical layout
 
@@ -98,6 +167,7 @@ shape is:
 .okf/agent-skills/
   skills/
     revisao-minutas.md
+    datajud.md
   resources/
     revisao-minutas--references--risco-fatal.md
   evals/
@@ -114,9 +184,15 @@ Sort discovery results and emitted collections. Normalize repository-relative pa
 form. Never include timestamps, temporary absolute paths, or machine-specific values unless
 they are explicitly requested observations.
 
+Derived relation rewriting is part of determinism: the same resolved source target must map
+to the same derived concept path on every run.
+
 ## Source mapping
 
 Every concept must carry enough information to return from a relational finding to the source
 artifact. At minimum this is `source_path` relative to the audited root.
+
+Every derived relation used for dependency analysis must likewise retain enough provenance to
+identify the source link that caused it.
 
 The report should cite the source, not the generated concept path, whenever practical.
