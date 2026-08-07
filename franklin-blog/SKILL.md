@@ -1,162 +1,172 @@
 ---
 name: franklin-blog
-description: |
-  Writes posts for Franklin Baldo's blog at franklinbaldo.github.io, where voice — thinking out loud, admitted uncertainty, lateral association, dry humor, and didactic generosity — is the criterion of quality. Drafts immediately, then iterates from Franklin's reactions. Use for blog-shaped requests unless Franklin explicitly wants formal/argumentative treatment.
+description: >-
+  Draft and revise posts for Franklin Baldo's blog at franklinbaldo.github.io. Use for
+  blog-shaped writing, rewrites, continuations, or voice recovery. Preserve the author's
+  actual thought, uncertainty, idiosyncrasy, and evolving register instead of forcing a
+  fixed house style. Draft early and iterate from Franklin's reactions. Do not invent
+  autobiographical facts, memories, emotions, beliefs, or experiences.
 ---
 
-# franklin-blog
+# Write the blog without turning it into a style preset
 
-Default skill for Franklin Baldo's blog. Voice drives every other decision.
+This skill exists so an agent can turn Franklin's notes, fragments, drafts, and reactions
+into blog posts that remain recognizably authored by him **without freezing the blog into
+one recurring voice, structure, or trick**.
 
-## When to use
+The primary failure is not imperfect elegance. It is **authorship drift**: prose that is
+competent, plausible, and no longer belongs to the person whose name is on it.
 
-Use for:
+## Evidence hierarchy
 
-- new blog posts and longform drafts;
-- rewrites/revisions of existing posts;
-- continuations and follow-ups;
-- blog-specific voice work.
+When deciding what the post should sound like, trust evidence in this order:
 
-Do not use for legal documents, technical documentation, papers, or unrelated social platforms.
+1. Franklin's instructions, corrections, phrases, examples, and current conversational
+   register;
+2. the draft or notes currently being transformed;
+3. relevant posts from the actual blog corpus, especially close conceptual/formal relatives;
+4. general observations in [`references/voice.md`](references/voice.md);
+5. the optional sampling pool in [`references/reference-pool.md`](references/reference-pool.md).
 
-A separate optional `franklin-essay` skill may handle explicitly formal/hostile-review argumentative work when installed. Do not cede merely because the topic is serious; the blog often treats serious subjects in a voice-first register. If the companion skill is unavailable, handle the request here with fewer jokes/memes and more restraint rather than refusing.
+Lower-ranked evidence must never overwrite higher-ranked evidence. A remembered stylistic
+rule is not permission to rewrite a sentence Franklin deliberately gave you.
 
-## The voice, in one breath
+When corpus calibration matters, follow
+[`references/corpus-calibration.md`](references/corpus-calibration.md).
 
-Center of gravity:
+## Non-negotiable authorship boundary
 
-- **short, dry, cumulative sentences**;
-- **confessional stance**;
-- **dry humor as load-bearing antimelodrama**;
-- **didactic generosity** that carries the lay reader;
-- a person visibly thinking out loud rather than presenting a polished generic answer.
+Never invent first-person material merely because it would make the post more vivid.
 
-Voiceless competence is the primary failure mode.
+Do not fabricate:
 
-For a dedicated fidelity pass, or when the summary above is insufficient, load [`references/voice.md`](references/voice.md).
+- memories or autobiographical events;
+- emotions Franklin did not express;
+- beliefs, preferences, doubts, regrets, or intentions he did not supply;
+- conversations, quotations, encounters, or personal history;
+- stronger certainty or stronger uncertainty than the available evidence supports.
 
-## Reference pool, not citation pool
+You may shape supplied first-person material. You may not manufacture a life for the narrator.
+If a personal bridge would improve the post but is not grounded, either write around it or
+leave a visible placeholder/question for Franklin.
 
-External writers are a sampling space, not voices to imitate or names to display. Load [`references/reference-pool.md`](references/reference-pool.md) only when widening associations or calibrating voice. Most posts should not visibly imitate or cite the pool.
+## What should remain stable
 
-## Workflow: draft first
+Across very different posts, protect these invariants unless Franklin explicitly redirects:
 
-1. **Draft before interrogating.** Do not require Franklin to fully articulate the post before he has something to react to.
-2. **Write a disposable first draft immediately.** Its job is to create reaction surface, not to be right.
-3. **Do not defend the draft.** If Franklin redirects, discard paragraphs, structures, or the whole thing without bargaining for salvage.
-4. **Iterate from his signal.** Each pass should contain more of his redirection and less of the model's initial framing.
-5. **Rewrite when needed.** Do not reduce major redirection to line edits.
-6. **Only after the form settles, polish.** At that stage load [`references/publishing-and-visuals.md`](references/publishing-and-visuals.md) for structure, visuals, frontmatter, links, further reading, bilingual conventions, and continuity.
-7. **Finish with a voice-fidelity pass.** Use [`references/voice.md`](references/voice.md) if useful.
+- **authorship is visible** — the text should not read like anonymous competent content;
+- **epistemic honesty** — uncertainty, confidence, and speculation stay calibrated;
+- **thought has motion** — the reader can feel discovery, tension, juxtaposition, or change;
+- **lateral curiosity is allowed** — relevant associations need not become a formal proof;
+- **the reader is carried** — specialized material gets enough context to remain followable;
+- **form follows the post** — no mandatory number of headings, jokes, references, memes, or
+  confessions;
+- **revision preserves live edges** — do not polish away the sentence that made the post
+  worth writing.
 
-The first draft is not the post. It starts the thinking.
+Everything else is variable.
 
-## Protection against tightening
+## Dimensions that may vary post to post
 
-The default model reflex is to make loose thought look complete. Resist it.
+Do not optimize every post toward an averaged house voice. A post may legitimately be:
 
-- When Franklin says “I don't know” / “não sei”, do not manufacture closure.
-- When he makes a loose association, do not retrofit a rigorous bridge unless asked.
-- When he admits uncertainty, do not fortify it with defensive hedges.
-- Parenthetical stumbles, interruptions, and partial metaphors can be voice features.
-- Do not replace a lived, vulnerable sentence with a formally “stronger” but emotionally flatter one.
+- confessional or impersonal;
+- dry and compressed or patient and expansive;
+- funny or entirely straight;
+- lyrical, technical, argumentative, documentary, weird, practical, or mixed;
+- heavily structured or almost structureless;
+- reference-rich or nearly self-contained;
+- visually playful or plain prose.
 
-If a revision smooths an admission, tightens an association, or preemptively answers an objection nobody raised, treat that as a likely regression.
+A serious technical post does not need a confession to prove authorship. A vulnerable post
+does not need a joke to earn permission to be vulnerable. A lyrical post does not need to be
+converted into an argument.
 
-## Lateral association as posture
+## Workflow: create reaction surface early
 
-Offer occasional lateral references unprompted when they genuinely illuminate the thought. The gesture is “this reminds me of X”, not a reading-list assignment.
+1. **Determine the actual function.** In one sentence, identify what this particular post is
+   doing: discovering, confessing, explaining, documenting, arguing, remembering, joking,
+   juxtaposing, teaching, or some mixture.
+2. **Draft before over-interviewing.** If there is enough signal to make a useful attempt,
+   produce a disposable draft rather than asking Franklin to specify the whole post in
+   advance.
+3. **Treat the draft as an experiment.** It exists to elicit correction. Do not defend its
+   framing or bargain to preserve paragraphs Franklin rejects.
+4. **Use Franklin's reaction as new primary evidence.** A redirection changes the model of
+   the post, not merely the wording of the last paragraph.
+5. **Rewrite at the right scale.** Structural redirection deserves structural rewriting;
+   voice drift deserves register repair; factual problems deserve factual correction.
+6. **Calibrate against corpus only when useful.** For follow-ups, explicit voice recovery, or
+   final fidelity checks, inspect relevant posts. Do not delay every first draft with a
+   repository archaeology ritual.
+7. **Verify external facts that matter.** Do not use "blog voice" as a license for factual
+   looseness. Mark loose associations as loose; verify concrete claims when their accuracy
+   affects the post.
+8. **Polish and publish late.** Once content and form have settled, load
+   [`references/publishing-and-visuals.md`](references/publishing-and-visuals.md).
 
-- Strong connections can be stated directly.
-- Weak associations should be marked as weak.
-- Verify uncertain factual details when they matter.
-- Include associations to Franklin's own prior posts/projects when they are the closest conceptual parent.
-- Do not flood: one or two useful associations beat a shelf dump.
+## Revision rules
 
-Loose association creates more false positives than tight argument. Honest confidence marking is the cost-control mechanism.
+When revising existing prose:
 
-## Didactic generosity
+- distinguish **error** from **strangeness**; unusual is not automatically wrong;
+- preserve deliberate uncertainty instead of resolving it for rhetorical neatness;
+- do not add defenses against objections nobody in the conversation is making;
+- do not replace a concrete odd phrase with a generic elegant one merely because the latter
+  scans better;
+- allow a tangent to remain a tangent when its value is juxtaposition rather than conclusion;
+- cut dead prose aggressively, but do not confuse vulnerability, ambiguity, or eccentricity
+  with dead prose;
+- when Franklin says a draft "sounds like someone else", change stance/rhythm/selection, not
+  just adjectives.
 
-Carrying an outside reader is default, not a special explanatory mode.
+## Associations and references
 
-When a technical idea or reference enters:
+Bring in an association when it genuinely changes how the reader can see the object. Do not
+perform erudition.
 
-- explain enough for a non-specialist to keep following;
-- remain in voice rather than switching to textbook prose;
-- introduce figures/theories generously enough that later disagreement is earned;
-- keep the tension between short-dry prose and patient explanation instead of solving it by dropping one side.
+- Prefer one useful connection to a shelf of names.
+- Explain unfamiliar material enough for an outside reader to continue.
+- Weak connections should sound weak; strong connections may sound strong.
+- Franklin's own previous posts/projects are legitimate conceptual neighbors when relevant.
+- Named writers in the reference pool are **not templates for voice imitation**.
 
-The characteristic voice is both exposed and helpful.
+## Blog boundaries
 
-## Core anti-patterns
+Use this skill for blog posts, blog revisions, continuations, and blog-specific voice work.
+Do not use it for legal pleadings, institutional documents, technical documentation, academic
+papers, or unrelated social posts merely because those artifacts could be written stylishly.
 
-Avoid:
+If the task is only to add or generate memes without rewriting the post, route to the
+companion meme skills rather than treating that as blog authorship.
 
-- **generic competence** — correct prose that could be anyone's;
-- **defensive prose with no attacker present**;
-- preempting critiques the reader is not making;
-- visible imitation of one reference voice;
-- performing expertise through unnecessary citation/name-dropping;
-- tightening loose associations into claims they were not;
-- completing admitted uncertainty;
-- smoothing graceful stumbles;
-- meta-openers such as “In this essay I will argue…”;
-- generic engagement closers such as “What do you think?”.
+## Publishing layer
 
-Visual/publishing anti-patterns live in [`references/publishing-and-visuals.md`](references/publishing-and-visuals.md) and should load only during that stage.
+After the post itself is substantially settled, use
+[`references/publishing-and-visuals.md`](references/publishing-and-visuals.md) for current site
+conventions, frontmatter, links, bilingualism, visuals, continuity, and formatting.
 
-## Voice-fidelity pass
+Concrete meme mechanics belong to `meme-image` and `text-meme-injection`.
 
-Before declaring the post done, ask two things.
+## Final fidelity test
 
-### 1. Did the function drift?
+Before calling the post done, ask:
 
-Restate in one sentence what the post is doing for the reader and compare it with the brief/conversation.
+1. **Is every first-person claim grounded in something Franklin actually supplied?**
+2. **What is this post doing, and did revision silently replace that function with an easier
+   one?**
+3. **Could the most distinctive sentences have been written for any competent person's
+   blog?** If yes, authorship probably drifted.
+4. **Did corpus/style guidance force a recurring trick that this post did not need?**
+5. **Did polishing erase uncertainty, tension, oddness, humor, or restraint that was carrying
+   meaning?**
+6. **Can a reader outside Franklin's immediate context still follow what matters?**
 
-Common swaps:
+## Definition of done
 
-- biographical companion → defense of a paper;
-- personal essay → literature summary;
-- confession → argument;
-- voice piece → competent generic ensaísmo;
-- blog voice → forensic register.
+A draft is ready when it performs the function Franklin is actually pursuing, preserves the
+specific evidence of his authorship, invents no personal history, calibrates claims honestly,
+carries the intended reader, and uses publishing conventions only after the post's own form
+has emerged.
 
-A function swap usually requires a stance rewrite, not cosmetic cuts.
-
-### 2. Does it sound like Franklin or a competent stranger with similar interests?
-
-If the latter, repair register rather than merely editing sentences.
-
-If the fidelity pass creates an urge to tighten an admission, fortify a hedge, or smooth a stumble, that urge itself is evidence of the failure mode.
-
-## Conditional publishing layer
-
-Once the draft's form settles, load [`references/publishing-and-visuals.md`](references/publishing-and-visuals.md) for:
-
-- Astro/body structure;
-- headings and closing-line conventions;
-- visual rhythm;
-- meme placement relative to confession/didactic register;
-- maps, Mermaid, SVG, pull quotes, and footnotes;
-- links and further reading;
-- frontmatter and file naming;
-- bilingual publishing conventions;
-- continuity/repetition checks across recent posts.
-
-For concrete meme mechanics, delegate to `meme-image` and `text-meme-injection` rather than duplicating their catalogs/API rules here.
-
-## Definition of Done
-
-A blog draft is ready when:
-
-- it satisfies the actual brief rather than a nearby function;
-- it reads as visibly thinking rather than prepackaged exposition;
-- admissions and uncertainty were not “fixed” out of existence;
-- lateral associations are useful and confidence-calibrated;
-- outside readers receive enough context to follow;
-- final publishing/visual conventions were checked only after the form settled;
-- voice-fidelity passes without generic-competence drift.
-
-## When in doubt
-
-Default to: **voice over argument, admission over hedge, association over amarração, silence over meme, less over more, draft over plan.**
+When in doubt: **preserve the author, not the preset. Draft something worth reacting to.**
