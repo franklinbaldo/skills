@@ -23,12 +23,12 @@ jobs:
 
       - name: Project repository skills to typed OKF IR
         run: |
+          set -o pipefail
           mkdir -p dogfood
           python okf-agent-skills/scripts/project.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/projector.txt
           cp -R "$RUNNER_TEMP/skills-okf" dogfood/projection
 
       - name: Inspect projection with current okf-parser
-        continue-on-error: true
         run: |
           set -o pipefail
           OKF="uvx --from git+https://github.com/franklinbaldo/okf-parser.git okf-parser"
@@ -42,6 +42,7 @@ jobs:
 
       - name: Assert declared DuckDB types
         run: |
+          set -o pipefail
           uv run --no-project --with duckdb python - <<'PY' | tee dogfood/typed-contracts.txt
           import duckdb
 
@@ -73,6 +74,7 @@ jobs:
 
       - name: Summarize projected corpus
         run: |
+          set -o pipefail
           python - <<'PY' | tee dogfood/summary.txt
           from collections import defaultdict
           from pathlib import Path
