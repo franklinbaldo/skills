@@ -1,6 +1,6 @@
 # Ruff rule recipes
 
-Load this reference when a concrete Ruff diagnostic needs an implementation pattern or when the repository has no Ruff configuration yet.
+Load this reference **on demand** when a concrete Ruff diagnostic needs an implementation pattern or when the repository has no Ruff configuration yet. The entry-point skill intentionally omits this catalog from always-loaded context.
 
 ## Enabling strict rule families
 
