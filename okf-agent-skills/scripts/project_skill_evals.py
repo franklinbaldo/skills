@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path, PurePosixPath
 
 EVAL_QUERIES = PurePosixPath("evals/eval_queries.json")
@@ -51,6 +52,15 @@ def discover_routing_evals(root: Path) -> list[dict[str, object]]:
     return cases
 
 
+def _mark_eval_resources(output: Path, source_paths: set[str]) -> None:
+    for path in sorted((output / "resources").glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        match = re.search(r'^source_path: "([^"]+)"$', text, re.M)
+        if match and match.group(1) in source_paths:
+            text = re.sub(r'^kind: "[^"]+"$', 'kind: "eval"', text, count=1, flags=re.M)
+            path.write_text(text, encoding="utf-8")
+
+
 def project(root: Path, output: Path) -> list[dict[str, object]]:
     root = root.resolve()
     output = output.resolve()
@@ -62,6 +72,8 @@ def project(root: Path, output: Path) -> list[dict[str, object]]:
         stale.unlink()
 
     cases = discover_routing_evals(root)
+    _mark_eval_resources(output, {str(case["source_path"]) for case in cases})
+
     per_skill: dict[str, int] = {}
     for case in cases:
         skill = str(case["skill"])
