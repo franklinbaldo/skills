@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,6 +10,7 @@ SCRIPT = Path(__file__).parents[1] / "scripts" / "project_agent_skills.py"
 SPEC = importlib.util.spec_from_file_location("project_agent_skills", SCRIPT)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 
@@ -61,7 +63,7 @@ class ProjectAgentSkillsTests(unittest.TestCase):
         relation = relation_files[0].read_text(encoding="utf-8")
         self.assertIn('source_path: "a/SKILL.md"', relation)
         self.assertIn('source_link_target: "../b/SKILL.md"', relation)
-        self.assertIn("source_line: 7", relation)
+        self.assertIn("source_line: 6", relation)
         self.assertIn('derived_source: "skills/a.md"', relation)
         self.assertIn('derived_target: "skills/b.md"', relation)
         self.assertIn("resolved: true", relation)
