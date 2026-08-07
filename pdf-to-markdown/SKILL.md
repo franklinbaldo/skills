@@ -4,6 +4,10 @@ description: |
   Converts court/process PDF documents (from PJe, SEI, Kanoê, or other systems) into clean, structured Markdown.
   Organizes the output in a directory named after the case (CNJ or NUP) where each document or section of the case
   becomes a separate .md file. Prefers `markitdown` via `uvx` / `uv run` with custom options, falling back to PyMuPDF.
+compatibility: >-
+  Requires Python/uv for local markitdown/PyMuPDF conversion. Local extraction can
+  run offline; Azure Document Intelligence or Content Understanding branches require
+  network access plus the corresponding Azure endpoint and credentials.
 ---
 
 # PDF-to-Markdown Court Document Conversion
