@@ -11,6 +11,9 @@ description: >-
   vem decidindo determinada tese. Dispare mesmo quando o pedido nao usar a
   palavra "jurisprudencia" — basta o contexto ser decisoes judiciais de
   Rondonia. NAO use para tribunais de outros estados, STF, STJ ou TST.
+compatibility: >-
+  Requires Python 3 and outbound HTTPS access to the TJRO JURIS API. The bundled
+  client is stdlib-only and does not require a private credential.
 ---
 
 ## O que esta skill faz
