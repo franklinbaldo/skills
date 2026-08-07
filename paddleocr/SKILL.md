@@ -1,6 +1,10 @@
 ---
 name: paddleocr
 description: Run PaddleOCR on PDFs and images, locally or through the Google Colab CLI. Use when extracting scanned documents to Markdown, choosing between GPU and CPU OCR, benchmarking OCR speed or confidence, or replacing slower generative document OCR with a deterministic pipeline.
+compatibility: >-
+  Requires Python plus a PaddleOCR environment. Local GPU mode needs a compatible
+  NVIDIA/CUDA stack; remote mode needs network access and an authenticated Google
+  Colab CLI on Linux/macOS or WSL. CPU fallback is supported but can be much slower.
 ---
 
 # PaddleOCR
