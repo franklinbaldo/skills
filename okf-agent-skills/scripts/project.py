@@ -2,8 +2,8 @@
 """Build the complete Agent Skills inspection IR for current okf-parser surfaces.
 
 This is the single frontend for repository dogfood. It composes the stable static
-projectors, then writes RFC 0006 DuckDB declarations for the derived concept types.
-It never executes code from the audited skills.
+projectors, applies optional reviewed-relation policy, then writes RFC 0006 DuckDB
+declarations for the derived concept types. It never executes code from audited skills.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from pathlib import Path
 import project_agent_skills
 import project_skill_evals
 import project_skill_mentions
+import promote_reviewed_relations
 
 SPEC_TEMPLATE = ".okf/contracts/{slug}.md"
 
@@ -23,7 +24,7 @@ DECLARED_SCHEMAS: dict[str, str] = {
     "AgentSkillsProjection": """CREATE TABLE \"AgentSkillsProjection\" (\n    skill_count INTEGER,\n    relation_count INTEGER,\n    resolved_relation_count INTEGER,\n    resource_count INTEGER\n);\n""",
     "Skill": """CREATE TABLE \"Skill\" (\n    name VARCHAR,\n    source_path VARCHAR,\n    source_sha256 VARCHAR,\n    line_count INTEGER\n);\n""",
     "SkillResource": """CREATE TABLE \"SkillResource\" (\n    skill VARCHAR,\n    source_path VARCHAR,\n    kind VARCHAR,\n    size_bytes UBIGINT,\n    source_sha256 VARCHAR,\n    line_count INTEGER\n);\n""",
-    "SkillRelation": """CREATE TABLE \"SkillRelation\" (\n    source_skill VARCHAR,\n    target_skill VARCHAR,\n    target_kind VARCHAR,\n    source_path VARCHAR,\n    source_link_target VARCHAR,\n    source_line INTEGER,\n    derived_source VARCHAR,\n    derived_target VARCHAR,\n    resolved BOOLEAN\n);\n""",
+    "SkillRelation": """CREATE TABLE \"SkillRelation\" (\n    source_skill VARCHAR,\n    target_skill VARCHAR,\n    target_kind VARCHAR,\n    source_path VARCHAR,\n    source_link_target VARCHAR,\n    source_line INTEGER,\n    derived_source VARCHAR,\n    derived_target VARCHAR,\n    resolved BOOLEAN,\n    evidence_kind VARCHAR,\n    review_reason VARCHAR,\n    context_sha256 VARCHAR\n);\n""",
     "SkillEval": """CREATE TABLE \"SkillEval\" (\n    skill VARCHAR,\n    eval_kind VARCHAR,\n    source_path VARCHAR,\n    case_index INTEGER,\n    should_trigger BOOLEAN,\n    query_sha256 VARCHAR\n);\n""",
     "SkillMention": """CREATE TABLE \"SkillMention\" (\n    source_skill VARCHAR,\n    target_skill VARCHAR,\n    source_path VARCHAR,\n    source_line INTEGER,\n    relation_strength VARCHAR,\n    context_sha256 VARCHAR\n);\n""",
 }
@@ -53,15 +54,20 @@ def project(root: Path, output: Path) -> dict[str, int]:
     root = root.resolve()
     output = output.resolve()
 
-    skills, relations = project_agent_skills.project(root, output)
+    skills, authored_relations = project_agent_skills.project(root, output)
     evals = project_skill_evals.project(root, output)
     mentions = project_skill_mentions.project(root, output)
+    reviewed_relations = promote_reviewed_relations.promote(root, output, mentions)
     write_declared_schemas(output)
 
+    relation_count = len(authored_relations) + len(reviewed_relations)
     return {
         "skills": len(skills),
-        "relations": len(relations),
-        "resolved_relations": sum(relation.resolved for relation in relations),
+        "relations": relation_count,
+        "authored_relations": len(authored_relations),
+        "reviewed_relations": len(reviewed_relations),
+        "resolved_relations": sum(relation.resolved for relation in authored_relations)
+        + len(reviewed_relations),
         "evals": len(evals),
         "mentions": len(mentions),
         "declared_types": len(DECLARED_SCHEMAS),
@@ -77,7 +83,8 @@ def main() -> int:
     counts = project(args.source, args.output)
     print(
         "projected "
-        f"{counts['skills']} skills, {counts['relations']} relations, "
+        f"{counts['skills']} skills, {counts['relations']} relations "
+        f"({counts['authored_relations']} authored + {counts['reviewed_relations']} reviewed), "
         f"{counts['evals']} evals, {counts['mentions']} mentions; "
         f"declared {counts['declared_types']} RFC 0006 concept types"
     )

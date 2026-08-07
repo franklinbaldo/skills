@@ -29,7 +29,9 @@ SELECT
     r.target_skill,
     r.target_kind,
     r.source_line,
-    r.resolved
+    r.resolved,
+    coalesce(r.evidence_kind, 'authored_link') AS evidence_kind,
+    r.review_reason
 FROM okf_types."SkillRelation" AS r
 WHERE r.target_kind = 'skill'
 ORDER BY r.source_skill, r.target_skill, r.source_line;
