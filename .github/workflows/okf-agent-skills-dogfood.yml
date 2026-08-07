@@ -26,6 +26,7 @@ jobs:
           mkdir -p dogfood
           python okf-agent-skills/scripts/project_agent_skills.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/projector.txt
           python okf-agent-skills/scripts/project_skill_evals.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/eval-projector.txt
+          python okf-agent-skills/scripts/project_skill_mentions.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/mention-projector.txt
           cp -R "$RUNNER_TEMP/skills-okf" dogfood/projection
 
       - name: Inspect projection with current okf-parser
@@ -51,6 +52,7 @@ jobs:
           resources = sorted((root / 'resources').glob('*.md'))
           relations = sorted((root / 'relations').glob('*.md'))
           evals = sorted((root / 'evals').glob('*.md'))
+          mentions = sorted((root / 'mentions').glob('*.md'))
 
           resolved = 0
           unresolved = 0
@@ -78,10 +80,27 @@ jobs:
                   key = 'positive' if trigger.group(1) == 'true' else 'negative'
                   coverage[skill.group(1)][key] += 1
 
+          mention_pairs = set()
+          for path in mentions:
+              text = path.read_text(encoding='utf-8')
+              source = re.search(r'^source_skill: "([^"]+)"$', text, re.M)
+              target = re.search(r'^target_skill: "([^"]+)"$', text, re.M)
+              if source and target:
+                  mention_pairs.add((source.group(1), target.group(1)))
+
+          eval_resources = 0
+          for path in resources:
+              text = path.read_text(encoding='utf-8')
+              if re.search(r'^kind: "eval"$', text, re.M):
+                  eval_resources += 1
+
           print(f'skills={len(skills)}')
           print(f'resources={len(resources)}')
           print(f'relations={len(relations)}')
           print(f'evals={len(evals)}')
+          print(f'eval_resources={eval_resources}')
+          print(f'mentions={len(mentions)}')
+          print(f'mention_pairs={len(mention_pairs)}')
           print(f'eval_covered_skills={len(coverage)}')
           print(f'eval_uncovered_skills={len(skills) - len(coverage)}')
           print(f'resolved_projected_relations={resolved}')
