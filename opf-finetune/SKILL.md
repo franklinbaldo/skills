@@ -14,6 +14,10 @@ description: >-
   CausaGanha, Leizilla, or Baliza — even if OPF is not named explicitly. Do NOT use
   for prompt-based extraction with a chat LLM, for regex pattern matching, or for
   OPF's out-of-the-box PII redaction (that needs no fine-tune).
+compatibility: >-
+  Requires Python and the openai/privacy-filter (OPF) training runtime. Data prep
+  is CPU-capable, but practical full fine-tuning requires a CUDA GPU; the documented
+  Colab/Drive path additionally requires network access and Google authentication.
 ---
 
 # Fine-tuning OPF for custom span domains
