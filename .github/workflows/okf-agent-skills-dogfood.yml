@@ -21,27 +21,60 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
 
-      - name: Project repository skills to OKF
+      - name: Project repository skills to typed OKF IR
         run: |
+          set -o pipefail
           mkdir -p dogfood
-          python okf-agent-skills/scripts/project_agent_skills.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/projector.txt
-          python okf-agent-skills/scripts/project_skill_evals.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/eval-projector.txt
-          python okf-agent-skills/scripts/project_skill_mentions.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/mention-projector.txt
+          python okf-agent-skills/scripts/project.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/projector.txt
           cp -R "$RUNNER_TEMP/skills-okf" dogfood/projection
 
       - name: Inspect projection with current okf-parser
-        continue-on-error: true
         run: |
           set -o pipefail
           OKF="uvx --from git+https://github.com/franklinbaldo/okf-parser.git okf-parser"
+          SPEC='.okf/contracts/{slug}.md'
           $OKF --help > dogfood/okf-parser-help.txt
           $OKF check "$RUNNER_TEMP/skills-okf" 2>&1 | tee dogfood/check.txt
           $OKF inventory "$RUNNER_TEMP/skills-okf" 2>&1 | tee dogfood/inventory.txt
           $OKF graph "$RUNNER_TEMP/skills-okf" 2>&1 | tee dogfood/graph.txt
-          $OKF duckdb "$RUNNER_TEMP/skills-okf" dogfood/skills.duckdb --overwrite 2>&1 | tee dogfood/duckdb.txt
+          $OKF schema "$RUNNER_TEMP/skills-okf" --format json --spec-template "$SPEC" 2>&1 | tee dogfood/schema.json
+          $OKF duckdb "$RUNNER_TEMP/skills-okf" dogfood/skills.duckdb okf --overwrite --spec-template "$SPEC" 2>&1 | tee dogfood/duckdb.txt
+
+      - name: Assert declared DuckDB types
+        run: |
+          set -o pipefail
+          uv run --no-project --with duckdb python - <<'PY' | tee dogfood/typed-contracts.txt
+          import duckdb
+
+          con = duckdb.connect('dogfood/skills.duckdb', read_only=True)
+          rows = con.execute("""
+              SELECT table_name, column_name, data_type
+              FROM duckdb_columns()
+              WHERE schema_name = 'okf_types'
+              ORDER BY table_name, column_index
+          """).fetchall()
+          for row in rows:
+              print('\t'.join(map(str, row)))
+
+          types = {(table, column): dtype for table, column, dtype in rows}
+          expected = {
+              ('Skill', 'line_count'): 'INTEGER',
+              ('SkillResource', 'size_bytes'): 'UBIGINT',
+              ('SkillRelation', 'source_line'): 'INTEGER',
+              ('SkillRelation', 'resolved'): 'BOOLEAN',
+              ('SkillEval', 'case_index'): 'INTEGER',
+              ('SkillEval', 'should_trigger'): 'BOOLEAN',
+              ('SkillMention', 'source_line'): 'INTEGER',
+          }
+          missing = {key: value for key, value in expected.items() if types.get(key) != value}
+          if missing:
+              raise SystemExit(f'declared type mismatch: {missing}; observed={types}')
+          print(f'asserted_declared_types={len(expected)}')
+          PY
 
       - name: Summarize projected corpus
         run: |
+          set -o pipefail
           python - <<'PY' | tee dogfood/summary.txt
           from collections import defaultdict
           from pathlib import Path
@@ -53,6 +86,7 @@ jobs:
           relations = sorted((root / 'relations').glob('*.md'))
           evals = sorted((root / 'evals').glob('*.md'))
           mentions = sorted((root / 'mentions').glob('*.md'))
+          contracts = sorted((root / '.okf' / 'contracts').glob('*.schema.sql'))
 
           resolved = 0
           unresolved = 0
@@ -101,6 +135,7 @@ jobs:
           print(f'eval_resources={eval_resources}')
           print(f'mentions={len(mentions)}')
           print(f'mention_pairs={len(mention_pairs)}')
+          print(f'declared_type_contracts={len(contracts)}')
           print(f'eval_covered_skills={len(coverage)}')
           print(f'eval_uncovered_skills={len(skills) - len(coverage)}')
           print(f'resolved_projected_relations={resolved}')
