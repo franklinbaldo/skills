@@ -13,6 +13,10 @@ description: >-
   distribuicao de processos. NAO use para TEOR de decisao, ementa, voto ou
   fundamentacao (o DataJud NAO tem inteiro teor): para jurisprudencia e teor do
   TJRO use a skill juris-tjro.
+compatibility: >-
+  Requires Python 3 and outbound HTTPS access to the public DataJud/CNJ API.
+  No private credential is required; the bundled stdlib client carries the CNJ
+  public API key and handles retry/backoff.
 ---
 
 ## O que esta skill faz
