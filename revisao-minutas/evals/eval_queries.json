@@ -1,0 +1,14 @@
+[
+  {"query":"a assessoria me mandou esta contestação; revisa e me diz se dá para protocolar","should_trigger":true},
+  {"query":"posso assinar essa minuta de agravo? quero só os riscos concretos, não reescreve tudo","should_trigger":true},
+  {"query":"confere esta apelação que eu não redigi e classifica em verde amarelo ou vermelho","should_trigger":true},
+  {"query":"vê se essa peça da assessoria esqueceu alguma preliminar fatal antes de eu protocolar","should_trigger":true},
+  {"query":"recebi uma minuta pronta de embargos; faz uma triagem adversarial e aponta só edits indispensáveis","should_trigger":true},
+  {"query":"avalia esta manifestação judicial alheia, inclusive fatos e citações, para decidir se está apta","should_trigger":true},
+  {"query":"vamos redigir do zero uma contestação sobre este caso; começa pelo esqueleto","should_trigger":false},
+  {"query":"melhora o estilo deste parecer administrativo e deixa mais conciso","should_trigger":false},
+  {"query":"qual é o prazo para recurso inominado nos Juizados Especiais?","should_trigger":false},
+  {"query":"formaliza este argumento jurídico em Lean para ver de quais premissas ele depende","should_trigger":false},
+  {"query":"tenho os autos incompletos; formula perguntas para eu rodar no NotebookLM antes de escrever a peça","should_trigger":false},
+  {"query":"revise este contrato particular e sugira cláusulas melhores","should_trigger":false}
+]
