@@ -15,6 +15,9 @@ VIEW_NAMES = (
     "mentions_without_edge",
     "isolated_skills",
     "resource_surface",
+    "routing_run_coverage",
+    "routing_case_results",
+    "routing_skill_results",
 )
 
 
