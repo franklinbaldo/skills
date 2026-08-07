@@ -6,6 +6,7 @@
 --   okf_types."SkillRelation"
 --   okf_types."SkillEval"
 --   okf_types."SkillMention"
+--   okf_types."SkillRoutingRun"
 --
 -- These are observations and review queues, not universal lint rules.
 
@@ -79,3 +80,67 @@ FROM okf_types."Skill" AS s
 LEFT JOIN okf_types."SkillResource" AS r
     ON r.skill = s.name
 GROUP BY s.name;
+
+CREATE OR REPLACE VIEW audit.routing_run_coverage AS
+SELECT
+    skill,
+    count(*) AS planned_runs,
+    count(observed_trigger) AS observed_runs,
+    count(*) - count(observed_trigger) AS pending_runs,
+    CASE
+        WHEN count(*) = 0 THEN NULL
+        ELSE count(observed_trigger)::DOUBLE / count(*)
+    END AS completion_rate
+FROM okf_types."SkillRoutingRun"
+GROUP BY skill
+ORDER BY skill;
+
+CREATE OR REPLACE VIEW audit.routing_case_results AS
+SELECT
+    skill,
+    case_index,
+    any_value(should_trigger) AS should_trigger,
+    count(*) AS planned_runs,
+    count(observed_trigger) AS observed_runs,
+    count(*) FILTER (WHERE observed_trigger IS TRUE) AS trigger_count,
+    CASE
+        WHEN count(observed_trigger) = 0 THEN NULL
+        ELSE count(*) FILTER (WHERE observed_trigger IS TRUE)::DOUBLE / count(observed_trigger)
+    END AS trigger_rate,
+    CASE
+        WHEN count(observed_trigger) <> count(*) THEN NULL
+        ELSE count(*) FILTER (WHERE observed_trigger IS TRUE) * 2 >= count(observed_trigger)
+    END AS majority_trigger,
+    CASE
+        WHEN count(observed_trigger) <> count(*) THEN NULL
+        WHEN any_value(should_trigger) IS TRUE
+             AND count(*) FILTER (WHERE observed_trigger IS TRUE) * 2 >= count(observed_trigger)
+            THEN 'true_positive'
+        WHEN any_value(should_trigger) IS TRUE THEN 'false_negative'
+        WHEN count(*) FILTER (WHERE observed_trigger IS TRUE) * 2 >= count(observed_trigger)
+            THEN 'false_positive'
+        ELSE 'true_negative'
+    END AS outcome
+FROM okf_types."SkillRoutingRun"
+GROUP BY skill, case_index
+ORDER BY skill, case_index;
+
+CREATE OR REPLACE VIEW audit.routing_skill_results AS
+SELECT
+    skill,
+    count(*) AS case_count,
+    count(*) FILTER (WHERE outcome IS NOT NULL) AS completed_cases,
+    count(*) FILTER (WHERE outcome = 'true_positive') AS true_positive,
+    count(*) FILTER (WHERE outcome = 'true_negative') AS true_negative,
+    count(*) FILTER (WHERE outcome = 'false_positive') AS false_positive,
+    count(*) FILTER (WHERE outcome = 'false_negative') AS false_negative,
+    CASE
+        WHEN count(*) FILTER (WHERE outcome IS NOT NULL) = 0 THEN NULL
+        ELSE (
+            count(*) FILTER (WHERE outcome IN ('true_positive', 'true_negative'))::DOUBLE
+            / count(*) FILTER (WHERE outcome IS NOT NULL)
+        )
+    END AS accuracy
+FROM audit.routing_case_results
+GROUP BY skill
+ORDER BY skill;
