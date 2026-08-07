@@ -9,6 +9,8 @@ It never executes code from the audited skills.
 from __future__ import annotations
 
 import argparse
+import re
+import unicodedata
 from pathlib import Path
 
 import project_agent_skills
@@ -26,20 +28,18 @@ DECLARED_SCHEMAS: dict[str, str] = {
     "SkillMention": """CREATE TABLE \"SkillMention\" (\n    source_skill VARCHAR,\n    target_skill VARCHAR,\n    source_path VARCHAR,\n    source_line INTEGER,\n    relation_strength VARCHAR,\n    context_sha256 VARCHAR\n);\n""",
 }
 
+_SEPARATOR_RE = re.compile(r"[\s/]+")
+_REMOVED_RE = re.compile(r"[^a-z0-9-]+")
+_HYPHEN_RUN_RE = re.compile(r"-{2,}")
+
 
 def _slug(concept_type: str) -> str:
-    """Return the okf-parser slug for the ASCII concept names used by this IR."""
-    parts: list[str] = []
-    current = ""
-    for char in concept_type:
-        if char.isupper() and current:
-            parts.append(current.lower())
-            current = char
-        else:
-            current += char
-    if current:
-        parts.append(current.lower())
-    return "-".join(parts)
+    """Mirror okf-parser's public type-slug contract without importing the parser."""
+    decomposed = unicodedata.normalize("NFKD", concept_type)
+    stripped = "".join(char for char in decomposed if not unicodedata.combining(char))
+    hyphenated = _SEPARATOR_RE.sub("-", stripped.strip().lower())
+    slug = _HYPHEN_RUN_RE.sub("-", _REMOVED_RE.sub("", hyphenated))
+    return slug.strip("-")
 
 
 def write_declared_schemas(output: Path) -> None:
