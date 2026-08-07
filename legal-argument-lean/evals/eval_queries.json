@@ -1,0 +1,14 @@
+[
+  {"query":"formaliza este argumento do acórdão em Lean 4 e mostra de quais precedentes e fatos cada conclusão depende","should_trigger":true},
+  {"query":"quero steelmanar a decisão em Lean antes de alegar omissão nos embargos","should_trigger":true},
+  {"query":"transforma esta tese jurídica em axiomas e teoremas para ver onde aparece contradição","should_trigger":true},
+  {"query":"compare duas vias de prova em Lean para descobrir qual precedente é realmente load-bearing","should_trigger":true},
+  {"query":"modela a incidência da Súmula 279 e roda um audit de #print axioms","should_trigger":true},
+  {"query":"já tenho a formalização; agora traduz o resultado do audit lógico de volta para uma peça forense","should_trigger":true},
+  {"query":"redija embargos de declaração contra este acórdão sem usar formalização","should_trigger":false},
+  {"query":"qual é a melhor interpretação do art. 1.022 do CPC?","should_trigger":false},
+  {"query":"revise esta minuta pronta e diga se ela pode ser protocolada","should_trigger":false},
+  {"query":"me ensina Lean 4 do zero com exemplos de listas e funções","should_trigger":false},
+  {"query":"faça uma pesquisa de jurisprudência sobre a Súmula 279 no STF","should_trigger":false},
+  {"query":"resuma este acórdão em linguagem simples para o cliente","should_trigger":false}
+]
