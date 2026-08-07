@@ -26,6 +26,7 @@ Each skill is installed as a directory under `~/.claude/skills/<name>/`, with it
 | [llm-work-via-subagents](llm-work-via-subagents/SKILL.md) | Do bulk LLM work with parallel subagents instead of API-key scripts. |
 | [meme-image](meme-image/SKILL.md) | Generate image memes via the memegen.link API for markdown content. |
 | [notebooklm-processos](notebooklm-processos/SKILL.md) | Draft grounded NotebookLM question blocks to verify case-file facts before drafting. |
+| [okf-agent-skills](okf-agent-skills/SKILL.md) | Inspect and govern Agent Skills through a derived OKF relational/graph projection while keeping Agent Skills as the source format. |
 | [opf-finetune](opf-finetune/SKILL.md) | Fine-tune the OpenAI Privacy Filter for custom span/token classification. |
 | [paddleocr](paddleocr/SKILL.md) | Run PaddleOCR locally or on a Colab GPU and export OCR results to Markdown with performance metrics. |
 | [pdf-compression](pdf-compression/SKILL.md) | Compress image-heavy or scanned PDFs via downscaling and CCITT G4/JPEG re-encoding. |
