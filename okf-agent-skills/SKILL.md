@@ -39,7 +39,9 @@ through the existing generic surfaces.
 3. Inspect the installed/current `okf-parser` interface rather than assuming a remembered
    CLI version. The integration should use existing commands and public APIs wherever
    possible.
-4. Never execute bundled scripts merely to inspect a skill repository.
+4. Never execute scripts belonging to the audited/source skills merely to inspect the
+   repository. Deterministic helpers bundled with this integration skill may be executed for
+   projection when their behavior is appropriate and understood.
 
 For the projection contract, read `references/projection-model.md`.
 For rule classification and current-best-practice audits, read
@@ -72,20 +74,42 @@ stay small:
 
 - one `Skill` concept per discovered `SKILL.md`;
 - one `SkillResource` concept per relevant bundled file;
-- ordinary Markdown links for relations wherever the source already contains links;
+- **derived Markdown links between projected concepts** for source relations that resolve
+  inside the audited corpus;
 - optional `SkillEval` concepts only when the repository has a real eval corpus.
 
 Do **not** add `type: Skill` to the original `SKILL.md`. Put OKF metadata only in the derived
 bundle or in supporting documents that are intentionally authored as OKF concepts.
 
-### 4. Prefer evidence already present in the source
+### 4. Materialize source relations inside the derived bundle
 
-If `A/SKILL.md` links to `B/SKILL.md`, use that link as dependency evidence. Do not duplicate
-it into an invented `dependencies:` field unless there is a real relation that cannot be
-represented by the source evidence.
+A source link is evidence, not yet an edge in the derived OKF graph. `okf-parser graph` and
+DuckDB only see links that exist in the bundle being parsed.
 
-Prose such as “use the datajud skill” without a link may be reported as a semantic candidate,
-but do not pretend a heuristic extraction is equivalent to a resolved authored link.
+Therefore, when a source skill relation resolves to another projected artifact, rewrite the
+relation into the derived namespace while preserving its provenance.
+
+Example:
+
+```text
+source:  A/SKILL.md -> ../datajud/SKILL.md
+derived: skills/a.md -> skills/datajud.md
+```
+
+The derived concept for `A` should contain an ordinary Markdown link to the derived `datajud`
+concept. Store source provenance separately — at minimum the source file and original target;
+record source line/location too when the projection can obtain it deterministically.
+
+Do **not** leave the derived link pointing back to `../datajud/SKILL.md`: that may escape the
+projection root and would make the graph depend on the source tree rather than the derived
+bundle.
+
+Do not add a duplicate authored `dependencies:` field. The dependency remains derived from
+the source link; only its target is translated so the relation exists inside the OKF IR.
+
+A semantic mention such as “use the datajud skill” without a link may be reported as a
+candidate relation, but do not silently upgrade heuristic extraction to the same certainty as
+a resolved authored link.
 
 ### 5. Use `okf-parser` as the generic engine
 
@@ -129,7 +153,9 @@ Do not promote recommendations such as “keep the main skill concise” into no
 ### 8. Trace findings back to source
 
 Reports must identify the authoritative `SKILL.md` or bundled resource that caused the
-finding. The derived OKF document is infrastructure, not the artifact the author edits.
+finding. For a derived relation, report both the derived endpoints and the source evidence
+that produced the edge. The derived OKF document is infrastructure, not the artifact the
+author edits.
 
 ### 9. Keep behavioral claims separate
 
@@ -153,7 +179,8 @@ Prefer a generic primitive when the same abstraction benefits domains beyond Age
 
 ## Guardrails
 
-- Do not execute source skill scripts during static projection.
+- Do not execute scripts from the audited/source skills during static projection merely to
+  inspect them. Integration-owned deterministic helpers are allowed.
 - Do not treat `.schema.sql` as inert data; follow `okf-parser`'s documented trust model.
 - Do not claim static presence of a tool/script proves harmful behavior.
 - Do not freeze current Claude Code extensions into a portable Agent Skills rule without
@@ -168,8 +195,10 @@ A repository-wide analysis is complete when:
 
 1. source skills remain untouched unless the user asked to change them;
 2. the OKF projection is reproducible from the source tree;
-3. `okf-parser` can inspect the projection using generic surfaces;
-4. every reported rule is classified by authority;
-5. every finding traces back to source;
-6. heuristic findings are labeled as heuristic;
-7. any proposed core change explains why a skill or bundled helper is no longer enough.
+3. source relations used for dependency analysis are materialized as links between derived
+   concepts, with provenance back to the source evidence;
+4. `okf-parser` can inspect the projection using generic surfaces;
+5. every reported rule is classified by authority;
+6. every finding traces back to source;
+7. heuristic findings are labeled as heuristic;
+8. any proposed core change explains why a skill or bundled helper is no longer enough.
