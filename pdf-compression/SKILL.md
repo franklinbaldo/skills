@@ -3,6 +3,10 @@ name: pdf-compression
 description: >-
   Optimize and compress large image-heavy or scanned PDFs by downscaling images and re-encoding them using CCITT Group 4 (black and white) or JPEG (grayscale/color).
   Use when compressing scanned PDFs, splitting large court PDFs by bookmarks, applying N-up (2-up/4-up) layouts, or when the user says "compress this PDF" / "PDF muito grande".
+compatibility: >-
+  Requires Python/uv; core compression installs PyMuPDF/Pillow dynamically.
+  OpenCV/numpy are optional enhancements. JBIG2 mode additionally requires a
+  `jbig2`/jbig2enc system binary; native Windows may need WSL or LiteBox for it.
 ---
 
 # PDF Compression
