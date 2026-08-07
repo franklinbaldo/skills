@@ -88,9 +88,17 @@ jobs:
           from pathlib import Path
 
           report = json.loads(Path('dogfood/audit.json').read_text(encoding='utf-8'))
+          projection = Path('dogfood/projection')
+          expected_skills = len(list((projection / 'skills').glob('*.md')))
+          expected_cases = len(list((projection / 'evals').glob('*.md')))
+          expected_runs = len(list((projection / 'routing-runs').glob('*.md')))
+
           coverage = report['eval_coverage']
-          if len(coverage) != 24:
-              raise SystemExit(f'expected audit coverage row for each of 24 skills, got {len(coverage)}')
+          if len(coverage) != expected_skills:
+              raise SystemExit(
+                  f'expected audit coverage row for each of {expected_skills} projected skills, '
+                  f'got {len(coverage)}'
+              )
           covered = [row for row in coverage if row['has_routing_evals']]
           uncovered = [row for row in coverage if not row['has_routing_evals']]
           if not covered or not uncovered:
@@ -98,18 +106,30 @@ jobs:
 
           run_coverage = report['routing_run_coverage']
           if len(run_coverage) != len(covered):
-              raise SystemExit(f'expected routing-run rows for {len(covered)} covered skills, got {len(run_coverage)}')
+              raise SystemExit(
+                  f'expected routing-run rows for {len(covered)} covered skills, '
+                  f'got {len(run_coverage)}'
+              )
           planned = sum(row['planned_runs'] for row in run_coverage)
           observed = sum(row['observed_runs'] for row in run_coverage)
           pending = sum(row['pending_runs'] for row in run_coverage)
-          if planned != 300 or observed + pending != planned:
-              raise SystemExit(f'expected coherent 300-run manifest, got planned={planned} observed={observed} pending={pending}')
-          if len(report['routing_case_results']) != 60:
-              raise SystemExit(f'expected 60 routing case rows, got {len(report["routing_case_results"])}')
+          if planned != expected_runs or observed + pending != planned:
+              raise SystemExit(
+                  f'expected coherent manifest matching {expected_runs} projected routing runs, '
+                  f'got planned={planned} observed={observed} pending={pending}'
+              )
+          if len(report['routing_case_results']) != expected_cases:
+              raise SystemExit(
+                  f'expected {expected_cases} routing case rows from projection, '
+                  f'got {len(report["routing_case_results"])}'
+              )
           if len(report['routing_skill_results']) != len(covered):
               raise SystemExit('routing skill results must cover every skill with routing evals')
 
           print(f'audit_views={len(report)}')
+          print(f'projected_skills={expected_skills}')
+          print(f'projected_routing_cases={expected_cases}')
+          print(f'projected_routing_runs={expected_runs}')
           print(f'eval_covered_skills={len(covered)}')
           print(f'eval_uncovered_skills={len(uncovered)}')
           print(f'routing_runs_planned={planned}')
