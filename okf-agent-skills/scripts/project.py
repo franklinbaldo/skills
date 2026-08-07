@@ -2,8 +2,9 @@
 """Build the complete Agent Skills inspection IR for current okf-parser surfaces.
 
 This is the single frontend for repository dogfood. It composes the stable static
-projectors, applies optional reviewed-relation policy, then writes RFC 0006 DuckDB
-declarations for the derived concept types. It never executes code from audited skills.
+projectors, applies optional reviewed-relation policy, projects planned/reported
+routing benchmark runs, then writes RFC 0006 DuckDB declarations for the derived
+concept types. It never executes code from audited skills.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import unicodedata
 from pathlib import Path
 
 import project_agent_skills
+import project_routing_runs
 import project_skill_evals
 import project_skill_mentions
 import promote_reviewed_relations
@@ -27,6 +29,7 @@ DECLARED_SCHEMAS: dict[str, str] = {
     "SkillRelation": """CREATE TABLE \"SkillRelation\" (\n    source_skill VARCHAR,\n    target_skill VARCHAR,\n    target_kind VARCHAR,\n    source_path VARCHAR,\n    source_link_target VARCHAR,\n    source_line INTEGER,\n    derived_source VARCHAR,\n    derived_target VARCHAR,\n    resolved BOOLEAN,\n    evidence_kind VARCHAR,\n    review_reason VARCHAR,\n    context_sha256 VARCHAR\n);\n""",
     "SkillEval": """CREATE TABLE \"SkillEval\" (\n    skill VARCHAR,\n    eval_kind VARCHAR,\n    source_path VARCHAR,\n    case_index INTEGER,\n    should_trigger BOOLEAN,\n    query_sha256 VARCHAR\n);\n""",
     "SkillMention": """CREATE TABLE \"SkillMention\" (\n    source_skill VARCHAR,\n    target_skill VARCHAR,\n    source_path VARCHAR,\n    source_line INTEGER,\n    relation_strength VARCHAR,\n    context_sha256 VARCHAR\n);\n""",
+    "SkillRoutingRun": """CREATE TABLE \"SkillRoutingRun\" (\n    skill VARCHAR,\n    case_index INTEGER,\n    repetition INTEGER,\n    should_trigger BOOLEAN,\n    observed_trigger BOOLEAN,\n    source_path VARCHAR,\n    query_sha256 VARCHAR,\n    runner VARCHAR,\n    model VARCHAR\n);\n""",
 }
 
 _SEPARATOR_RE = re.compile(r"[\s/]+")
@@ -56,11 +59,13 @@ def project(root: Path, output: Path) -> dict[str, int]:
 
     skills, authored_relations = project_agent_skills.project(root, output)
     evals = project_skill_evals.project(root, output)
+    routing_runs = project_routing_runs.project(root, output)
     mentions = project_skill_mentions.project(root, output)
     reviewed_relations = promote_reviewed_relations.promote(root, output, mentions)
     write_declared_schemas(output)
 
     relation_count = len(authored_relations) + len(reviewed_relations)
+    observed_runs = sum(row["observed_trigger"] is not None for row in routing_runs)
     return {
         "skills": len(skills),
         "relations": relation_count,
@@ -69,6 +74,8 @@ def project(root: Path, output: Path) -> dict[str, int]:
         "resolved_relations": sum(relation.resolved for relation in authored_relations)
         + len(reviewed_relations),
         "evals": len(evals),
+        "routing_runs": len(routing_runs),
+        "observed_routing_runs": observed_runs,
         "mentions": len(mentions),
         "declared_types": len(DECLARED_SCHEMAS),
     }
@@ -85,7 +92,8 @@ def main() -> int:
         "projected "
         f"{counts['skills']} skills, {counts['relations']} relations "
         f"({counts['authored_relations']} authored + {counts['reviewed_relations']} reviewed), "
-        f"{counts['evals']} evals, {counts['mentions']} mentions; "
+        f"{counts['evals']} evals, {counts['routing_runs']} routing runs "
+        f"({counts['observed_routing_runs']} observed), {counts['mentions']} mentions; "
         f"declared {counts['declared_types']} RFC 0006 concept types"
     )
     print(f"spec_template={SPEC_TEMPLATE}")
