@@ -1,122 +1,200 @@
 ---
 name: juris-tjro
 description: >-
-  Consulta a jurisprudencia do Tribunal de Justica de Rondonia (TJRO) pelo
-  sistema JURIS — acordaos, sentencas, votos, ementas, decisoes e relatorios de
-  1o e 2o graus. Use SEMPRE que o usuario pedir jurisprudencia, precedentes,
-  decisoes ou julgados do TJRO; quiser saber "o que o Tribunal de Rondonia (ou
-  uma Camara/Vara/Turma Recursal) decidiu sobre" algum tema; buscar por numero
-  de processo (CNJ) no acervo; levantar precedentes locais para uma peca
-  (contestacao, apelacao, embargos, parecer, memoriais); ou mapear como o TJRO
-  vem decidindo determinada tese. Dispare mesmo quando o pedido nao usar a
-  palavra "jurisprudencia" — basta o contexto ser decisoes judiciais de
-  Rondonia. NAO use para tribunais de outros estados, STF, STJ ou TST.
+  Consulta jurisprudência e inteiro teor no sistema JURIS do TJRO: acórdãos,
+  sentenças, votos, decisões, ementas e relatórios de 1º e 2º graus. Use quando a
+  proposição depende do que o TJRO efetivamente decidiu, fundamentou ou escreveu.
+  Não use para contagem ampla de processos, panorama de tramitação ou linha de
+  movimentos — para isso use DataJud. Para reconstrução documental de autos
+  carregados, use notebooklm-processos.
 compatibility: >-
   Requires Python 3 and outbound HTTPS access to the TJRO JURIS API. The bundled
   client is stdlib-only and does not require a private credential.
 ---
 
-## O que esta skill faz
+# JURIS TJRO — teor e fundamento
 
-Busca documentos na jurisprudencia do TJRO via a API real do sistema JURIS
-(`juris-back.tjro.jus.br`, indexado em Elasticsearch) e devolve resultados
-enxutos: numero do processo (CNJ), tipo, data de julgamento, classe, orgao,
-relator, um trecho do inteiro teor e o link do portal. Tambem busca todos os
-documentos de um processo, extrai o inteiro teor limpo de um documento e
-levanta facetas (classes, orgaos, tipos).
+A função desta skill é responder perguntas sobre **o conteúdo dos atos judiciais
+do TJRO**.
 
-Toda a interacao acontece pelo script `scripts/juris.py` (Python 3, so
-stdlib). Nao tente reescrever as chamadas HTTP a mao: o script ja encapsula o
-endpoint correto e as varias armadilhas descritas abaixo.
+Contrato da fonte:
 
-## Como usar o script
-
-Sempre rode o script (assuma rede liberada). Comece pelo `-h` se precisar.
-
-Buscar por texto e filtros:
-
+```text
+JURIS sabe: inteiro teor, ementa, voto, sentença, decisão, relatório, fundamento
+JURIS não é a melhor fonte para: volume processual, linha de tramitação, estado atual
 ```
+
+A pergunta central é: **qual proposição jurídica ou fática o documento do
+tribunal sustenta?**
+
+## Regra de roteamento
+
+- “o TJRO decidiu/entendeu/fundamentou X?” → JURIS;
+- “qual foi o teor daquela sentença/acórdão/voto?” → JURIS;
+- “há precedentes locais sobre X?” → JURIS;
+- “em que fase está o processo / qual último movimento?” →
+  [`datajud`](../datajud/SKILL.md);
+- “quantos processos existem por classe/assunto/órgão?” → DataJud;
+- “o que dizem as peças, anexos e documentos de um processo carregado?” →
+  [`notebooklm-processos`](../notebooklm-processos/SKILL.md);
+- “qual a jurisprudência atual de STJ/STF/outro tribunal?” → fonte externa
+  adequada.
+
+Não use um snippet de resultado para afirmar ratio decidendi quando o inteiro
+teor está disponível.
+
+## Fluxo
+
+1. Defina a proposição que precisa ser sustentada.
+2. Busque com o termo mais distintivo possível.
+3. Use filtros para reduzir ruído.
+4. Leia o inteiro teor dos candidatos relevantes antes de afirmar fundamento.
+5. Separe holding/desfecho, fundamento, contexto fático e eventual obiter.
+6. Compare precedentes apenas depois de saber que tratam realmente da mesma
+   questão material.
+7. Quando a pergunta virar tramitação/estado atual, pare e passe ao DataJud.
+
+## CLI
+
+Toda interação deve passar por `scripts/juris.py`.
+
+Busca:
+
+```bash
 python scripts/juris.py buscar "<termo>" \
-    [--tipo ACÓRDÃO EMENTA SENTENÇA VOTO DECISÃO RELATÓRIO] \
-    [--classe "APELAÇÃO CÍVEL"] [--orgao "2ª Câmara"] [--relator "SOBRENOME"] \
-    [--contendo palavra1 "expressão exata"] \
-    [--de DD/MM/AAAA] [--ate DD/MM/AAAA] \
-    [--recentes] [--tamanho N] [--trecho-perto TERMO] [--json]
+  [--tipo ACÓRDÃO EMENTA SENTENÇA VOTO DECISÃO RELATÓRIO] \
+  [--classe "APELAÇÃO CÍVEL"] [--orgao "2ª Câmara"] [--relator "SOBRENOME"] \
+  [--contendo palavra1 "expressão exata"] \
+  [--de DD/MM/AAAA] [--ate DD/MM/AAAA] \
+  [--recentes] [--tamanho N] [--trecho-perto TERMO] [--json]
 ```
 
-Documentos de um processo (aceita numero com ou sem mascara):
+Documentos de um processo:
 
-```
+```bash
 python scripts/juris.py processo 7030969-47.2024.8.22.0001
 ```
 
-Inteiro teor limpo de UM documento (o `id` vem do campo `id_documento` dos
-resultados de `buscar`/`processo`):
+Inteiro teor:
 
-```
-python scripts/juris.py texto 21458095            # texto completo
-python scripts/juris.py texto 21458095 --max 8000 # truncado
+```bash
+python scripts/juris.py texto 21458095
+python scripts/juris.py texto 21458095 --max 8000
 ```
 
-Facetas / agregacoes (panorama do acervo ou de um termo):
+Facetas:
 
-```
+```bash
 python scripts/juris.py facetas "improbidade" --limite 20
 ```
 
-Acrescente `--json` em `buscar`/`processo`/`facetas` quando for processar o
-resultado programaticamente (montar planilha, tabela, recurso repetitivo).
+## Estratégia de busca
 
-## Armadilhas da API — leia antes de buscar
+A busca textual do servidor é **OR e analisada**. Mais palavras podem aumentar o
+ruído.
 
-A busca textual do servidor e **OR e analisada**. Cada palavra a mais no
-`<termo>` AUMENTA o numero de resultados (traz quem casa com qualquer uma das
-palavras), nao diminui. Consequencias praticas:
+Portanto:
 
-- Para precisao, coloque no `<termo>` a expressao/numero MAIS distintivo
-  (ex.: `"18,25%"`, um nome proprio, uma sigla rara) e jogue as demais
-  palavras obrigatorias em `--contendo` (filtro AND aplicado client-side sobre
-  o inteiro teor). Exemplo que funciona bem:
-  `buscar "18,25%" --tipo ACÓRDÃO --contendo "polícia civil"`.
-- Ordene por relevancia (padrao) para pesquisa tematica; use `--recentes` so
-  quando o que importa e a data.
+1. coloque no termo principal a expressão mais distintiva;
+2. use `--contendo` para condições adicionais obrigatórias;
+3. use `--recentes` somente quando recência for parte da pergunta;
+4. quando um resultado parecer decisivo, abra o `texto <id>`.
 
-Outras pegadinhas ja tratadas pelo script (nao as recrie do zero):
+Exemplo:
 
-- `tipo` precisa ser ARRAY no corpo da requisicao; string crua derruba o
-  servidor (HTTP 500). Por isso `--tipo` aceita varios valores.
-- Filtro de DATA por intervalo no servidor quebra (range `gte/lte` -> 500).
-  Por isso `--de/--ate` sao aplicados client-side; o script busca um pool maior
-  e filtra. Em recortes de data muito amplos, aumente `--tamanho`.
-- `nr_processo` casa por numero exato de 20 digitos (sem mascara); o script
-  normaliza automaticamente.
-- O inteiro teor (`ds_modelo_documento`) vem como HTML gigante com imagens em
-  base64 embutidas (dezenas de KB por documento). O script SEMPRE limpa isso.
-  **Nunca** despeje o JSON cru da API no contexto — estoura o limite.
-- IGNORE o endpoint `GET /search/documentos/` e qualquer cliente que use os
-  parametros `texto`/`nr_processo`/`paginaAtual` nele: o servidor IGNORA esses
-  parametros e devolve o corpus inteiro sem filtrar. O endpoint de busca de
-  verdade e `POST /search/varios_parametros/`, que o script usa.
+```bash
+python scripts/juris.py buscar "18,25%" --tipo ACÓRDÃO --contendo "polícia civil"
+```
 
-## Como apresentar os resultados ao usuario
+## Unidade mínima de precedente
 
-Sintetize, nao despeje. Fluxo recomendado:
+Ao usar um julgado como suporte, tente preservar:
 
-1. Rode `buscar` com o termo distintivo + `--contendo` para fechar o tema.
-2. Se vier muita coisa, separe por instancia/tipo (acordaos e votos de 2o grau
-   sao os precedentes mais uteis; sentencas de 1o grau mostram a tendencia).
-3. Liste cada julgado com: CNJ formatado, tipo, data, classe, orgao, relator e
-   o link do portal. Acrescente uma linha sobre o desfecho quando der para
-   inferir do trecho, mas avise que o trecho e parcial.
-4. Para afirmar fundamento ou dispositivo com seguranca, use `texto <id>` e leia
-   o inteiro teor antes de concluir — nao infira o resultado so pelo trecho.
-5. Ofereca os proximos passos uteis: puxar a integra de um julgado, refinar o
-   recorte, ou exportar a lista (`--json`) para planilha/tabela.
+```text
+CNJ / identificação
++ órgão julgador
++ data
++ tipo de documento
++ questão decidida
++ desfecho
++ fundamento realmente utilizado
++ trecho/localização suficiente
+```
 
-## Campos uteis em cada resultado
+Não trate ementa como substituto automático do voto/inteiro teor quando a
+controvérsia depende da fundamentação.
 
-`nr_processo`, `tipo`, `dtjulgamento_str` / `dtjulgamento`, `ds_classe_judicial`,
-`ds_orgao_julgador` / `ds_orgao_julgador_colegiado`, `ds_nome` (magistrado de 1o
-grau), `nome_relator_acordao` (relator de 2o grau), `id_processo_documento`
-(use no modo `texto`), `sistema_origem` (PJEPG = 1o grau, PJESG = 2o grau),
-`id_documento_principal`. O link do portal e montado a partir desses campos.
+## Composição com DataJud
+
+Para um processo concreto do TJRO, as duas fontes podem formar uma cadeia:
+
+```text
+DataJud → localiza grau, data e movimento relevante
+JURIS   → recupera o documento e seu teor
+```
+
+Mantenha as provas separadas. Exemplo de formulação correta:
+
+> O DataJud registra o julgamento em determinada data; no inteiro teor disponível
+> no JURIS, o colegiado fundamenta o resultado em X.
+
+Evite:
+
+> O DataJud mostra que o tribunal entendeu X.
+
+Isso atribui conteúdo a uma fonte que só forneceu metadata.
+
+## Comparação de precedentes
+
+Antes de afirmar “o TJRO vem decidindo”, verifique se os resultados compartilham
+a mesma questão relevante. Não conte como apoio equivalente decisões que apenas
+contêm as mesmas palavras.
+
+Para cada candidato, pergunte:
+
+- a questão jurídica é a mesma?
+- o contexto fático/processual importa para o resultado?
+- o fundamento é central ou incidental?
+- houve distinção, ressalva ou mudança de entendimento?
+- o ato é sentença isolada, voto, acórdão colegiado ou outro documento?
+
+Uma lista longa de hits não substitui uma amostra menor lida em profundidade.
+
+## Armadilhas load-bearing
+
+O script já trata:
+
+- `tipo` como array, evitando HTTP 500;
+- filtro de datas client-side porque range no servidor quebra;
+- normalização do CNJ;
+- limpeza de HTML/base64 do inteiro teor;
+- endpoint real `POST /search/varios_parametros/`.
+
+Nunca use `GET /search/documentos/` como se filtrasse corretamente; ele pode
+devolver o corpus sem respeitar os parâmetros esperados.
+
+## Como apresentar
+
+Sintetize os julgados relevantes. Para cada um, informe identificação, órgão,
+data e a proposição que ele realmente sustenta. Se a conclusão depender do
+inteiro teor, diga que ele foi lido; se só houver snippet/ementa, limite a força
+da afirmação.
+
+Não despeje HTML nem JSON cru.
+
+## Definition of Done
+
+A pesquisa termina quando:
+
+- a proposição jurídica investigada está explícita;
+- os candidatos relevantes foram filtrados por questão, não só por palavra;
+- o inteiro teor foi lido quando necessário para afirmar fundamento;
+- holding/desfecho e contexto foram distinguidos de linguagem incidental;
+- não se usou JURIS como substituto para estado processual/contagem;
+- quando DataJud participou, metadata e teor permanecem separados por
+  proveniência;
+- a resposta diz o que os documentos sustentam sem transformar coincidência de
+  termos em jurisprudência consolidada.
+
+A skill é bem-sucedida quando responde **o que o TJRO efetivamente disse e por
+quê**, e sabe não responder perguntas que pertencem ao DataJud.
