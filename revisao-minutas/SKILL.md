@@ -1,13 +1,15 @@
 ---
 name: revisao-minutas
 description: >-
-  Revisa uma minuta jurídica ou institucional já existente para decidir se ela
+  Revisa uma minuta forense ou institucional já existente para decidir se ela
   pode ser assinada, expedida ou protocolada e quais correções realmente mudam
   esse juízo. Use quando Franklin trouxer contestação, recurso, manifestação,
-  parecer, ofício, decisão, relatório, nota ou outro texto pronto e pedir revisão,
-  segurança para assinatura, adequação institucional ou riscos concretos. O foco
-  é reconstruir a função do documento, o compromisso que ele cria e o que falta
-  ao leitor para agir corretamente. Não use para redação greenfield sem minuta.
+  parecer, ofício, decisão, relatório, nota ou outro texto pronto ligado à sua
+  atuação institucional e pedir revisão, segurança para assinatura, adequação
+  institucional ou riscos concretos. O foco é reconstruir a função do documento,
+  o compromisso que ele cria e o que falta ao leitor para agir corretamente. Não
+  use para redação greenfield, mera edição de estilo ou revisão negocial de
+  contratos privados.
 ---
 
 # Revisão de minutas
