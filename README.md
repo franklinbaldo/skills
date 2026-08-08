@@ -32,8 +32,6 @@ npx skills use franklinbaldo/skills --skill software-review --agent claude-code
 
 `npx skills` owns discovery, selection, agent-specific installation paths, symlink/copy behavior, updates, removal, and supported-agent integration. This repository owns the skills themselves, their tests/evals, and repository-specific analysis. See [`okf-agent-skills/references/tooling-boundary.md`](okf-agent-skills/references/tooling-boundary.md).
 
-The historical `skills.sh` helper remains only for compatibility with older local workflows. It is not the canonical installation architecture and should not gain new agent/runtime behavior.
-
 ## Skills
 
 | Skill | Description |
