@@ -30,7 +30,7 @@ DECLARED_SCHEMAS: dict[str, str] = {
     "SkillRelation": """CREATE TABLE \"SkillRelation\" (\n    source_skill VARCHAR,\n    target_skill VARCHAR,\n    target_kind VARCHAR,\n    source_path VARCHAR,\n    source_link_target VARCHAR,\n    source_line INTEGER,\n    derived_source VARCHAR,\n    derived_target VARCHAR,\n    resolved BOOLEAN,\n    evidence_kind VARCHAR,\n    review_reason VARCHAR,\n    context_sha256 VARCHAR\n);\n""",
     "SkillEval": """CREATE TABLE \"SkillEval\" (\n    skill VARCHAR,\n    eval_kind VARCHAR,\n    source_path VARCHAR,\n    case_index INTEGER,\n    should_trigger BOOLEAN,\n    query_sha256 VARCHAR\n);\n""",
     "SkillMention": """CREATE TABLE \"SkillMention\" (\n    source_skill VARCHAR,\n    target_skill VARCHAR,\n    source_path VARCHAR,\n    source_line INTEGER,\n    relation_strength VARCHAR,\n    context_sha256 VARCHAR\n);\n""",
-    "SkillRoutingRun": """CREATE TABLE \"SkillRoutingRun\" (\n    skill VARCHAR,\n    case_index INTEGER,\n    repetition INTEGER,\n    should_trigger BOOLEAN,\n    observed_trigger BOOLEAN,\n    source_path VARCHAR,\n    query_sha256 VARCHAR,\n    runner VARCHAR,\n    model VARCHAR\n);\n""",
+    "SkillRoutingRun": """CREATE TABLE \"SkillRoutingRun\" (\n    skill VARCHAR,\n    case_index INTEGER,\n    repetition INTEGER,\n    should_trigger BOOLEAN,\n    observed_trigger BOOLEAN,\n    execution_status VARCHAR,\n    source_path VARCHAR,\n    query_sha256 VARCHAR,\n    runner VARCHAR,\n    model VARCHAR,\n    error_type VARCHAR,\n    error_message VARCHAR\n);\n""",
 }
 
 _SEPARATOR_RE = re.compile(r"[\s/]+")
@@ -89,6 +89,7 @@ def project(root: Path, output: Path) -> dict[str, int]:
 
     relation_count = len(authored_relations) + len(reviewed_relations)
     observed_runs = sum(row["observed_trigger"] is not None for row in routing_runs)
+    failed_runs = sum(row["execution_status"] == "error" for row in routing_runs)
     counts = {
         "skills": len(skills),
         "relations": relation_count,
@@ -100,6 +101,7 @@ def project(root: Path, output: Path) -> dict[str, int]:
         "evals": len(evals),
         "routing_runs": len(routing_runs),
         "observed_routing_runs": observed_runs,
+        "failed_routing_runs": failed_runs,
         "mentions": len(mentions),
         "declared_types": len(DECLARED_SCHEMAS),
     }
@@ -120,8 +122,8 @@ def main() -> int:
         f"{counts['skills']} skills, {counts['relations']} relations "
         f"({counts['authored_relations']} authored + {counts['reviewed_relations']} reviewed), "
         f"{counts['evals']} evals, {counts['routing_runs']} routing runs "
-        f"({counts['observed_routing_runs']} observed), {counts['mentions']} mentions; "
-        f"declared {counts['declared_types']} RFC 0006 concept types"
+        f"({counts['observed_routing_runs']} observed, {counts['failed_routing_runs']} failed), "
+        f"{counts['mentions']} mentions; declared {counts['declared_types']} RFC 0006 concept types"
     )
     print(f"spec_template={SPEC_TEMPLATE}")
     print(args.output.resolve())
