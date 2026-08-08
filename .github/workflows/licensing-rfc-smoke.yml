@@ -1,0 +1,28 @@
+name: Licensing RFC smoke
+
+on:
+  pull_request:
+    paths:
+      - "licensing/examples/metered-public/**"
+      - "docs/rfcs/0001-agentic-metered-skill-licensing.md"
+      - ".github/workflows/licensing-rfc-smoke.yml"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: franklinbaldo/okf-parser
+          path: .tools/okf-parser
+      - uses: astral-sh/setup-uv@v6
+      - name: Validate fixture with cloned okf-parser
+        run: |
+          set -euo pipefail
+          OKF="uv run --project .tools/okf-parser okf-parser"
+          ROOT="licensing/examples/metered-public"
+          $OKF check "$ROOT"
+          $OKF inventory "$ROOT"
+          $OKF graph "$ROOT"
+          $OKF duckdb "$ROOT" /tmp/licensing.duckdb --overwrite
