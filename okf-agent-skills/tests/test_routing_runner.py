@@ -23,7 +23,7 @@ class RoutingRunnerTests(unittest.TestCase):
             "source_path": "alpha/evals/eval_queries.json",
         }
 
-    def test_successful_adapter_records_observed_trigger_and_model(self) -> None:
+    def test_successful_adapter_emits_one_observation_fact(self) -> None:
         code = (
             "import json,sys; q=sys.stdin.read(); "
             "print(json.dumps({'observed_trigger': q == 'Use alpha', 'model': 'fake-model'}))"
@@ -31,26 +31,25 @@ class RoutingRunnerTests(unittest.TestCase):
         result = routing_runner.run_one(
             self._row(), [sys.executable, "-c", code], "fake-runner", 5
         )
-        self.assertEqual(result["execution_status"], "observed")
+        self.assertEqual(result["observation_id"], "alpha--case-001--run-02")
         self.assertTrue(result["observed_trigger"])
         self.assertEqual(result["model"], "fake-model")
         self.assertEqual(result["runner"], "fake-runner")
+        self.assertNotIn("error", result)
 
-    def test_nonzero_exit_is_execution_error_not_false_negative(self) -> None:
+    def test_runner_failure_is_fact_not_false_negative(self) -> None:
         code = "import sys; print('boom', file=sys.stderr); raise SystemExit(7)"
         result = routing_runner.run_one(
             self._row(), [sys.executable, "-c", code], "fake-runner", 5
         )
-        self.assertEqual(result["execution_status"], "error")
-        self.assertEqual(result["error_type"], "process_exit")
+        self.assertIn("exit 7", result["error"])
         self.assertNotIn("observed_trigger", result)
 
-    def test_invalid_json_is_execution_error(self) -> None:
+    def test_invalid_json_is_failure_fact(self) -> None:
         result = routing_runner.run_one(
             self._row(), [sys.executable, "-c", "print('not-json')"], "fake-runner", 5
         )
-        self.assertEqual(result["execution_status"], "error")
-        self.assertEqual(result["error_type"], "invalid_json")
+        self.assertIn("invalid JSON", result["error"])
         self.assertNotIn("observed_trigger", result)
 
     def test_select_runs_can_address_one_repetition(self) -> None:
