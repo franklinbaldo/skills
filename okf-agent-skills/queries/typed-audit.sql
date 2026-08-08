@@ -86,7 +86,8 @@ SELECT
     skill,
     count(*) AS planned_runs,
     count(observed_trigger) AS observed_runs,
-    count(*) - count(observed_trigger) AS pending_runs,
+    count(*) FILTER (WHERE execution_status = 'error') AS failed_runs,
+    count(*) FILTER (WHERE execution_status IS NULL) AS pending_runs,
     CASE
         WHEN count(*) = 0 THEN NULL
         ELSE count(observed_trigger)::DOUBLE / count(*)
@@ -102,17 +103,23 @@ SELECT
     any_value(should_trigger) AS should_trigger,
     count(*) AS planned_runs,
     count(observed_trigger) AS observed_runs,
+    count(*) FILTER (WHERE execution_status = 'error') AS failed_runs,
+    count(*) FILTER (WHERE execution_status IS NULL) AS pending_runs,
     count(*) FILTER (WHERE observed_trigger IS TRUE) AS trigger_count,
     CASE
         WHEN count(observed_trigger) = 0 THEN NULL
         ELSE count(*) FILTER (WHERE observed_trigger IS TRUE)::DOUBLE / count(observed_trigger)
     END AS trigger_rate,
     CASE
-        WHEN count(observed_trigger) <> count(*) THEN NULL
+        WHEN count(*) FILTER (WHERE execution_status IS NULL) > 0
+          OR count(*) FILTER (WHERE execution_status = 'error') > 0
+            THEN NULL
         ELSE count(*) FILTER (WHERE observed_trigger IS TRUE) * 2 >= count(observed_trigger)
     END AS majority_trigger,
     CASE
-        WHEN count(observed_trigger) <> count(*) THEN NULL
+        WHEN count(*) FILTER (WHERE execution_status IS NULL) > 0
+          OR count(*) FILTER (WHERE execution_status = 'error') > 0
+            THEN NULL
         WHEN any_value(should_trigger) IS TRUE
              AND count(*) FILTER (WHERE observed_trigger IS TRUE) * 2 >= count(observed_trigger)
             THEN 'true_positive'
@@ -130,6 +137,8 @@ SELECT
     skill,
     count(*) AS case_count,
     count(*) FILTER (WHERE outcome IS NOT NULL) AS completed_cases,
+    sum(failed_runs)::UBIGINT AS failed_runs,
+    sum(pending_runs)::UBIGINT AS pending_runs,
     count(*) FILTER (WHERE outcome = 'true_positive') AS true_positive,
     count(*) FILTER (WHERE outcome = 'true_negative') AS true_negative,
     count(*) FILTER (WHERE outcome = 'false_positive') AS false_positive,
