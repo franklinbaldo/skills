@@ -38,7 +38,7 @@ npx skills use franklinbaldo/skills --skill software-review --agent claude-code
 
 Do not introduce a repository-specific agent registry, installer framework, compatibility matrix, temporary-skill materializer, or runtime abstraction unless a concrete requirement cannot be expressed through the upstream CLI.
 
-The historical root `skills.sh` is compatibility tooling for an older Claude-only local workflow, not an architectural primitive. New distribution/runtime behavior belongs upstream or in `npx skills` usage documentation, not in that script.
+There is intentionally no repository-local installer fallback. A duplicated installer/runtime is maintenance surface with no domain value; if an upstream gap appears, document the concrete gap before adding any local adapter.
 
 ### This repository owns skill semantics
 
