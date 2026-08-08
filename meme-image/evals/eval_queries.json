@@ -1,0 +1,14 @@
+[
+  {"query":"gera cinco memes de imagem diferentes para este post e força alguns templates aleatórios para não repetir sempre os clássicos","should_trigger":true},
+  {"query":"quero um meme visual no meio deste ensaio, escolhe um template que carregue a piada e me dá o embed","should_trigger":true},
+  {"query":"faz uma rodada com 3 templates sorteados e 2 escolhidos por você para este artigo","should_trigger":true},
+  {"query":"usa um meme com imagem customizada deste screenshot em vez de um template pronto","should_trigger":true},
+  {"query":"preciso de um meme de imagem auto-hospedado, sem depender da URL do gerador depois","should_trigger":true},
+  {"query":"nenhum template clássico encaixa; tenta uma imagem original com estrutura de meme para este trecho","should_trigger":true},
+  {"query":"injeta duas piadas curtas dentro da prosa, sem imagem","should_trigger":false},
+  {"query":"gera um diagrama SVG explicando essa arquitetura","should_trigger":false},
+  {"query":"faz uma capa ilustrada original para este artigo, sem formato de meme","should_trigger":false},
+  {"query":"deixa esta petição mais visual com um meme do Drake","should_trigger":false},
+  {"query":"quero uma imagem fotográfica realista do lugar descrito no texto","should_trigger":false},
+  {"query":"o post já tem dois memes de imagem; só melhora a legenda do segundo","should_trigger":false}
+]
