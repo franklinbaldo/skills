@@ -2,6 +2,33 @@
 
 Static eval cases state what should happen. Behavioral observations record what a real agent actually did. Keep those two layers separate and iterate from evidence.
 
+## System invariant: benchmark R&D is part of the product
+
+The evaluation system is responsible not only for diversifying the benchmark, but for **inventing better ways to test skills**. Benchmark design is an active research-and-development concern of the system itself.
+
+Every improvement cycle must ask three separate questions:
+
+1. **What should change in the skill?**
+2. **What new or harder cases should enter the benchmark?**
+3. **What new evaluation method, axis, adversarial setup, comparison, or measurement could reveal failures the current benchmark cannot see?**
+
+A cycle is incomplete if it only makes the existing corpus greener or merely adds more paraphrases. The system should actively search for previously unmeasured dimensions of failure and create new benchmark forms when useful.
+
+Examples of benchmark innovation include, but are not limited to:
+
+- moving from isolated prompts to multi-turn continuation routing;
+- testing competition among several plausible skills instead of one-vs-rest cases;
+- measuring whether a skill is loaded too early, too late, or unnecessarily;
+- introducing ambiguity gradients rather than only binary easy/hard examples;
+- evaluating robustness to compressed, noisy, typo-heavy, multilingual, or code-switched requests;
+- generating adversarial prompts from observed false positives/negatives instead of hand-writing only obvious cases;
+- testing routing under changing catalog composition, including new neighboring skills;
+- measuring calibration/uncertainty when the routing decision is genuinely ambiguous;
+- comparing multiple hosts/models as separate behavioral environments;
+- inventing quality rubrics, pairwise comparisons, counterfactual no-skill baselines, mutation tests, or other eval forms when routing accuracy is no longer the main uncertainty.
+
+The benchmark system should periodically audit its own blind spots. If all existing metrics are saturated, that is a prompt to invent a better test, not a reason to declare the skill finished.
+
 ## Improvement loop
 
 ```text
@@ -15,6 +42,7 @@ write/expand static eval cases
   → inspect routing results in DuckDB
   → change only behavior with observed evidence of failure
   → strengthen the benchmark with new adversarial/held-out cases
+  → invent new benchmark methods when the current ones saturate or miss important behavior
   → run the benchmark again
 ```
 
@@ -69,9 +97,10 @@ known/train cases
   → live repeated runs
   → promote useful challenge cases into permanent regression corpus
   → generate a harder held-out frontier
+  → propose at least one new evaluation angle when useful
 ```
 
-The corpus should therefore tend to grow in both **coverage** and **difficulty** even when headline accuracy stays flat or temporarily drops. A lower score on a materially harder benchmark may represent progress.
+The corpus should therefore tend to grow in both **coverage** and **difficulty**, while the benchmark methodology itself grows in **expressiveness**. A lower score on a materially harder or more revealing benchmark may represent progress.
 
 ### Measure benchmark quality, not only model accuracy
 
@@ -83,9 +112,12 @@ Track at least:
 - number of held-out/challenge cases not used for the latest tuning step;
 - semantic diversity rather than raw case count alone;
 - instability across repeated real-agent runs;
-- cases that have become trivial because they nearly quote the skill description.
+- cases that have become trivial because they nearly quote the skill description;
+- number of distinct evaluation modes/axes in active use;
+- benchmark blind spots discovered and newly covered;
+- whether a newly introduced benchmark method changed what the team learned about a skill.
 
-Do not reward benchmark growth by case count alone. Ten paraphrases of the same obvious trigger are weaker than one realistic collision that exposes an ambiguous boundary.
+Do not reward benchmark growth by case count alone. Ten paraphrases of the same obvious trigger are weaker than one realistic collision that exposes an ambiguous boundary; likewise, one new benchmark method that reveals an unseen failure mode can be more valuable than dozens of additional cases in an already-saturated format.
 
 ## Distribution/runtime boundary
 
@@ -161,6 +193,7 @@ After a routing change:
 3. keep a held-out frontier where practical;
 4. rerun the affected cases repeatedly;
 5. periodically rerun the full benchmark to detect cross-skill regressions;
-6. generate a harder challenge set before the next optimization cycle.
+6. generate a harder challenge set before the next optimization cycle;
+7. ask whether the current benchmark format itself is now the limiting factor and, if so, invent a better one.
 
 As coverage expands, prioritize skills by operational value and ambiguity rather than by directory order.
