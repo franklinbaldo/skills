@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Build the complete Agent Skills inspection IR for current okf-parser surfaces.
+"""Build the static Agent Skills inspection IR for current okf-parser surfaces.
 
-This is the single frontend for repository dogfood. It composes the stable static
-projectors, applies optional reviewed-relation policy, projects planned/reported
-routing benchmark runs, then writes the final projection manifest and RFC 0006
-DuckDB declarations for the derived concept types. It never executes code from
-audited skills.
+This frontend projects authored/static repository facts only. Behavioral routing
+observations are produced separately and imported by okf-parser; pending runs are
+therefore derived from eval definitions rather than materialized as fake concepts.
 """
 
 from __future__ import annotations
@@ -16,21 +14,21 @@ import unicodedata
 from pathlib import Path
 
 import project_agent_skills
-import project_routing_runs
 import project_skill_evals
 import project_skill_mentions
 import promote_reviewed_relations
 
 SPEC_TEMPLATE = ".okf/contracts/{slug}.md"
+ROUTING_REPETITIONS = 5
 
 DECLARED_SCHEMAS: dict[str, str] = {
-    "AgentSkillsProjection": """CREATE TABLE \"AgentSkillsProjection\" (\n    skill_count INTEGER,\n    relation_count INTEGER,\n    authored_relation_count INTEGER,\n    reviewed_relation_count INTEGER,\n    resolved_relation_count INTEGER,\n    resource_count INTEGER,\n    eval_count INTEGER,\n    routing_run_count INTEGER,\n    mention_count INTEGER\n);\n""",
+    "AgentSkillsProjection": """CREATE TABLE \"AgentSkillsProjection\" (\n    skill_count INTEGER,\n    relation_count INTEGER,\n    authored_relation_count INTEGER,\n    reviewed_relation_count INTEGER,\n    resolved_relation_count INTEGER,\n    resource_count INTEGER,\n    eval_count INTEGER,\n    routing_repetitions INTEGER,\n    planned_routing_run_count INTEGER,\n    mention_count INTEGER\n);\n""",
     "Skill": """CREATE TABLE \"Skill\" (\n    name VARCHAR,\n    source_path VARCHAR,\n    source_sha256 VARCHAR,\n    line_count INTEGER\n);\n""",
     "SkillResource": """CREATE TABLE \"SkillResource\" (\n    skill VARCHAR,\n    source_path VARCHAR,\n    kind VARCHAR,\n    size_bytes UBIGINT,\n    source_sha256 VARCHAR,\n    line_count INTEGER\n);\n""",
     "SkillRelation": """CREATE TABLE \"SkillRelation\" (\n    source_skill VARCHAR,\n    target_skill VARCHAR,\n    target_kind VARCHAR,\n    source_path VARCHAR,\n    source_link_target VARCHAR,\n    source_line INTEGER,\n    derived_source VARCHAR,\n    derived_target VARCHAR,\n    resolved BOOLEAN,\n    evidence_kind VARCHAR,\n    review_reason VARCHAR,\n    context_sha256 VARCHAR\n);\n""",
     "SkillEval": """CREATE TABLE \"SkillEval\" (\n    skill VARCHAR,\n    eval_kind VARCHAR,\n    source_path VARCHAR,\n    case_index INTEGER,\n    should_trigger BOOLEAN,\n    query_sha256 VARCHAR\n);\n""",
     "SkillMention": """CREATE TABLE \"SkillMention\" (\n    source_skill VARCHAR,\n    target_skill VARCHAR,\n    source_path VARCHAR,\n    source_line INTEGER,\n    relation_strength VARCHAR,\n    context_sha256 VARCHAR\n);\n""",
-    "SkillRoutingRun": """CREATE TABLE \"SkillRoutingRun\" (\n    skill VARCHAR,\n    case_index INTEGER,\n    repetition INTEGER,\n    should_trigger BOOLEAN,\n    observed_trigger BOOLEAN,\n    execution_status VARCHAR,\n    source_path VARCHAR,\n    query_sha256 VARCHAR,\n    runner VARCHAR,\n    model VARCHAR,\n    error_type VARCHAR,\n    error_message VARCHAR\n);\n""",
+    "SkillRoutingObservation": """CREATE TABLE \"SkillRoutingObservation\" (\n    observation_id VARCHAR,\n    skill VARCHAR,\n    case_index INTEGER,\n    repetition INTEGER,\n    should_trigger BOOLEAN,\n    query_sha256 VARCHAR,\n    observed_trigger BOOLEAN,\n    runner VARCHAR,\n    model VARCHAR,\n    error VARCHAR\n);\n""",
 }
 
 _SEPARATOR_RE = re.compile(r"[\s/]+")
@@ -39,7 +37,6 @@ _HYPHEN_RUN_RE = re.compile(r"-{2,}")
 
 
 def _slug(concept_type: str) -> str:
-    """Mirror okf-parser's public type-slug contract without importing the parser."""
     decomposed = unicodedata.normalize("NFKD", concept_type)
     stripped = "".join(char for char in decomposed if not unicodedata.combining(char))
     hyphenated = _SEPARATOR_RE.sub("-", stripped.strip().lower())
@@ -65,7 +62,8 @@ def write_final_manifest(output: Path, counts: dict[str, int]) -> None:
         f"resolved_relation_count: {counts['resolved_relations']}",
         f"resource_count: {counts['resources']}",
         f"eval_count: {counts['evals']}",
-        f"routing_run_count: {counts['routing_runs']}",
+        f"routing_repetitions: {ROUTING_REPETITIONS}",
+        f"planned_routing_run_count: {counts['planned_routing_runs']}",
         f"mention_count: {counts['mentions']}",
         "---",
         "",
@@ -83,25 +81,19 @@ def project(root: Path, output: Path) -> dict[str, int]:
 
     skills, authored_relations = project_agent_skills.project(root, output)
     evals = project_skill_evals.project(root, output)
-    routing_runs = project_routing_runs.project(root, output)
     mentions = project_skill_mentions.project(root, output)
     reviewed_relations = promote_reviewed_relations.promote(root, output, mentions)
 
-    relation_count = len(authored_relations) + len(reviewed_relations)
-    observed_runs = sum(row["observed_trigger"] is not None for row in routing_runs)
-    failed_runs = sum(row["execution_status"] == "error" for row in routing_runs)
     counts = {
         "skills": len(skills),
-        "relations": relation_count,
+        "relations": len(authored_relations) + len(reviewed_relations),
         "authored_relations": len(authored_relations),
         "reviewed_relations": len(reviewed_relations),
         "resolved_relations": sum(relation.resolved for relation in authored_relations)
         + len(reviewed_relations),
         "resources": len(list((output / "resources").glob("*.md"))),
         "evals": len(evals),
-        "routing_runs": len(routing_runs),
-        "observed_routing_runs": observed_runs,
-        "failed_routing_runs": failed_runs,
+        "planned_routing_runs": len(evals) * ROUTING_REPETITIONS,
         "mentions": len(mentions),
         "declared_types": len(DECLARED_SCHEMAS),
     }
@@ -121,8 +113,7 @@ def main() -> int:
         "projected "
         f"{counts['skills']} skills, {counts['relations']} relations "
         f"({counts['authored_relations']} authored + {counts['reviewed_relations']} reviewed), "
-        f"{counts['evals']} evals, {counts['routing_runs']} routing runs "
-        f"({counts['observed_routing_runs']} observed, {counts['failed_routing_runs']} failed), "
+        f"{counts['evals']} evals -> {counts['planned_routing_runs']} planned routing runs, "
         f"{counts['mentions']} mentions; declared {counts['declared_types']} RFC 0006 concept types"
     )
     print(f"spec_template={SPEC_TEMPLATE}")
