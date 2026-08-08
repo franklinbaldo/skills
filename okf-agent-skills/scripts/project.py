@@ -14,6 +14,7 @@ import unicodedata
 from pathlib import Path
 
 import project_agent_skills
+import project_benchmark_rnd
 import project_skill_evals
 import project_skill_mentions
 import promote_reviewed_relations
@@ -22,11 +23,14 @@ SPEC_TEMPLATE = ".okf/contracts/{slug}.md"
 ROUTING_REPETITIONS = 5
 
 DECLARED_SCHEMAS: dict[str, str] = {
-    "AgentSkillsProjection": """CREATE TABLE \"AgentSkillsProjection\" (\n    skill_count INTEGER,\n    relation_count INTEGER,\n    authored_relation_count INTEGER,\n    reviewed_relation_count INTEGER,\n    resolved_relation_count INTEGER,\n    resource_count INTEGER,\n    eval_count INTEGER,\n    routing_repetitions INTEGER,\n    planned_routing_run_count INTEGER,\n    mention_count INTEGER\n);\n""",
+    "AgentSkillsProjection": """CREATE TABLE \"AgentSkillsProjection\" (\n    skill_count INTEGER,\n    relation_count INTEGER,\n    authored_relation_count INTEGER,\n    reviewed_relation_count INTEGER,\n    resolved_relation_count INTEGER,\n    resource_count INTEGER,\n    eval_count INTEGER,\n    routing_repetitions INTEGER,\n    planned_routing_run_count INTEGER,\n    mention_count INTEGER,\n    challenge_case_count INTEGER,\n    benchmark_mutation_count INTEGER,\n    catalog_scenario_count INTEGER,\n    catalog_variant_count INTEGER\n);\n""",
     "Skill": """CREATE TABLE \"Skill\" (\n    name VARCHAR,\n    source_path VARCHAR,\n    source_sha256 VARCHAR,\n    line_count INTEGER\n);\n""",
     "SkillResource": """CREATE TABLE \"SkillResource\" (\n    skill VARCHAR,\n    source_path VARCHAR,\n    kind VARCHAR,\n    size_bytes UBIGINT,\n    source_sha256 VARCHAR,\n    line_count INTEGER\n);\n""",
     "SkillRelation": """CREATE TABLE \"SkillRelation\" (\n    source_skill VARCHAR,\n    target_skill VARCHAR,\n    target_kind VARCHAR,\n    source_path VARCHAR,\n    source_link_target VARCHAR,\n    source_line INTEGER,\n    derived_source VARCHAR,\n    derived_target VARCHAR,\n    resolved BOOLEAN,\n    evidence_kind VARCHAR,\n    review_reason VARCHAR,\n    context_sha256 VARCHAR\n);\n""",
     "SkillEval": """CREATE TABLE \"SkillEval\" (\n    skill VARCHAR,\n    eval_kind VARCHAR,\n    source_path VARCHAR,\n    case_index INTEGER,\n    should_trigger BOOLEAN,\n    query_sha256 VARCHAR\n);\n""",
+    "SkillChallengeCase": """CREATE TABLE \"SkillChallengeCase\" (\n    challenge_id VARCHAR,\n    skill VARCHAR,\n    should_trigger BOOLEAN,\n    query_sha256 VARCHAR,\n    tags VARCHAR\n);\n""",
+    "SkillBenchmarkMutation": """CREATE TABLE \"SkillBenchmarkMutation\" (\n    mutation_id VARCHAR,\n    skill VARCHAR,\n    mutation_kind VARCHAR,\n    expected_detection_tags VARCHAR\n);\n""",
+    "SkillCatalogScenario": """CREATE TABLE \"SkillCatalogScenario\" (\n    scenario_id VARCHAR,\n    skill VARCHAR,\n    query_sha256 VARCHAR,\n    variant_count INTEGER\n);\n""",
     "SkillMention": """CREATE TABLE \"SkillMention\" (\n    source_skill VARCHAR,\n    target_skill VARCHAR,\n    source_path VARCHAR,\n    source_line INTEGER,\n    relation_strength VARCHAR,\n    context_sha256 VARCHAR\n);\n""",
     "SkillRoutingObservation": """CREATE TABLE \"SkillRoutingObservation\" (\n    observation_id VARCHAR,\n    skill VARCHAR,\n    case_index INTEGER,\n    repetition INTEGER,\n    should_trigger BOOLEAN,\n    query_sha256 VARCHAR,\n    observed_trigger BOOLEAN,\n    runner VARCHAR,\n    model VARCHAR,\n    error VARCHAR\n);\n""",
 }
@@ -65,6 +69,10 @@ def write_final_manifest(output: Path, counts: dict[str, int]) -> None:
         f"routing_repetitions: {ROUTING_REPETITIONS}",
         f"planned_routing_run_count: {counts['planned_routing_runs']}",
         f"mention_count: {counts['mentions']}",
+        f"challenge_case_count: {counts['challenge_cases']}",
+        f"benchmark_mutation_count: {counts['benchmark_mutations']}",
+        f"catalog_scenario_count: {counts['catalog_scenarios']}",
+        f"catalog_variant_count: {counts['catalog_variants']}",
         "---",
         "",
         "# Agent Skills projection",
@@ -81,6 +89,7 @@ def project(root: Path, output: Path) -> dict[str, int]:
 
     skills, authored_relations = project_agent_skills.project(root, output)
     evals = project_skill_evals.project(root, output)
+    benchmark_rnd = project_benchmark_rnd.project(root, output)
     mentions = project_skill_mentions.project(root, output)
     reviewed_relations = promote_reviewed_relations.promote(root, output, mentions)
 
@@ -95,6 +104,10 @@ def project(root: Path, output: Path) -> dict[str, int]:
         "evals": len(evals),
         "planned_routing_runs": len(evals) * ROUTING_REPETITIONS,
         "mentions": len(mentions),
+        "challenge_cases": benchmark_rnd["challenge_cases"],
+        "benchmark_mutations": benchmark_rnd["mutations"],
+        "catalog_scenarios": benchmark_rnd["catalog_scenarios"],
+        "catalog_variants": benchmark_rnd["catalog_variants"],
         "declared_types": len(DECLARED_SCHEMAS),
     }
     write_final_manifest(output, counts)
@@ -114,6 +127,8 @@ def main() -> int:
         f"{counts['skills']} skills, {counts['relations']} relations "
         f"({counts['authored_relations']} authored + {counts['reviewed_relations']} reviewed), "
         f"{counts['evals']} evals -> {counts['planned_routing_runs']} planned routing runs, "
+        f"{counts['challenge_cases']} challenge cases, {counts['benchmark_mutations']} mutations, "
+        f"{counts['catalog_scenarios']} catalog scenarios/{counts['catalog_variants']} variants, "
         f"{counts['mentions']} mentions; declared {counts['declared_types']} RFC 0006 concept types"
     )
     print(f"spec_template={SPEC_TEMPLATE}")
