@@ -1,0 +1,14 @@
+[
+  {"query":"review essa PR e me diga só os bugs reais que bloqueiam; não quero nitpick de estilo","should_trigger":true},
+  {"query":"re-review depois das correções e veja se os P1 anteriores realmente foram resolvidos","should_trigger":true},
+  {"query":"analise essa RFC e veja se os gates propostos realmente provam o contrato arquitetural","should_trigger":true},
+  {"query":"esse check verde me parece falso; reproduza o caso e veja se o pipeline está escondendo erro","should_trigger":true},
+  {"query":"veja se esse P1 seria mesmo problema para o tipo de app que estamos construindo","should_trigger":true},
+  {"query":"procure uma solução mais estrutural usando DuckDB/Ibis em vez de inventar parser e abstrações paralelas","should_trigger":true},
+  {"query":"escreva do zero um serviço FastAPI para cadastro de usuários","should_trigger":false},
+  {"query":"corrija todos os warnings do Ruff nesse projeto Python","should_trigger":false},
+  {"query":"revise esta minuta judicial e diga se posso protocolar","should_trigger":false},
+  {"query":"faça uma análise greenfield desta estratégia jurídica sem olhar a solução atual","should_trigger":false},
+  {"query":"resuma as mudanças desta release em um post de blog","should_trigger":false},
+  {"query":"me ensine o que é arquitetura hexagonal com exemplos","should_trigger":false}
+]

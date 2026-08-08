@@ -167,8 +167,8 @@ que precisam ser testadas contra o corpus.
 Saia quando a pergunta for sobre algo que não pertence às fontes carregadas.
 
 - **metadados/andamento processual:** [`datajud`](../datajud/SKILL.md);
-- **jurisprudência e inteiro teor do TJRO:** fontes externas adequadas, incluindo
-  `juris-tjro` quando aplicável;
+- **jurisprudência e inteiro teor do TJRO:**
+  [`juris-tjro`](../juris-tjro/SKILL.md), quando aplicável;
 - **lei/jurisprudência atual:** fonte oficial ou pesquisa externa;
 - **ato superveniente não carregado:** obtenha/adicione o documento primeiro.
 

@@ -59,6 +59,15 @@ jobs:
 
           types = {(table, column): dtype for table, column, dtype in rows}
           expected = {
+              ('AgentSkillsProjection', 'skill_count'): 'INTEGER',
+              ('AgentSkillsProjection', 'relation_count'): 'INTEGER',
+              ('AgentSkillsProjection', 'authored_relation_count'): 'INTEGER',
+              ('AgentSkillsProjection', 'reviewed_relation_count'): 'INTEGER',
+              ('AgentSkillsProjection', 'resolved_relation_count'): 'INTEGER',
+              ('AgentSkillsProjection', 'resource_count'): 'INTEGER',
+              ('AgentSkillsProjection', 'eval_count'): 'INTEGER',
+              ('AgentSkillsProjection', 'routing_run_count'): 'INTEGER',
+              ('AgentSkillsProjection', 'mention_count'): 'INTEGER',
               ('Skill', 'line_count'): 'INTEGER',
               ('SkillResource', 'size_bytes'): 'UBIGINT',
               ('SkillRelation', 'source_line'): 'INTEGER',
@@ -83,14 +92,70 @@ jobs:
           uv run --no-project --with duckdb python okf-agent-skills/scripts/run_typed_audit.py \
             dogfood/skills.duckdb --output dogfood/audit.json
           cat dogfood/audit.json
-          python - <<'PY'
+          uv run --no-project --with duckdb python - <<'PY'
           import json
           from pathlib import Path
 
+          import duckdb
+
           report = json.loads(Path('dogfood/audit.json').read_text(encoding='utf-8'))
+          ignored = {'.git', '.hg', '.svn', '__pycache__', '.pytest_cache', '.mypy_cache'}
+          source_skill_files = [
+              path for path in Path('.').rglob('SKILL.md')
+              if not any(part in ignored for part in path.parts)
+          ]
+
+          con = duckdb.connect('dogfood/skills.duckdb', read_only=True)
+          try:
+              manifest_rows = con.execute(
+                  'SELECT * FROM okf_types."AgentSkillsProjection"'
+              ).fetchall()
+              if len(manifest_rows) != 1:
+                  raise SystemExit(f'expected one AgentSkillsProjection row, got {len(manifest_rows)}')
+              columns = [item[0] for item in con.description]
+              manifest = dict(zip(columns, manifest_rows[0], strict=True))
+
+              table_counts = {
+                  'skill_count': con.execute('SELECT count(*) FROM okf_types."Skill"').fetchone()[0],
+                  'relation_count': con.execute('SELECT count(*) FROM okf_types."SkillRelation"').fetchone()[0],
+                  'resource_count': con.execute('SELECT count(*) FROM okf_types."SkillResource"').fetchone()[0],
+                  'eval_count': con.execute('SELECT count(*) FROM okf_types."SkillEval"').fetchone()[0],
+                  'routing_run_count': con.execute('SELECT count(*) FROM okf_types."SkillRoutingRun"').fetchone()[0],
+                  'mention_count': con.execute('SELECT count(*) FROM okf_types."SkillMention"').fetchone()[0],
+              }
+              table_counts['authored_relation_count'] = con.execute(
+                  "SELECT count(*) FROM okf_types.\"SkillRelation\" "
+                  "WHERE coalesce(evidence_kind, 'authored_link') = 'authored_link'"
+              ).fetchone()[0]
+              table_counts['reviewed_relation_count'] = con.execute(
+                  "SELECT count(*) FROM okf_types.\"SkillRelation\" WHERE evidence_kind = 'reviewed_mention'"
+              ).fetchone()[0]
+              table_counts['resolved_relation_count'] = con.execute(
+                  'SELECT count(*) FROM okf_types."SkillRelation" WHERE resolved IS TRUE'
+              ).fetchone()[0]
+          finally:
+              con.close()
+
+          if table_counts['skill_count'] != len(source_skill_files):
+              raise SystemExit(
+                  'source → IR skill coverage mismatch: '
+                  f'source={len(source_skill_files)} typed={table_counts["skill_count"]}'
+              )
+
+          mismatches = {
+              field: {'manifest': manifest.get(field), 'typed_rows': expected}
+              for field, expected in table_counts.items()
+              if manifest.get(field) != expected
+          }
+          if mismatches:
+              raise SystemExit(f'AgentSkillsProjection contradicts typed IR: {mismatches}')
+
           coverage = report['eval_coverage']
-          if len(coverage) != 24:
-              raise SystemExit(f'expected audit coverage row for each of 24 skills, got {len(coverage)}')
+          if len(coverage) != table_counts['skill_count']:
+              raise SystemExit(
+                  f'expected audit coverage row for each of {table_counts["skill_count"]} typed skills, '
+                  f'got {len(coverage)}'
+              )
           covered = [row for row in coverage if row['has_routing_evals']]
           uncovered = [row for row in coverage if not row['has_routing_evals']]
           if not covered or not uncovered:
@@ -98,18 +163,34 @@ jobs:
 
           run_coverage = report['routing_run_coverage']
           if len(run_coverage) != len(covered):
-              raise SystemExit(f'expected routing-run rows for {len(covered)} covered skills, got {len(run_coverage)}')
+              raise SystemExit(
+                  f'expected routing-run rows for {len(covered)} covered skills, '
+                  f'got {len(run_coverage)}'
+              )
           planned = sum(row['planned_runs'] for row in run_coverage)
           observed = sum(row['observed_runs'] for row in run_coverage)
           pending = sum(row['pending_runs'] for row in run_coverage)
-          if planned != 300 or observed + pending != planned:
-              raise SystemExit(f'expected coherent 300-run manifest, got planned={planned} observed={observed} pending={pending}')
-          if len(report['routing_case_results']) != 60:
-              raise SystemExit(f'expected 60 routing case rows, got {len(report["routing_case_results"])}')
+          if planned != table_counts['routing_run_count'] or observed + pending != planned:
+              raise SystemExit(
+                  f'expected coherent routing audit matching {table_counts["routing_run_count"]} typed runs, '
+                  f'got planned={planned} observed={observed} pending={pending}'
+              )
+          if len(report['routing_case_results']) != table_counts['eval_count']:
+              raise SystemExit(
+                  f'expected {table_counts["eval_count"]} routing case rows from typed evals, '
+                  f'got {len(report["routing_case_results"])}'
+              )
           if len(report['routing_skill_results']) != len(covered):
               raise SystemExit('routing skill results must cover every skill with routing evals')
 
           print(f'audit_views={len(report)}')
+          print(f'source_skills={len(source_skill_files)}')
+          print(f'typed_skills={table_counts["skill_count"]}')
+          print(f'typed_relations={table_counts["relation_count"]}')
+          print(f'authored_relations={table_counts["authored_relation_count"]}')
+          print(f'reviewed_relations={table_counts["reviewed_relation_count"]}')
+          print(f'typed_routing_cases={table_counts["eval_count"]}')
+          print(f'typed_routing_runs={table_counts["routing_run_count"]}')
           print(f'eval_covered_skills={len(covered)}')
           print(f'eval_uncovered_skills={len(uncovered)}')
           print(f'routing_runs_planned={planned}')
