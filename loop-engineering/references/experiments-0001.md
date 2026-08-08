@@ -2,6 +2,13 @@
 
 This is the first explicit benchmark-research frontier for the skill ecosystem. It is not a permanent canon; successful experiments should either become repeatable benchmark modes or be replaced by more revealing methods.
 
+The executable fixtures for this frontier live in:
+
+- `okf-agent-skills/evals/challenge-frontier-0001.json` — 18 held-out challenge cases across legal, software, writing and loop-engineering neighborhoods;
+- `okf-agent-skills/evals/description-mutations-0001.json` — 8 deliberate routing-contract mutations;
+- `okf-agent-skills/evals/catalog-perturbation-0001.json` — catalog-composition scenarios;
+- `okf-agent-skills/scripts/benchmark_rnd.py` — deterministic validation/manifest expansion only; it never invokes a model or decides routing.
+
 ## Experiment A — description mutation testing
 
 ### Question
@@ -50,7 +57,7 @@ For each selected prompt, compare at least:
 2. target + clearly irrelevant skills;
 3. target + one plausible neighboring skill;
 4. target + several plausible neighboring skills;
-5. full repository catalog.
+5. full repository catalog when the host permits an explicit catalog condition.
 
 ### Expected behavior
 
@@ -76,7 +83,8 @@ Start where the existing corpus already exposed useful boundaries:
 
 - `revisao-minutas` × `legal-argument-lean` × `notebooklm-processos`;
 - `software-review` × `blank-sheet-redesign`;
-- `franklin-blog` × `text-meme-injection`.
+- `franklin-blog` × `text-meme-injection`;
+- `loop-engineering` × neighboring governance/eval skills.
 
 These neighborhoods combine clear composition opportunities with plausible collisions.
 
