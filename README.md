@@ -22,6 +22,7 @@ Each skill is installed as a directory under `~/.claude/skills/<name>/`, with it
 | [free-gpu](free-gpu/SKILL.md) | Run GPU workloads through Colab or Kaggle CLIs, including native Windows without WSL or administrator rights. |
 | [juris-tjro](juris-tjro/SKILL.md) | Search TJRO (Rondonia court) case law via the JURIS system. |
 | [legal-argument-lean](legal-argument-lean/SKILL.md) | Formalize legal arguments in Lean 4 only when doing so reduces a concrete structural uncertainty, with explicit dependency auditing and stopping rules. |
+| [license-enforcement](license-enforcement/SKILL.md) | Audit public evidence of operational skill use, build provenance-rich compliance cases, and prepare guarded licensing outreach with mandatory human approval before external action. |
 | [litebox](litebox/SKILL.md) | Adapt Linux-only CLI workflows to locked-down Windows with LiteBox when native Linux, WSL, containers, VMs, or admin installation are unavailable. |
 | [llm-work-via-subagents](llm-work-via-subagents/SKILL.md) | Do bulk LLM work with parallel subagents instead of API-key scripts. |
 | [meme-image](meme-image/SKILL.md) | Generate image memes via the memegen.link API for markdown content. |
@@ -43,6 +44,14 @@ Each skill is installed as a directory under `~/.claude/skills/<name>/`, with it
 ## Repo-level scripts
 
 `scripts/` contains Lean 4 tooling used by the [`lean-compile.yml`](.github/workflows/lean-compile.yml) workflow: `lean_docgen_md.py` generates Markdown docs from Lean sources, and `axiom_graph.py` builds an axiom dependency graph. These support the `legal-argument-lean` skill.
+
+## License
+
+This repository is distributed under the [Skill Use License 0.1](LICENSE.md): it is **source-available, not Open Source**. Reading, inspection, and good-faith evaluation are permitted; operational use of the licensed skills/material requires a separate paid license unless a stated exception applies.
+
+The machine-readable policy is in [`licensing/policy.yaml`](licensing/policy.yaml). The [`license-enforcement`](license-enforcement/SKILL.md) skill is deliberately usable without charge for self-audit, license inquiries, and compliance responses under the License's Compliance Skill Exception.
+
+The license does not claim ownership of abstract ideas, methods, systems, facts, or other subject matter that applicable law leaves unprotected. See the License for the exact scope and exceptions.
 
 ## Note
 
