@@ -29,7 +29,7 @@ The default architecture is:
 Agent Skills
   → deterministic domain frontend
   → derived OKF + RFC 0006 .schema.sql contracts
-  → okf-parser TypeContract / graph / DuckDB
+  → okf-parser TypeContract / import / graph / DuckDB
   → canonical audit queries + behavioral evidence
 ```
 
@@ -85,7 +85,8 @@ python <skill-dir>/scripts/project.py <skills-root> <derived-bundle>
 ```
 
 The frontend is stdlib-only and composes the specialized deterministic helpers. It never
-executes scripts from the audited skills.
+executes scripts from the audited skills and does not materialize one document per planned
+behavioral run.
 
 The derived bundle contains:
 
@@ -96,9 +97,14 @@ The derived bundle contains:
 - ordinary derived Markdown links for resolved source relations;
 - `SkillEval` concepts for supported routing-eval files;
 - `SkillMention` observations for semantic mentions of known sibling skills;
-- an `AgentSkillsProjection` manifest;
-- RFC 0006 DuckDB declarations under `.okf/contracts/*.schema.sql` for the projection's
-  concept types.
+- an `AgentSkillsProjection` manifest containing the repetition policy and derived planned
+  routing-run count;
+- RFC 0006 DuckDB declarations under `.okf/contracts/*.schema.sql` for projected and imported
+  concept types, including `SkillRoutingObservation`.
+
+A planned routing run is **not** a fact worth storing as its own concept. The audit layer
+derives the plan from `SkillEval × routing_repetitions`; an absent observation is pending by
+definition.
 
 The `.schema.sql` files are generated projection metadata, not authored Agent Skills
 requirements. They remain outside the concept walk and are addressed through:
@@ -166,7 +172,7 @@ Do not create a second parser or type system for facts already represented by `T
 
 ### 6. Query architecture through the canonical audit layer
 
-After producing the typed DuckDB artifact, materialize the bundled audit views:
+After producing the DuckDB artifact, materialize the bundled audit views:
 
 ```bash
 python <skill-dir>/scripts/run_typed_audit.py <output.duckdb> --output audit.json
@@ -179,7 +185,11 @@ for:
 - resolved skill-to-skill relations;
 - semantic mentions that do not currently have a hard edge;
 - skills isolated from the hard skill graph;
-- resource/reference/script/eval surface per skill.
+- resource/reference/script/eval surface per skill;
+- imported routing observations;
+- routing observation/eval mismatches;
+- planned, observed, failed and pending routing runs derived relationally;
+- case- and skill-level routing results.
 
 These views are **review queues and observations**, not lint errors. A mention without an
 edge, an isolated skill, or a skill without evals can all be legitimate states.
@@ -224,9 +234,32 @@ not the artifacts the author edits.
 ### 10. Keep behavioral claims separate
 
 Static structure cannot prove that a model routes or follows a skill correctly. Routing eval
-concepts express expected behavior; actual model runs are separate evidence. Use the bundled
-routing benchmark harness to aggregate observed triggers, but do not infer behavioral success
-from static presence of an eval case.
+concepts express expected behavior; actual model runs are separate evidence.
+
+Use the bundled runner only for the Agent-Skills-specific act of executing a query and
+recording the result:
+
+```bash
+python <skill-dir>/scripts/routing_runner.py <skills-root> \
+  --skill revisao-minutas --case-index 1 --repetition 1 \
+  --runner <adapter-name> -- <adapter-command>
+```
+
+The output is NDJSON at `.okf/agent-skills-routing-observations.jsonl`. Each row has a stable
+`observation_id` and contains either `observed_trigger` or `error`, never a fabricated routing
+result for a failed execution.
+
+Do not write a second importer. Feed those rows to the generic backend:
+
+```bash
+okf-parser import .okf/agent-skills-routing-observations.jsonl <derived-bundle> \
+  --type SkillRoutingObservation --id-column observation_id --write
+```
+
+`okf-parser import` owns row-to-concept materialization and duplicate-id rejection; `duckdb`
+owns relational materialization; the canonical audit SQL joins observations to the static
+`SkillEval` plan. Pending means no matching observation exists. A runner failure is an
+observation with `error`, not `observed_trigger: false`.
 
 ### 11. Reassess the architecture after real use
 
@@ -256,20 +289,22 @@ Skills.
 - Do not convert observations from `audit.*` into normative failures without an explicit
   authority or repository policy.
 - Do not add native parser support merely to save a few lines of skill instructions.
+- Do not represent pending behavioral work as placeholder observation concepts.
 
 ## Definition of done
 
 A repository-wide analysis is complete when:
 
 1. source skills remain untouched unless the user asked to change them;
-2. the full OKF projection is reproducible from the source tree through `project.py`;
+2. the full static OKF projection is reproducible from the source tree through `project.py`;
 3. source relations used for dependency analysis are materialized with provenance;
 4. routing evals and semantic mentions are represented separately from hard relations;
-5. current `okf-parser` consumes the generated RFC 0006 declarations and exposes the typed
-   projection through generic schema/DuckDB surfaces;
-6. repeated architecture questions use the canonical relational audit layer when possible;
-7. every reported rule is classified by authority and traces back to source;
-8. heuristic findings remain labeled as heuristic;
+5. current `okf-parser` consumes generated declarations and imported observation facts through
+   generic import/schema/DuckDB surfaces;
+6. planned routing runs are derived from evals and repetition policy rather than stored as
+   synthetic state;
+7. repeated architecture questions use the canonical relational audit layer when possible;
+8. every reported rule is classified by authority and traces back to source;
 9. behavioral claims rely on model-run evidence rather than static structure alone;
 10. any proposed parser-core change explains why a skill, query, or bundled helper is no
     longer enough.
