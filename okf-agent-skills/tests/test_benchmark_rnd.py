@@ -73,6 +73,44 @@ class BenchmarkRndTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "expected_detection_tags"):
                 benchmark_rnd.validate_mutations(path)
 
+    def test_multiturn_expands_history_per_turn(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(
+                Path(tmp),
+                "multiturn.json",
+                [
+                    {
+                        "id": "mt1",
+                        "turns": ["first", "second"],
+                        "expected_skill_by_turn": ["alpha", "beta"],
+                        "tags": ["handoff"],
+                    }
+                ],
+            )
+            rows = benchmark_rnd.expand_multiturn(path)
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0]["history"], ["first"])
+            self.assertEqual(rows[1]["history"], ["first", "second"])
+            self.assertEqual(rows[1]["expected_skill"], "beta")
+
+    def test_multiturn_allows_explicit_no_skill_turn(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(
+                Path(tmp),
+                "multiturn.json",
+                [
+                    {
+                        "id": "mt1",
+                        "turns": ["one-off edit", "now build a loop"],
+                        "expected_skill_by_turn": [None, "loop-engineering"],
+                        "tags": ["late-trigger"],
+                    }
+                ],
+            )
+            rows = benchmark_rnd.expand_multiturn(path)
+            self.assertIsNone(rows[0]["expected_skill"])
+            self.assertEqual(rows[1]["expected_skill"], "loop-engineering")
+
 
 if __name__ == "__main__":
     unittest.main()
