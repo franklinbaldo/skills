@@ -3,8 +3,9 @@
 
 This is the single frontend for repository dogfood. It composes the stable static
 projectors, applies optional reviewed-relation policy, projects planned/reported
-routing benchmark runs, then writes RFC 0006 DuckDB declarations for the derived
-concept types. It never executes code from audited skills.
+routing benchmark runs, then writes the final projection manifest and RFC 0006
+DuckDB declarations for the derived concept types. It never executes code from
+audited skills.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ import promote_reviewed_relations
 SPEC_TEMPLATE = ".okf/contracts/{slug}.md"
 
 DECLARED_SCHEMAS: dict[str, str] = {
-    "AgentSkillsProjection": """CREATE TABLE \"AgentSkillsProjection\" (\n    skill_count INTEGER,\n    relation_count INTEGER,\n    resolved_relation_count INTEGER,\n    resource_count INTEGER\n);\n""",
+    "AgentSkillsProjection": """CREATE TABLE \"AgentSkillsProjection\" (\n    skill_count INTEGER,\n    relation_count INTEGER,\n    authored_relation_count INTEGER,\n    reviewed_relation_count INTEGER,\n    resolved_relation_count INTEGER,\n    resource_count INTEGER,\n    eval_count INTEGER,\n    routing_run_count INTEGER,\n    mention_count INTEGER\n);\n""",
     "Skill": """CREATE TABLE \"Skill\" (\n    name VARCHAR,\n    source_path VARCHAR,\n    source_sha256 VARCHAR,\n    line_count INTEGER\n);\n""",
     "SkillResource": """CREATE TABLE \"SkillResource\" (\n    skill VARCHAR,\n    source_path VARCHAR,\n    kind VARCHAR,\n    size_bytes UBIGINT,\n    source_sha256 VARCHAR,\n    line_count INTEGER\n);\n""",
     "SkillRelation": """CREATE TABLE \"SkillRelation\" (\n    source_skill VARCHAR,\n    target_skill VARCHAR,\n    target_kind VARCHAR,\n    source_path VARCHAR,\n    source_link_target VARCHAR,\n    source_line INTEGER,\n    derived_source VARCHAR,\n    derived_target VARCHAR,\n    resolved BOOLEAN,\n    evidence_kind VARCHAR,\n    review_reason VARCHAR,\n    context_sha256 VARCHAR\n);\n""",
@@ -53,6 +54,29 @@ def write_declared_schemas(output: Path) -> None:
         (contract_dir / f"{_slug(concept_type)}.schema.sql").write_text(sql, encoding="utf-8")
 
 
+def write_final_manifest(output: Path, counts: dict[str, int]) -> None:
+    manifest = [
+        "---",
+        "type: AgentSkillsProjection",
+        f"skill_count: {counts['skills']}",
+        f"relation_count: {counts['relations']}",
+        f"authored_relation_count: {counts['authored_relations']}",
+        f"reviewed_relation_count: {counts['reviewed_relations']}",
+        f"resolved_relation_count: {counts['resolved_relations']}",
+        f"resource_count: {counts['resources']}",
+        f"eval_count: {counts['evals']}",
+        f"routing_run_count: {counts['routing_runs']}",
+        f"mention_count: {counts['mentions']}",
+        "---",
+        "",
+        "# Agent Skills projection",
+        "",
+        "Derived inspection bundle. Edit the source skills, not this directory.",
+        "",
+    ]
+    (output / "projection.md").write_text("\n".join(manifest), encoding="utf-8")
+
+
 def project(root: Path, output: Path) -> dict[str, int]:
     root = root.resolve()
     output = output.resolve()
@@ -62,23 +86,26 @@ def project(root: Path, output: Path) -> dict[str, int]:
     routing_runs = project_routing_runs.project(root, output)
     mentions = project_skill_mentions.project(root, output)
     reviewed_relations = promote_reviewed_relations.promote(root, output, mentions)
-    write_declared_schemas(output)
 
     relation_count = len(authored_relations) + len(reviewed_relations)
     observed_runs = sum(row["observed_trigger"] is not None for row in routing_runs)
-    return {
+    counts = {
         "skills": len(skills),
         "relations": relation_count,
         "authored_relations": len(authored_relations),
         "reviewed_relations": len(reviewed_relations),
         "resolved_relations": sum(relation.resolved for relation in authored_relations)
         + len(reviewed_relations),
+        "resources": len(list((output / "resources").glob("*.md"))),
         "evals": len(evals),
         "routing_runs": len(routing_runs),
         "observed_routing_runs": observed_runs,
         "mentions": len(mentions),
         "declared_types": len(DECLARED_SCHEMAS),
     }
+    write_final_manifest(output, counts)
+    write_declared_schemas(output)
+    return counts
 
 
 def main() -> int:
