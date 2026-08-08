@@ -1,14 +1,6 @@
--- Canonical Agent Skills audit views over the RFC 0006 typed projection.
---
--- Input contract:
---   okf_types."Skill"
---   okf_types."SkillResource"
---   okf_types."SkillRelation"
---   okf_types."SkillEval"
---   okf_types."SkillMention"
---   okf_types."SkillRoutingRun"
---
--- These are observations and review queues, not universal lint rules.
+-- Canonical Agent Skills audit views over the OKF/DuckDB projection.
+-- Behavioral observations arrive as imported SkillRoutingObservation concepts;
+-- planned and pending runs are derived relationally from SkillEval × repetitions.
 
 CREATE SCHEMA IF NOT EXISTS audit;
 
@@ -20,8 +12,7 @@ SELECT
     count(e.case_index) FILTER (WHERE e.should_trigger IS FALSE) AS negative_count,
     count(e.case_index) > 0 AS has_routing_evals
 FROM okf_types."Skill" AS s
-LEFT JOIN okf_types."SkillEval" AS e
-    ON e.skill = s.name
+LEFT JOIN okf_types."SkillEval" AS e ON e.skill = s.name
 GROUP BY s.name;
 
 CREATE OR REPLACE VIEW audit.skill_relations AS
@@ -77,22 +68,87 @@ SELECT
     coalesce(sum(r.size_bytes), 0)::UBIGINT AS total_resource_bytes,
     coalesce(sum(r.line_count), 0)::UBIGINT AS total_resource_lines
 FROM okf_types."Skill" AS s
-LEFT JOIN okf_types."SkillResource" AS r
-    ON r.skill = s.name
+LEFT JOIN okf_types."SkillResource" AS r ON r.skill = s.name
 GROUP BY s.name;
+
+CREATE OR REPLACE VIEW audit.routing_observations AS
+SELECT
+    json_extract_string(frontmatter_json, '$.observation_id') AS observation_id,
+    json_extract_string(frontmatter_json, '$.skill') AS skill,
+    try_cast(json_extract_string(frontmatter_json, '$.case_index') AS INTEGER) AS case_index,
+    try_cast(json_extract_string(frontmatter_json, '$.repetition') AS INTEGER) AS repetition,
+    try_cast(json_extract_string(frontmatter_json, '$.should_trigger') AS BOOLEAN) AS should_trigger,
+    json_extract_string(frontmatter_json, '$.query_sha256') AS query_sha256,
+    try_cast(json_extract_string(frontmatter_json, '$.observed_trigger') AS BOOLEAN) AS observed_trigger,
+    json_extract_string(frontmatter_json, '$.runner') AS runner,
+    json_extract_string(frontmatter_json, '$.model') AS model,
+    json_extract_string(frontmatter_json, '$.error') AS error,
+    path AS source_path
+FROM okf.concepts
+WHERE concept_type = 'SkillRoutingObservation';
+
+CREATE OR REPLACE VIEW audit.routing_observation_mismatches AS
+WITH config AS (
+    SELECT routing_repetitions
+    FROM okf_types."AgentSkillsProjection"
+    LIMIT 1
+)
+SELECT o.*
+FROM audit.routing_observations AS o
+LEFT JOIN okf_types."SkillEval" AS e
+    ON e.skill = o.skill AND e.case_index = o.case_index
+CROSS JOIN config
+WHERE e.skill IS NULL
+   OR o.should_trigger IS DISTINCT FROM e.should_trigger
+   OR o.query_sha256 IS DISTINCT FROM e.query_sha256
+   OR o.repetition < 1
+   OR o.repetition > config.routing_repetitions
+ORDER BY o.skill, o.case_index, o.repetition;
+
+CREATE OR REPLACE VIEW audit.routing_runs AS
+WITH config AS (
+    SELECT routing_repetitions
+    FROM okf_types."AgentSkillsProjection"
+    LIMIT 1
+), planned AS (
+    SELECT
+        e.skill,
+        e.case_index,
+        repetitions.repetition,
+        e.should_trigger,
+        e.query_sha256
+    FROM okf_types."SkillEval" AS e
+    CROSS JOIN config
+    CROSS JOIN range(1, config.routing_repetitions + 1) AS repetitions(repetition)
+)
+SELECT
+    p.skill,
+    p.case_index,
+    p.repetition,
+    p.should_trigger,
+    p.query_sha256,
+    o.observation_id,
+    o.observed_trigger,
+    o.runner,
+    o.model,
+    o.error
+FROM planned AS p
+LEFT JOIN audit.routing_observations AS o
+    ON o.skill = p.skill
+   AND o.case_index = p.case_index
+   AND o.repetition = p.repetition
+ORDER BY p.skill, p.case_index, p.repetition;
 
 CREATE OR REPLACE VIEW audit.routing_run_coverage AS
 SELECT
     skill,
     count(*) AS planned_runs,
     count(observed_trigger) AS observed_runs,
-    count(*) FILTER (WHERE execution_status = 'error') AS failed_runs,
-    count(*) FILTER (WHERE execution_status IS NULL) AS pending_runs,
-    CASE
-        WHEN count(*) = 0 THEN NULL
-        ELSE count(observed_trigger)::DOUBLE / count(*)
-    END AS completion_rate
-FROM okf_types."SkillRoutingRun"
+    count(*) FILTER (WHERE error IS NOT NULL) AS failed_runs,
+    count(*) FILTER (WHERE observation_id IS NULL) AS pending_runs,
+    count(observation_id)::DOUBLE / count(*) AS attempted_rate,
+    count(observed_trigger)::DOUBLE / count(*) AS completion_rate
+FROM audit.routing_runs
 GROUP BY skill
 ORDER BY skill;
 
@@ -103,23 +159,19 @@ SELECT
     any_value(should_trigger) AS should_trigger,
     count(*) AS planned_runs,
     count(observed_trigger) AS observed_runs,
-    count(*) FILTER (WHERE execution_status = 'error') AS failed_runs,
-    count(*) FILTER (WHERE execution_status IS NULL) AS pending_runs,
+    count(*) FILTER (WHERE error IS NOT NULL) AS failed_runs,
+    count(*) FILTER (WHERE observation_id IS NULL) AS pending_runs,
     count(*) FILTER (WHERE observed_trigger IS TRUE) AS trigger_count,
     CASE
         WHEN count(observed_trigger) = 0 THEN NULL
         ELSE count(*) FILTER (WHERE observed_trigger IS TRUE)::DOUBLE / count(observed_trigger)
     END AS trigger_rate,
     CASE
-        WHEN count(*) FILTER (WHERE execution_status IS NULL) > 0
-          OR count(*) FILTER (WHERE execution_status = 'error') > 0
-            THEN NULL
+        WHEN count(*) FILTER (WHERE observation_id IS NULL OR error IS NOT NULL) > 0 THEN NULL
         ELSE count(*) FILTER (WHERE observed_trigger IS TRUE) * 2 >= count(observed_trigger)
     END AS majority_trigger,
     CASE
-        WHEN count(*) FILTER (WHERE execution_status IS NULL) > 0
-          OR count(*) FILTER (WHERE execution_status = 'error') > 0
-            THEN NULL
+        WHEN count(*) FILTER (WHERE observation_id IS NULL OR error IS NOT NULL) > 0 THEN NULL
         WHEN any_value(should_trigger) IS TRUE
              AND count(*) FILTER (WHERE observed_trigger IS TRUE) * 2 >= count(observed_trigger)
             THEN 'true_positive'
@@ -128,7 +180,7 @@ SELECT
             THEN 'false_positive'
         ELSE 'true_negative'
     END AS outcome
-FROM okf_types."SkillRoutingRun"
+FROM audit.routing_runs
 GROUP BY skill, case_index
 ORDER BY skill, case_index;
 
@@ -145,10 +197,8 @@ SELECT
     count(*) FILTER (WHERE outcome = 'false_negative') AS false_negative,
     CASE
         WHEN count(*) FILTER (WHERE outcome IS NOT NULL) = 0 THEN NULL
-        ELSE (
-            count(*) FILTER (WHERE outcome IN ('true_positive', 'true_negative'))::DOUBLE
-            / count(*) FILTER (WHERE outcome IS NOT NULL)
-        )
+        ELSE count(*) FILTER (WHERE outcome IN ('true_positive', 'true_negative'))::DOUBLE
+             / count(*) FILTER (WHERE outcome IS NOT NULL)
     END AS accuracy
 FROM audit.routing_case_results
 GROUP BY skill
