@@ -29,12 +29,16 @@ jobs:
           python okf-agent-skills/scripts/project.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/projector.txt
           cp -R "$RUNNER_TEMP/skills-okf" dogfood/projection
 
-      - name: Inspect projection with current okf-parser
+      - name: Import observations and inspect with current okf-parser
         run: |
           set -o pipefail
           OKF="uvx --from git+https://github.com/franklinbaldo/okf-parser.git okf-parser"
           SPEC='.okf/contracts/{slug}.md'
           $OKF --help > dogfood/okf-parser-help.txt
+          if [ -s .okf/agent-skills-routing-observations.jsonl ]; then
+            $OKF import .okf/agent-skills-routing-observations.jsonl "$RUNNER_TEMP/skills-okf" \
+              --type SkillRoutingObservation --id-column observation_id --write 2>&1 | tee dogfood/import-observations.txt
+          fi
           $OKF check "$RUNNER_TEMP/skills-okf" 2>&1 | tee dogfood/check.txt
           $OKF inventory "$RUNNER_TEMP/skills-okf" 2>&1 | tee dogfood/inventory.txt
           $OKF graph "$RUNNER_TEMP/skills-okf" 2>&1 | tee dogfood/graph.txt
@@ -66,8 +70,8 @@ jobs:
               ('AgentSkillsProjection', 'resolved_relation_count'): 'INTEGER',
               ('AgentSkillsProjection', 'resource_count'): 'INTEGER',
               ('AgentSkillsProjection', 'eval_count'): 'INTEGER',
-              ('AgentSkillsProjection', 'routing_run_count'): 'INTEGER',
-              ('AgentSkillsProjection', 'mention_count'): 'INTEGER',
+              ('AgentSkillsProjection', 'routing_repetitions'): 'INTEGER',
+              ('AgentSkillsProjection', 'planned_routing_run_count'): 'INTEGER',
               ('Skill', 'line_count'): 'INTEGER',
               ('SkillResource', 'size_bytes'): 'UBIGINT',
               ('SkillRelation', 'source_line'): 'INTEGER',
@@ -75,12 +79,6 @@ jobs:
               ('SkillEval', 'case_index'): 'INTEGER',
               ('SkillEval', 'should_trigger'): 'BOOLEAN',
               ('SkillMention', 'source_line'): 'INTEGER',
-              ('SkillRoutingRun', 'case_index'): 'INTEGER',
-              ('SkillRoutingRun', 'repetition'): 'INTEGER',
-              ('SkillRoutingRun', 'should_trigger'): 'BOOLEAN',
-              ('SkillRoutingRun', 'observed_trigger'): 'BOOLEAN',
-              ('SkillRoutingRun', 'execution_status'): 'VARCHAR',
-              ('SkillRoutingRun', 'error_type'): 'VARCHAR',
           }
           missing = {key: value for key, value in expected.items() if types.get(key) != value}
           if missing:
@@ -88,7 +86,7 @@ jobs:
           print(f'asserted_declared_types={len(expected)}')
           PY
 
-      - name: Materialize canonical typed audit views
+      - name: Materialize canonical audit views
         run: |
           set -o pipefail
           uv run --no-project --with duckdb python okf-agent-skills/scripts/run_typed_audit.py \
@@ -97,7 +95,6 @@ jobs:
           uv run --no-project --with duckdb python - <<'PY'
           import json
           from pathlib import Path
-
           import duckdb
 
           report = json.loads(Path('dogfood/audit.json').read_text(encoding='utf-8'))
@@ -109,25 +106,20 @@ jobs:
 
           con = duckdb.connect('dogfood/skills.duckdb', read_only=True)
           try:
-              manifest_rows = con.execute(
-                  'SELECT * FROM okf_types."AgentSkillsProjection"'
-              ).fetchall()
-              if len(manifest_rows) != 1:
-                  raise SystemExit(f'expected one AgentSkillsProjection row, got {len(manifest_rows)}')
-              columns = [item[0] for item in con.description]
-              manifest = dict(zip(columns, manifest_rows[0], strict=True))
-
+              cursor = con.execute('SELECT * FROM okf_types."AgentSkillsProjection"')
+              rows = cursor.fetchall()
+              if len(rows) != 1:
+                  raise SystemExit(f'expected one AgentSkillsProjection row, got {len(rows)}')
+              manifest = dict(zip([item[0] for item in cursor.description], rows[0], strict=True))
               table_counts = {
                   'skill_count': con.execute('SELECT count(*) FROM okf_types."Skill"').fetchone()[0],
                   'relation_count': con.execute('SELECT count(*) FROM okf_types."SkillRelation"').fetchone()[0],
                   'resource_count': con.execute('SELECT count(*) FROM okf_types."SkillResource"').fetchone()[0],
                   'eval_count': con.execute('SELECT count(*) FROM okf_types."SkillEval"').fetchone()[0],
-                  'routing_run_count': con.execute('SELECT count(*) FROM okf_types."SkillRoutingRun"').fetchone()[0],
                   'mention_count': con.execute('SELECT count(*) FROM okf_types."SkillMention"').fetchone()[0],
               }
               table_counts['authored_relation_count'] = con.execute(
-                  "SELECT count(*) FROM okf_types.\"SkillRelation\" "
-                  "WHERE coalesce(evidence_kind, 'authored_link') = 'authored_link'"
+                  "SELECT count(*) FROM okf_types.\"SkillRelation\" WHERE coalesce(evidence_kind, 'authored_link') = 'authored_link'"
               ).fetchone()[0]
               table_counts['reviewed_relation_count'] = con.execute(
                   "SELECT count(*) FROM okf_types.\"SkillRelation\" WHERE evidence_kind = 'reviewed_mention'"
@@ -140,8 +132,7 @@ jobs:
 
           if table_counts['skill_count'] != len(source_skill_files):
               raise SystemExit(
-                  'source → IR skill coverage mismatch: '
-                  f'source={len(source_skill_files)} typed={table_counts["skill_count"]}'
+                  f'source → IR skill coverage mismatch: source={len(source_skill_files)} typed={table_counts["skill_count"]}'
               )
 
           mismatches = {
@@ -152,54 +143,45 @@ jobs:
           if mismatches:
               raise SystemExit(f'AgentSkillsProjection contradicts typed IR: {mismatches}')
 
+          planned_formula = table_counts['eval_count'] * manifest['routing_repetitions']
+          if manifest['planned_routing_run_count'] != planned_formula:
+              raise SystemExit(
+                  f'planned routing count mismatch: manifest={manifest["planned_routing_run_count"]} formula={planned_formula}'
+              )
+          if report['routing_observation_mismatches']:
+              raise SystemExit(f'stale/mismatched routing observations: {report["routing_observation_mismatches"][:5]}')
+
           coverage = report['eval_coverage']
           if len(coverage) != table_counts['skill_count']:
-              raise SystemExit(
-                  f'expected audit coverage row for each of {table_counts["skill_count"]} typed skills, '
-                  f'got {len(coverage)}'
-              )
+              raise SystemExit('eval coverage must contain one row per skill')
           covered = [row for row in coverage if row['has_routing_evals']]
           uncovered = [row for row in coverage if not row['has_routing_evals']]
           if not covered or not uncovered:
               raise SystemExit('routing coverage audit must distinguish covered and uncovered skills')
 
           run_coverage = report['routing_run_coverage']
-          if len(run_coverage) != len(covered):
-              raise SystemExit(
-                  f'expected routing-run rows for {len(covered)} covered skills, '
-                  f'got {len(run_coverage)}'
-              )
           planned = sum(row['planned_runs'] for row in run_coverage)
           observed = sum(row['observed_runs'] for row in run_coverage)
           failed = sum(row['failed_runs'] for row in run_coverage)
           pending = sum(row['pending_runs'] for row in run_coverage)
-          if planned != table_counts['routing_run_count'] or observed + failed + pending != planned:
+          if planned != planned_formula or observed + failed + pending != planned:
               raise SystemExit(
-                  f'expected coherent routing audit matching {table_counts["routing_run_count"]} typed runs, '
-                  f'got planned={planned} observed={observed} failed={failed} pending={pending}'
+                  f'incoherent routing audit: planned={planned} observed={observed} failed={failed} pending={pending}'
               )
           if len(report['routing_case_results']) != table_counts['eval_count']:
-              raise SystemExit(
-                  f'expected {table_counts["eval_count"]} routing case rows from typed evals, '
-                  f'got {len(report["routing_case_results"])}'
-              )
-          if len(report['routing_skill_results']) != len(covered):
-              raise SystemExit('routing skill results must cover every skill with routing evals')
+              raise SystemExit('routing case results must contain one row per eval')
 
           print(f'audit_views={len(report)}')
           print(f'source_skills={len(source_skill_files)}')
           print(f'typed_skills={table_counts["skill_count"]}')
           print(f'typed_relations={table_counts["relation_count"]}')
-          print(f'authored_relations={table_counts["authored_relation_count"]}')
-          print(f'reviewed_relations={table_counts["reviewed_relation_count"]}')
           print(f'typed_routing_cases={table_counts["eval_count"]}')
-          print(f'typed_routing_runs={table_counts["routing_run_count"]}')
-          print(f'eval_covered_skills={len(covered)}')
-          print(f'eval_uncovered_skills={len(uncovered)}')
+          print(f'routing_repetitions={manifest["routing_repetitions"]}')
           print(f'routing_runs_planned={planned}')
           print(f'routing_runs_observed={observed}')
           print(f'routing_runs_failed={failed}')
           print(f'routing_runs_pending={pending}')
+          print(f'routing_observations={len(report["routing_observations"])}')
           print(f'mentions_without_edge={len(report["mentions_without_edge"])}')
           print(f'isolated_skills={len(report["isolated_skills"])}')
           PY
@@ -208,90 +190,24 @@ jobs:
         run: |
           set -o pipefail
           python - <<'PY' | tee dogfood/summary.txt
-          from collections import defaultdict
           from pathlib import Path
           import re
 
           root = Path('dogfood/projection')
-          skills = sorted((root / 'skills').glob('*.md'))
-          resources = sorted((root / 'resources').glob('*.md'))
-          relations = sorted((root / 'relations').glob('*.md'))
-          evals = sorted((root / 'evals').glob('*.md'))
-          routing_runs = sorted((root / 'routing-runs').glob('*.md'))
-          mentions = sorted((root / 'mentions').glob('*.md'))
-          contracts = sorted((root / '.okf' / 'contracts').glob('*.schema.sql'))
-
-          resolved = 0
-          unresolved = 0
-          for path in relations:
-              text = path.read_text(encoding='utf-8')
-              if re.search(r'^resolved: true$', text, re.M):
-                  resolved += 1
-              else:
-                  unresolved += 1
-
-          line_counts = []
-          for path in skills:
-              text = path.read_text(encoding='utf-8')
-              match = re.search(r'^line_count: (\d+)$', text, re.M)
-              source = re.search(r'^source_path: "([^"]+)"$', text, re.M)
-              if match and source:
-                  line_counts.append((int(match.group(1)), source.group(1)))
-
-          coverage = defaultdict(lambda: {'positive': 0, 'negative': 0})
-          for path in evals:
-              text = path.read_text(encoding='utf-8')
-              skill = re.search(r'^skill: "([^"]+)"$', text, re.M)
-              trigger = re.search(r'^should_trigger: (true|false)$', text, re.M)
-              if skill and trigger:
-                  key = 'positive' if trigger.group(1) == 'true' else 'negative'
-                  coverage[skill.group(1)][key] += 1
-
-          observed_runs = 0
-          failed_runs = 0
-          for path in routing_runs:
-              text = path.read_text(encoding='utf-8')
-              if re.search(r'^observed_trigger: (true|false)$', text, re.M):
-                  observed_runs += 1
-              if re.search(r'^execution_status: "error"$', text, re.M):
-                  failed_runs += 1
-
-          mention_pairs = set()
-          for path in mentions:
-              text = path.read_text(encoding='utf-8')
-              source = re.search(r'^source_skill: "([^"]+)"$', text, re.M)
-              target = re.search(r'^target_skill: "([^"]+)"$', text, re.M)
-              if source and target:
-                  mention_pairs.add((source.group(1), target.group(1)))
-
-          eval_resources = 0
-          for path in resources:
-              text = path.read_text(encoding='utf-8')
-              if re.search(r'^kind: "eval"$', text, re.M):
-                  eval_resources += 1
-
-          print(f'skills={len(skills)}')
-          print(f'resources={len(resources)}')
-          print(f'relations={len(relations)}')
-          print(f'evals={len(evals)}')
-          print(f'routing_runs={len(routing_runs)}')
-          print(f'observed_routing_runs={observed_runs}')
-          print(f'failed_routing_runs={failed_runs}')
-          print(f'eval_resources={eval_resources}')
-          print(f'mentions={len(mentions)}')
-          print(f'mention_pairs={len(mention_pairs)}')
-          print(f'declared_type_contracts={len(contracts)}')
-          print(f'eval_covered_skills={len(coverage)}')
-          print(f'eval_uncovered_skills={len(skills) - len(coverage)}')
-          print(f'resolved_projected_relations={resolved}')
-          print(f'unresolved_local_relations={unresolved}')
-          print('routing_eval_coverage:')
-          for skill in sorted(coverage):
-              counts = coverage[skill]
-              print(f"  {skill}: +{counts['positive']} / -{counts['negative']}")
-          print('largest_skills:')
-          for count, source in sorted(line_counts, reverse=True)[:10]:
-              print(f'  {count:4d}  {source}')
+          for label, pattern in (
+              ('skills', 'skills/*.md'),
+              ('resources', 'resources/*.md'),
+              ('relations', 'relations/*.md'),
+              ('evals', 'evals/*.md'),
+              ('mentions', 'mentions/*.md'),
+              ('declared_type_contracts', '.okf/contracts/*.schema.sql'),
+          ):
+              print(f'{label}={len(list(root.glob(pattern)))}')
+          manifest = (root / 'projection.md').read_text(encoding='utf-8')
+          for field in ('routing_repetitions', 'planned_routing_run_count'):
+              match = re.search(rf'^{field}: (\d+)$', manifest, re.M)
+              if match:
+                  print(f'{field}={match.group(1)}')
           PY
 
       - name: Upload dogfood evidence
