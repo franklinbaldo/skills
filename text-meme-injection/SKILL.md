@@ -101,15 +101,16 @@ Provide a full revised version only when the user asks for it or when that is cl
 
 ## Quality check
 
-Before delivering, score the proposed edit informally on five questions:
+Before delivering, score the proposed edit informally on six questions:
 
 - **naturalness** — does it read as part of the paragraph rather than an attachment?
 - **voice preservation** — could this writer plausibly have written it?
 - **timing/rhythm** — does the beat land where the prose benefits from release or contrast?
 - **semantic contribution** — does it sharpen/compress/expose something rather than merely react?
 - **freshness/restraint** — is the register appropriate and no louder/more dated than necessary?
+- **meme-texture fidelity** — when the user explicitly asked for meme/internet texture, does the edit retain a recognizable internet-derived form, rhythm, or sensibility instead of collapsing into generic witty copy?
 
-If a candidate is weak on two or more dimensions, prefer no meme or find a different slot.
+Do not maximize the sixth dimension at the expense of the first five. The target is integrated meme texture, not conspicuous meme signaling. If a candidate is weak on two or more dimensions, prefer no meme or find a different slot.
 
 ## Definition of Done
 
@@ -121,5 +122,6 @@ The pass is complete when:
 - no unsafe/serious-context exclusion was crossed;
 - density feels intentional rather than algorithmic;
 - concrete catalogs/calibration references were loaded only when needed;
+- explicit requests for meme texture are not silently optimized into generic humor;
 - the delivery does not bury a simple edit under unnecessary meme taxonomy;
 - the user can accept/reject changes individually.
