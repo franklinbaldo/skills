@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 
 import routing_benchmark
@@ -69,8 +68,11 @@ def project(root: Path, output: Path, repetitions: int = DEFAULT_REPETITIONS) ->
         query = str(row['query'])
         source_path = str(row['source_path'])
         observed_trigger: bool | None = None
+        execution_status: str | None = None
         runner: str | None = None
         model: str | None = None
+        error_type: str | None = None
+        error_message: str | None = None
 
         if observation is not None:
             if bool(observation['should_trigger']) != should_trigger:
@@ -79,15 +81,13 @@ def project(root: Path, output: Path, repetitions: int = DEFAULT_REPETITIONS) ->
                 raise ValueError(f'observation query disagrees with current eval for {key}')
             if 'source_path' in observation and observation['source_path'] != source_path:
                 raise ValueError(f'observation source_path disagrees with current eval for {key}')
-            observed_trigger = bool(observation['observed_trigger'])
-            if observation.get('runner') is not None:
-                if not isinstance(observation['runner'], str):
-                    raise ValueError(f'observation runner must be string for {key}')
-                runner = str(observation['runner'])
-            if observation.get('model') is not None:
-                if not isinstance(observation['model'], str):
-                    raise ValueError(f'observation model must be string for {key}')
-                model = str(observation['model'])
+            execution_status = str(observation.get('execution_status', routing_benchmark.EXECUTION_OBSERVED))
+            if execution_status == routing_benchmark.EXECUTION_OBSERVED:
+                observed_trigger = bool(observation['observed_trigger'])
+            runner = str(observation['runner']) if observation.get('runner') is not None else None
+            model = str(observation['model']) if observation.get('model') is not None else None
+            error_type = str(observation['error_type']) if observation.get('error_type') is not None else None
+            error_message = str(observation['error_message']) if observation.get('error_message') is not None else None
 
         projected = {
             'skill': skill,
@@ -95,10 +95,13 @@ def project(root: Path, output: Path, repetitions: int = DEFAULT_REPETITIONS) ->
             'repetition': repetition,
             'should_trigger': should_trigger,
             'observed_trigger': observed_trigger,
+            'execution_status': execution_status,
             'source_path': source_path,
             'query_sha256': _sha256(query),
             'runner': runner,
             'model': model,
+            'error_type': error_type,
+            'error_message': error_message,
         }
         rows.append(projected)
 
@@ -114,10 +117,16 @@ def project(root: Path, output: Path, repetitions: int = DEFAULT_REPETITIONS) ->
         ]
         if observed_trigger is not None:
             fields.append(f'observed_trigger: {"true" if observed_trigger else "false"}')
+        if execution_status is not None:
+            fields.append(f'execution_status: {_yaml_string(execution_status)}')
         if runner is not None:
             fields.append(f'runner: {_yaml_string(runner)}')
         if model is not None:
             fields.append(f'model: {_yaml_string(model)}')
+        if error_type is not None:
+            fields.append(f'error_type: {_yaml_string(error_type)}')
+        if error_message is not None:
+            fields.append(f'error_message: {_yaml_string(error_message)}')
         fields.extend(['---', ''])
         filename = f'{skill}--case-{case_index:03d}--run-{repetition:02d}.md'
         (run_dir / filename).write_text('\n'.join(fields), encoding='utf-8')
