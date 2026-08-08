@@ -2,8 +2,8 @@
 """Validate and expand benchmark-R&D experiment definitions.
 
 This helper never invokes a model and never decides whether a skill should route.
-It only validates challenge/mutation/catalog experiment files and expands catalog
-perturbations into a deterministic manifest for an external evaluator.
+It only validates challenge/mutation/catalog/multi-turn experiment files and expands
+those definitions into deterministic manifests for an external evaluator.
 """
 
 from __future__ import annotations
@@ -101,6 +101,45 @@ def expand_catalog(path: Path) -> list[dict[str, object]]:
     return manifest
 
 
+def expand_multiturn(path: Path) -> list[dict[str, object]]:
+    rows = _load_array(path)
+    manifest: list[dict[str, object]] = []
+    for row in rows:
+        turns = row.get("turns")
+        expected = row.get("expected_skill_by_turn")
+        tags = row.get("tags")
+        if not isinstance(turns, list) or not turns or not all(isinstance(turn, str) and turn.strip() for turn in turns):
+            raise ValueError(f"{path}: {row['id']} needs non-empty string turns")
+        if not isinstance(expected, list) or len(expected) != len(turns):
+            raise ValueError(f"{path}: {row['id']} expected_skill_by_turn must match turns")
+        if not all(skill is None or isinstance(skill, str) and skill for skill in expected):
+            raise ValueError(f"{path}: {row['id']} expected skills must be string or null")
+        if not isinstance(tags, list) or not tags or not all(isinstance(tag, str) and tag for tag in tags):
+            raise ValueError(f"{path}: {row['id']} needs tags")
+        history: list[str] = []
+        for turn_index, (turn, expected_skill) in enumerate(zip(turns, expected, strict=True), start=1):
+            history.append(turn.strip())
+            manifest.append(
+                {
+                    "experiment_id": row["id"],
+                    "turn_index": turn_index,
+                    "history": list(history),
+                    "query": turn.strip(),
+                    "expected_skill": expected_skill,
+                    "tags": tags,
+                }
+            )
+    return manifest
+
+
+def _write_jsonl(rows: list[dict[str, object]], output: Path) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -110,9 +149,13 @@ def main() -> int:
     validate.add_argument("mutations", type=Path)
     validate.add_argument("catalog", type=Path)
 
-    expand = sub.add_parser("catalog-manifest")
-    expand.add_argument("catalog", type=Path)
-    expand.add_argument("output", type=Path)
+    catalog = sub.add_parser("catalog-manifest")
+    catalog.add_argument("catalog", type=Path)
+    catalog.add_argument("output", type=Path)
+
+    multiturn = sub.add_parser("multiturn-manifest")
+    multiturn.add_argument("multiturn", type=Path)
+    multiturn.add_argument("output", type=Path)
 
     args = parser.parse_args()
     if args.command == "validate":
@@ -124,13 +167,15 @@ def main() -> int:
         print(json.dumps(result, sort_keys=True))
         return 0
 
-    manifest = expand_catalog(args.catalog)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
-        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in manifest),
-        encoding="utf-8",
-    )
-    print(f"wrote {len(manifest)} catalog variants to {args.output}")
+    if args.command == "catalog-manifest":
+        manifest = expand_catalog(args.catalog)
+        _write_jsonl(manifest, args.output)
+        print(f"wrote {len(manifest)} catalog variants to {args.output}")
+        return 0
+
+    manifest = expand_multiturn(args.multiturn)
+    _write_jsonl(manifest, args.output)
+    print(f"wrote {len(manifest)} multi-turn steps to {args.output}")
     return 0
 
 
