@@ -16,8 +16,11 @@ permissions:
     allowed_without_paid_license: false
     license_type: separate-paid-operational-license
   compliance_skill:
+    free_terms_review: true
     free_self_audit: true
+    free_license_determination: true
     free_license_inquiry: true
+    free_compliance_response: true
 commercial_terms:
   pricing_model: quote_required
   public_price: null
