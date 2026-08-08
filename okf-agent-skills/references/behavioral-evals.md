@@ -6,6 +6,8 @@ Static eval cases state what should happen. Behavioral observations record what 
 
 ```text
 write/expand static eval cases
+  → run a cheap simulated-routing audit against names + descriptions
+  → fix only clear contract/eval inconsistencies
   → expose the repository skills through Vercel `skills`
   → run each case repeatedly in fresh agent sessions
   → record factual SkillRoutingObservation rows
@@ -19,6 +21,21 @@ write/expand static eval cases
 This is intentionally cyclical. A benchmark is not a release ceremony; it is the feedback mechanism by which routing contracts accumulate evidence and improve over time.
 
 Routing accuracy and output quality are different loops. First ask whether the right skill activated. Separately ask whether activating it improved the answer.
+
+## Skill-authoring discipline
+
+When changing a skill or its routing description, follow the current upstream `skill-creator` workflow rather than inventing a local prompt-authoring methodology. In particular:
+
+1. diagnose the existing skill and its trigger boundary before editing;
+2. use realistic positive and near-miss negative prompts;
+3. change the smallest amount of instruction/description needed to explain the intended boundary;
+4. preserve good eval cases instead of changing their expected result merely to make the benchmark green;
+5. re-run the affected trigger evals after a change;
+6. keep routing evals separate from output-quality evals.
+
+A simulated-routing audit is a cheap diagnostic layer, not host evidence. It may use a capable model to answer “given only this catalog of skill names/descriptions, would this query cause skill X to be selected?” and may compare strict/normal/permissive interpretations to find unstable boundaries. Record such results as simulation findings, never as `SkillRoutingObservation`, and never mix simulated accuracy with Claude Code/Codex runtime accuracy.
+
+The purpose of simulation is to find obvious contradictions, ambiguous descriptions, and valuable near-miss cases before paying for repeated live runs. It does not prove how a real agent host routes.
 
 ## Distribution/runtime boundary
 
@@ -89,7 +106,7 @@ For the first complete benchmark, do not change skill descriptions while collect
 
 After a routing change:
 
-1. add a static case that protects the corrected boundary;
+1. add or preserve a static case that protects the corrected boundary;
 2. preserve held-out cases where practical;
 3. rerun the affected cases repeatedly;
 4. periodically rerun the full benchmark to detect cross-skill regressions.
