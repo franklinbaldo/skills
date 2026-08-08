@@ -2,13 +2,35 @@
 
 A collection of [Claude Code agent skills](https://docs.claude.com/en/docs/claude-code/skills) by Franklin Baldo, plus Lean 4 tooling for legal formalization.
 
-## Install
+## Install and use
+
+Use Vercel's open `skills` CLI as the canonical distribution/runtime boundary for this repository. Do not add a repository-specific installer, agent registry, path-mapping layer, or competing skills runtime when `npx skills` already provides that capability.
+
+Install from this repository:
 
 ```bash
-bash skills.sh
+npx skills add franklinbaldo/skills
 ```
 
-Each skill is installed as a directory under `~/.claude/skills/<name>/`, with its bundled `references/` and `scripts/` copied alongside `SKILL.md`. The `<skill-dir>` placeholder in skill instructions is resolved to the installed path. Re-running the script replaces previous installs (and cleans up flat `<name>.md` files from the old install scheme).
+Install a specific skill:
+
+```bash
+npx skills add franklinbaldo/skills --skill software-review
+```
+
+Target a specific supported agent when needed:
+
+```bash
+npx skills add franklinbaldo/skills --skill software-review --agent claude-code
+```
+
+Use a skill without making installation semantics part of this repository:
+
+```bash
+npx skills use franklinbaldo/skills --skill software-review --agent claude-code
+```
+
+`npx skills` owns discovery, selection, agent-specific installation paths, symlink/copy behavior, updates, removal, and supported-agent integration. This repository owns the skills themselves, their tests/evals, and repository-specific analysis. See [`okf-agent-skills/references/tooling-boundary.md`](okf-agent-skills/references/tooling-boundary.md).
 
 ## Skills
 
