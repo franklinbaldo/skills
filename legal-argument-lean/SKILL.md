@@ -1,12 +1,14 @@
 ---
 name: legal-argument-lean
 description: >-
-  Formaliza argumentos jurídicos brasileiros em Lean 4 quando a formalização
-  reduz uma incerteza estrutural real: dependências ocultas, premissas
-  load-bearing, omissão lógica, inconsistência, aderência a precedente ou
-  steelman de uma decisão. Não use Lean só para “dar rigor” a uma peça já
-  compreensível; a skill deve primeiro justificar o ganho esperado da prova
-  formal e pode concluir que não vale formalizar.
+  Formaliza e audita argumentos jurídicos brasileiros em Lean 4 quando isso reduz
+  uma incerteza estrutural real: dependências ocultas, premissas load-bearing,
+  omissão lógica, inconsistência, aderência a precedente ou steelman de uma
+  decisão. Também use para continuar uma formalização já existente, interpretar
+  `#print axioms` e traduzir achados formais de volta para linguagem jurídica.
+  Não use Lean só para “dar rigor” a uma peça já compreensível; a skill deve
+  primeiro justificar o ganho esperado da prova formal e pode concluir que não
+  vale formalizar.
 ---
 
 # Legal argument audit with Lean
