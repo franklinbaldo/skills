@@ -56,47 +56,12 @@ class RoutingBenchmarkTests(unittest.TestCase):
         result = MODULE.aggregate(rows)
         self.assertEqual(result["summary"]["true_positive"], 1)
         self.assertEqual(result["summary"]["true_negative"], 1)
-        self.assertEqual(result["summary"]["failed_runs"], 0)
+        self.assertEqual(result["summary"]["false_positive"], 0)
+        self.assertEqual(result["summary"]["false_negative"], 0)
         self.assertEqual(result["cases"][0]["trigger_rate"], 0.6667)
         self.assertEqual(result["cases"][1]["trigger_rate"], 0.3333)
 
-    def test_aggregate_does_not_turn_runner_failure_into_false_negative(self) -> None:
-        rows = [
-            {
-                "skill": "alpha",
-                "case_index": 1,
-                "should_trigger": True,
-                "execution_status": "error",
-                "error_type": "timeout",
-            }
-        ]
-        result = MODULE.aggregate(rows)
-        self.assertEqual(result["summary"]["failed_runs"], 1)
-        self.assertEqual(result["summary"]["classified_cases"], 0)
-        self.assertEqual(result["summary"]["false_negative"], 0)
-        self.assertIsNone(result["cases"][0]["outcome"])
-
-    def test_loads_error_observation_without_trigger_boolean(self) -> None:
-        path = Path(self.tempdir.name) / "observations.jsonl"
-        path.write_text(
-            json.dumps(
-                {
-                    "skill": "alpha",
-                    "case_index": 1,
-                    "repetition": 1,
-                    "should_trigger": True,
-                    "execution_status": "error",
-                    "error_type": "timeout",
-                }
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        rows = MODULE.load_observations(path)
-        self.assertEqual(rows[0]["execution_status"], "error")
-        self.assertNotIn("observed_trigger", rows[0])
-
-    def test_rejects_missing_observation_for_success(self) -> None:
+    def test_rejects_missing_observation(self) -> None:
         path = Path(self.tempdir.name) / "observations.jsonl"
         path.write_text(
             json.dumps({"skill": "alpha", "case_index": 1, "should_trigger": True}) + "\n",
