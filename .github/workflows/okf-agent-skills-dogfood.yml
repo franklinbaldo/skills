@@ -79,6 +79,8 @@ jobs:
               ('SkillRoutingRun', 'repetition'): 'INTEGER',
               ('SkillRoutingRun', 'should_trigger'): 'BOOLEAN',
               ('SkillRoutingRun', 'observed_trigger'): 'BOOLEAN',
+              ('SkillRoutingRun', 'execution_status'): 'VARCHAR',
+              ('SkillRoutingRun', 'error_type'): 'VARCHAR',
           }
           missing = {key: value for key, value in expected.items() if types.get(key) != value}
           if missing:
@@ -169,11 +171,12 @@ jobs:
               )
           planned = sum(row['planned_runs'] for row in run_coverage)
           observed = sum(row['observed_runs'] for row in run_coverage)
+          failed = sum(row['failed_runs'] for row in run_coverage)
           pending = sum(row['pending_runs'] for row in run_coverage)
-          if planned != table_counts['routing_run_count'] or observed + pending != planned:
+          if planned != table_counts['routing_run_count'] or observed + failed + pending != planned:
               raise SystemExit(
                   f'expected coherent routing audit matching {table_counts["routing_run_count"]} typed runs, '
-                  f'got planned={planned} observed={observed} pending={pending}'
+                  f'got planned={planned} observed={observed} failed={failed} pending={pending}'
               )
           if len(report['routing_case_results']) != table_counts['eval_count']:
               raise SystemExit(
@@ -195,6 +198,7 @@ jobs:
           print(f'eval_uncovered_skills={len(uncovered)}')
           print(f'routing_runs_planned={planned}')
           print(f'routing_runs_observed={observed}')
+          print(f'routing_runs_failed={failed}')
           print(f'routing_runs_pending={pending}')
           print(f'mentions_without_edge={len(report["mentions_without_edge"])}')
           print(f'isolated_skills={len(report["isolated_skills"])}')
@@ -244,9 +248,13 @@ jobs:
                   coverage[skill.group(1)][key] += 1
 
           observed_runs = 0
+          failed_runs = 0
           for path in routing_runs:
-              if re.search(r'^observed_trigger: (true|false)$', path.read_text(encoding='utf-8'), re.M):
+              text = path.read_text(encoding='utf-8')
+              if re.search(r'^observed_trigger: (true|false)$', text, re.M):
                   observed_runs += 1
+              if re.search(r'^execution_status: "error"$', text, re.M):
+                  failed_runs += 1
 
           mention_pairs = set()
           for path in mentions:
@@ -268,6 +276,7 @@ jobs:
           print(f'evals={len(evals)}')
           print(f'routing_runs={len(routing_runs)}')
           print(f'observed_routing_runs={observed_runs}')
+          print(f'failed_routing_runs={failed_runs}')
           print(f'eval_resources={eval_resources}')
           print(f'mentions={len(mentions)}')
           print(f'mention_pairs={len(mention_pairs)}')
