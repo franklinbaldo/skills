@@ -15,6 +15,76 @@ FROM okf_types."Skill" AS s
 LEFT JOIN okf_types."SkillEval" AS e ON e.skill = s.name
 GROUP BY s.name;
 
+CREATE OR REPLACE VIEW audit.benchmark_challenge_coverage AS
+SELECT
+    s.name AS skill,
+    count(c.challenge_id) AS challenge_count,
+    count(c.challenge_id) FILTER (WHERE c.should_trigger IS TRUE) AS positive_count,
+    count(c.challenge_id) FILTER (WHERE c.should_trigger IS FALSE) AS negative_count,
+    count(c.challenge_id) FILTER (WHERE c.tags LIKE '%hard-negative%') AS hard_negative_count,
+    count(c.challenge_id) FILTER (WHERE c.tags LIKE '%collision%') AS collision_count,
+    count(c.challenge_id) > 0 AS has_challenge_frontier
+FROM okf_types."Skill" AS s
+LEFT JOIN okf_types."SkillChallengeCase" AS c ON c.skill = s.name
+GROUP BY s.name
+ORDER BY s.name;
+
+CREATE OR REPLACE VIEW audit.benchmark_mutation_surface AS
+SELECT
+    s.name AS skill,
+    count(m.mutation_id) AS mutation_count,
+    count(DISTINCT m.mutation_kind) AS mutation_kind_count,
+    count(m.mutation_id) > 0 AS has_mutation_tests
+FROM okf_types."Skill" AS s
+LEFT JOIN okf_types."SkillBenchmarkMutation" AS m ON m.skill = s.name
+GROUP BY s.name
+ORDER BY s.name;
+
+CREATE OR REPLACE VIEW audit.benchmark_catalog_surface AS
+SELECT
+    s.name AS skill,
+    count(c.scenario_id) AS scenario_count,
+    coalesce(sum(c.variant_count), 0)::UBIGINT AS variant_count,
+    count(c.scenario_id) > 0 AS has_catalog_perturbation
+FROM okf_types."Skill" AS s
+LEFT JOIN okf_types."SkillCatalogScenario" AS c ON c.skill = s.name
+GROUP BY s.name
+ORDER BY s.name;
+
+CREATE OR REPLACE VIEW audit.benchmark_health AS
+WITH projection AS (
+    SELECT *
+    FROM okf_types."AgentSkillsProjection"
+    LIMIT 1
+), coverage AS (
+    SELECT
+        count(*) AS skill_count,
+        count(*) FILTER (WHERE has_routing_evals) AS eval_covered_skills,
+        count(*) FILTER (WHERE has_challenge_frontier) AS challenge_covered_skills
+    FROM audit.eval_coverage
+    LEFT JOIN audit.benchmark_challenge_coverage USING (skill)
+), mutation AS (
+    SELECT count(*) FILTER (WHERE has_mutation_tests) AS mutation_covered_skills
+    FROM audit.benchmark_mutation_surface
+), catalog AS (
+    SELECT count(*) FILTER (WHERE has_catalog_perturbation) AS catalog_covered_skills
+    FROM audit.benchmark_catalog_surface
+)
+SELECT
+    coverage.skill_count,
+    coverage.eval_covered_skills,
+    coverage.challenge_covered_skills,
+    mutation.mutation_covered_skills,
+    catalog.catalog_covered_skills,
+    projection.eval_count,
+    projection.challenge_case_count,
+    projection.benchmark_mutation_count,
+    projection.catalog_scenario_count,
+    projection.catalog_variant_count,
+    coverage.eval_covered_skills::DOUBLE / nullif(coverage.skill_count, 0) AS eval_skill_coverage,
+    coverage.challenge_covered_skills::DOUBLE / nullif(coverage.skill_count, 0) AS challenge_skill_coverage
+FROM projection, coverage, mutation, catalog;
+
 CREATE OR REPLACE VIEW audit.skill_relations AS
 SELECT
     r.source_skill,

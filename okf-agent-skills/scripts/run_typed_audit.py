@@ -11,6 +11,10 @@ import duckdb
 
 VIEW_NAMES = (
     "eval_coverage",
+    "benchmark_challenge_coverage",
+    "benchmark_mutation_surface",
+    "benchmark_catalog_surface",
+    "benchmark_health",
     "skill_relations",
     "mentions_without_edge",
     "isolated_skills",
