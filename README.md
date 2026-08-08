@@ -21,17 +21,17 @@ Each skill is installed as a directory under `~/.claude/skills/<name>/`, with it
 | [franklin-blog](franklin-blog/SKILL.md) | Write posts for Franklin's blog, preserving his voice via draft-and-react workflow. |
 | [free-gpu](free-gpu/SKILL.md) | Run GPU workloads through Colab or Kaggle CLIs, including native Windows without WSL or administrator rights. |
 | [juris-tjro](juris-tjro/SKILL.md) | Search TJRO (Rondonia court) case law via the JURIS system. |
-| [legal-argument-lean](legal-argument-lean/SKILL.md) | Formalize Brazilian legal arguments (CPC-anchored vicios) in Lean 4. |
+| [legal-argument-lean](legal-argument-lean/SKILL.md) | Formalize legal arguments in Lean 4 only when doing so reduces a concrete structural uncertainty, with explicit dependency auditing and stopping rules. |
 | [litebox](litebox/SKILL.md) | Adapt Linux-only CLI workflows to locked-down Windows with LiteBox when native Linux, WSL, containers, VMs, or admin installation are unavailable. |
 | [llm-work-via-subagents](llm-work-via-subagents/SKILL.md) | Do bulk LLM work with parallel subagents instead of API-key scripts. |
 | [meme-image](meme-image/SKILL.md) | Generate image memes via the memegen.link API for markdown content. |
-| [notebooklm-processos](notebooklm-processos/SKILL.md) | Draft grounded NotebookLM question blocks to verify case-file facts before drafting. |
+| [notebooklm-processos](notebooklm-processos/SKILL.md) | Turn large case files into grounded, provenance-preserving evidence for the next legal or institutional decision. |
 | [okf-agent-skills](okf-agent-skills/SKILL.md) | Inspect and govern Agent Skills through a derived OKF relational/graph projection while keeping Agent Skills as the source format. |
 | [opf-finetune](opf-finetune/SKILL.md) | Fine-tune the OpenAI Privacy Filter for custom span/token classification. |
 | [paddleocr](paddleocr/SKILL.md) | Run PaddleOCR locally or on a Colab GPU and export OCR results to Markdown with performance metrics. |
 | [pdf-compression](pdf-compression/SKILL.md) | Compress image-heavy or scanned PDFs via downscaling and CCITT G4/JPEG re-encoding. |
 | [pdf-to-markdown](pdf-to-markdown/SKILL.md) | Convert court/process PDFs (PJe, SEI) into structured Markdown per document. |
-| [revisao-minutas](revisao-minutas/SKILL.md) | Adversarial risk triage of draft legal filings before they're submitted. |
+| [revisao-minutas](revisao-minutas/SKILL.md) | Review existing legal and institutional drafts for concrete risk, missing context, unintended commitments, and readiness to sign, issue, or file. |
 | [ruff-strict-compliance](ruff-strict-compliance/SKILL.md) | Enforce zero-warning Ruff linting and formatting in Python projects. |
 | [software-review](software-review/SKILL.md) | Review PRs and RFCs for reproducible defects, broken invariants, false-green gates, and architecture issues calibrated to the real application. |
 | [suno-curator](suno-curator/SKILL.md) | Audit and curate the Suno/blog mirror with deterministic drift checks and guarded editorial workflows. |
