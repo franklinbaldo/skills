@@ -46,6 +46,7 @@ npx skills use franklinbaldo/skills --skill software-review --agent claude-code
 | [legal-argument-lean](legal-argument-lean/SKILL.md) | Formalize legal arguments in Lean 4 only when doing so reduces a concrete structural uncertainty, with explicit dependency auditing and stopping rules. |
 | [litebox](litebox/SKILL.md) | Adapt Linux-only CLI workflows to locked-down Windows with LiteBox when native Linux, WSL, containers, VMs, or admin installation are unavailable. |
 | [llm-work-via-subagents](llm-work-via-subagents/SKILL.md) | Do bulk LLM work with parallel subagents instead of API-key scripts. |
+| [loop-engineering](loop-engineering/SKILL.md) | Engineer self-improving loops in which skills, benchmarks, evaluation methods, coverage, and neighboring skills co-evolve from evidence. |
 | [meme-image](meme-image/SKILL.md) | Generate image memes via the memegen.link API for markdown content. |
 | [notebooklm-processos](notebooklm-processos/SKILL.md) | Turn large case files into grounded, provenance-preserving evidence for the next legal or institutional decision. |
 | [okf-agent-skills](okf-agent-skills/SKILL.md) | Inspect and govern Agent Skills through a derived OKF relational/graph projection while keeping Agent Skills as the source format. |
