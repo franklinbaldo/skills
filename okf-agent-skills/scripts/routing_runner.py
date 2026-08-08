@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Execute routing eval cases through an external isolated runner protocol.
+"""Execute routing eval cases and emit import-ready observation facts.
 
 Each attempt launches a fresh subprocess, sends the eval query on stdin, and
-expects one JSON object on stdout. A successful adapter response must contain
-`observed_trigger: bool`; it may also report `model`. Process/timeout/protocol
-failures are preserved as execution errors and never converted into routing
-false negatives.
+expects one JSON object on stdout. A success contains `observed_trigger: bool`;
+a failed attempt contains `error` and no observed trigger. The output JSONL is
+data for `okf-parser import`, not a second projection format.
 """
 
 from __future__ import annotations
@@ -26,46 +25,34 @@ def _sha256(value: str) -> str:
     return hashlib.sha256(value.encode('utf-8')).hexdigest()
 
 
+def _observation_id(row: dict[str, object]) -> str:
+    return (
+        f"{row['skill']}--case-{int(row['case_index']):03d}"
+        f"--run-{int(row['repetition']):02d}"
+    )
+
+
 def _base_observation(row: dict[str, object], runner: str) -> dict[str, object]:
     query = str(row['query'])
     return {
+        'observation_id': _observation_id(row),
         'skill': str(row['skill']),
         'case_index': int(row['case_index']),
         'repetition': int(row['repetition']),
-        'query': query,
-        'query_sha256': _sha256(query),
         'should_trigger': bool(row['should_trigger']),
-        'source_path': str(row['source_path']),
+        'query_sha256': _sha256(query),
         'runner': runner,
     }
 
 
-def _error(
-    row: dict[str, object],
-    runner: str,
-    error_type: str,
-    message: str,
-    *,
-    model: str | None = None,
-) -> dict[str, object]:
+def _failure(row: dict[str, object], runner: str, error: str) -> dict[str, object]:
     result = _base_observation(row, runner)
-    result.update(
-        {
-            'execution_status': routing_benchmark.EXECUTION_ERROR,
-            'error_type': error_type,
-            'error_message': message,
-        }
-    )
-    if model:
-        result['model'] = model
+    result['error'] = error
     return result
 
 
 def run_one(
-    row: dict[str, object],
-    command: list[str],
-    runner: str,
-    timeout: float,
+    row: dict[str, object], command: list[str], runner: str, timeout: float
 ) -> dict[str, object]:
     query = str(row['query'])
     env = os.environ.copy()
@@ -75,7 +62,6 @@ def run_one(
             'SKILL_ROUTING_CASE_INDEX': str(row['case_index']),
             'SKILL_ROUTING_REPETITION': str(row['repetition']),
             'SKILL_ROUTING_SHOULD_TRIGGER': 'true' if bool(row['should_trigger']) else 'false',
-            'SKILL_ROUTING_SOURCE_PATH': str(row['source_path']),
             'SKILL_ROUTING_QUERY_SHA256': _sha256(query),
         }
     )
@@ -89,50 +75,29 @@ def run_one(
             env=env,
             check=False,
         )
-    except subprocess.TimeoutExpired as exc:
-        return _error(row, runner, 'timeout', f'runner exceeded {timeout:g}s timeout')
+    except subprocess.TimeoutExpired:
+        return _failure(row, runner, f'timeout after {timeout:g}s')
     except OSError as exc:
-        return _error(row, runner, 'spawn_error', str(exc))
+        return _failure(row, runner, f'spawn error: {exc}')
 
     if completed.returncode != 0:
-        detail = completed.stderr.strip() or completed.stdout.strip() or 'runner exited non-zero'
-        return _error(
-            row,
-            runner,
-            'process_exit',
-            f'exit={completed.returncode}: {detail[:2000]}',
-        )
+        detail = completed.stderr.strip() or completed.stdout.strip() or 'no output'
+        return _failure(row, runner, f'exit {completed.returncode}: {detail[:2000]}')
 
-    stdout = completed.stdout.strip()
     try:
-        payload = json.loads(stdout)
+        payload = json.loads(completed.stdout)
     except json.JSONDecodeError as exc:
-        return _error(row, runner, 'invalid_json', f'{exc}: {stdout[:1000]}')
-    if not isinstance(payload, dict):
-        return _error(row, runner, 'invalid_output', 'runner stdout must be a JSON object')
-
-    observed = payload.get('observed_trigger')
-    model = payload.get('model')
-    if model is not None and not isinstance(model, str):
-        return _error(row, runner, 'invalid_output', 'model must be a string when present')
-    if not isinstance(observed, bool):
-        return _error(
-            row,
-            runner,
-            'invalid_output',
-            'successful runner output requires boolean observed_trigger',
-            model=model,
-        )
+        return _failure(row, runner, f'invalid JSON: {exc}')
+    if not isinstance(payload, dict) or not isinstance(payload.get('observed_trigger'), bool):
+        return _failure(row, runner, 'adapter must return JSON object with boolean observed_trigger')
 
     result = _base_observation(row, runner)
-    result.update(
-        {
-            'execution_status': routing_benchmark.EXECUTION_OBSERVED,
-            'observed_trigger': observed,
-        }
-    )
-    if model:
+    result['observed_trigger'] = payload['observed_trigger']
+    model = payload.get('model')
+    if isinstance(model, str) and model:
         result['model'] = model
+    elif model is not None:
+        return _failure(row, runner, 'adapter model must be a string when present')
     return result
 
 
@@ -176,11 +141,7 @@ def main() -> int:
     parser.add_argument('--runner', required=True, help='stable adapter/runner identifier')
     parser.add_argument('--timeout', type=float, default=120.0)
     parser.add_argument('--append', action='store_true')
-    parser.add_argument(
-        'command',
-        nargs=argparse.REMAINDER,
-        help='external adapter command after --; query is sent on stdin',
-    )
+    parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
     command = list(args.command)
@@ -203,13 +164,12 @@ def main() -> int:
     output = args.output if args.output.is_absolute() else root / args.output
     write_observations(observations, output, args.append)
 
-    completed = sum(row['execution_status'] == routing_benchmark.EXECUTION_OBSERVED for row in observations)
-    failed = len(observations) - completed
+    failed = sum('error' in row for row in observations)
     print(
         json.dumps(
             {
                 'attempted': len(observations),
-                'observed': completed,
+                'observed': len(observations) - failed,
                 'failed': failed,
                 'output': str(output),
             },
