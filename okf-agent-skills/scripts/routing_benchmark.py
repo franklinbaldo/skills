@@ -3,8 +3,7 @@
 
 This helper never invokes a model. It turns official-style
 */evals/eval_queries.json corpora into a deterministic run manifest and
-aggregates observations produced by an external runner such as Anthropic's
-Skill Creator benchmark workflow.
+aggregates observations produced by an external behavioral runner.
 """
 
 from __future__ import annotations
@@ -13,6 +12,10 @@ import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
+
+EXECUTION_OBSERVED = "observed"
+EXECUTION_ERROR = "error"
+EXECUTION_STATUSES = {EXECUTION_OBSERVED, EXECUTION_ERROR}
 
 
 def load_cases(root: Path) -> list[dict[str, object]]:
@@ -70,6 +73,34 @@ def write_jsonl(rows: list[dict[str, object]], path: Path) -> None:
     )
 
 
+def _validate_observation(row: dict[str, object], path: Path, line_no: int) -> None:
+    expected = row.get("should_trigger")
+    if not isinstance(expected, bool):
+        raise ValueError(f"{path}:{line_no}: should_trigger must be boolean")
+
+    status = row.get("execution_status", EXECUTION_OBSERVED)
+    if status not in EXECUTION_STATUSES:
+        raise ValueError(
+            f"{path}:{line_no}: execution_status must be one of {sorted(EXECUTION_STATUSES)}"
+        )
+
+    observed = row.get("observed_trigger")
+    if status == EXECUTION_OBSERVED:
+        if not isinstance(observed, bool):
+            raise ValueError(
+                f"{path}:{line_no}: observed execution requires boolean observed_trigger"
+            )
+    elif observed is not None:
+        raise ValueError(
+            f"{path}:{line_no}: failed execution must not contain observed_trigger"
+        )
+
+    for field in ("runner", "model", "error_type", "error_message"):
+        value = row.get(field)
+        if value is not None and not isinstance(value, str):
+            raise ValueError(f"{path}:{line_no}: {field} must be string when present")
+
+
 def load_observations(path: Path) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -78,12 +109,9 @@ def load_observations(path: Path) -> list[dict[str, object]]:
         row = json.loads(line)
         if not isinstance(row, dict):
             raise ValueError(f"{path}:{line_no}: expected object")
-        observed = row.get("observed_trigger")
-        if not isinstance(observed, bool):
-            raise ValueError(f"{path}:{line_no}: observed_trigger must be boolean")
-        expected = row.get("should_trigger")
-        if not isinstance(expected, bool):
-            raise ValueError(f"{path}:{line_no}: should_trigger must be boolean")
+        _validate_observation(row, path, line_no)
+        if "execution_status" not in row:
+            row["execution_status"] = EXECUTION_OBSERVED
         rows.append(row)
     return rows
 
@@ -99,29 +127,49 @@ def aggregate(rows: list[dict[str, object]]) -> dict[str, object]:
 
     cases: list[dict[str, object]] = []
     tp = tn = fp = fn = 0
+    attempted = completed = failed = 0
     for (skill, case_index), observations in sorted(per_case.items()):
         expected = bool(observations[0]["should_trigger"])
-        triggers = sum(bool(row["observed_trigger"]) for row in observations)
-        runs = len(observations)
-        trigger_rate = triggers / runs
-        predicted = trigger_rate >= 0.5
-        if expected and predicted:
-            tp += 1
-        elif expected and not predicted:
-            fn += 1
-        elif not expected and predicted:
-            fp += 1
-        else:
-            tn += 1
+        successful = [
+            row
+            for row in observations
+            if row.get("execution_status", EXECUTION_OBSERVED) == EXECUTION_OBSERVED
+        ]
+        failures = len(observations) - len(successful)
+        triggers = sum(bool(row["observed_trigger"]) for row in successful)
+        runs = len(successful)
+        attempted += len(observations)
+        completed += runs
+        failed += failures
+
+        trigger_rate: float | None = triggers / runs if runs else None
+        predicted: bool | None = trigger_rate >= 0.5 if trigger_rate is not None else None
+        outcome: str | None = None
+        if predicted is not None:
+            if expected and predicted:
+                tp += 1
+                outcome = "true_positive"
+            elif expected and not predicted:
+                fn += 1
+                outcome = "false_negative"
+            elif not expected and predicted:
+                fp += 1
+                outcome = "false_positive"
+            else:
+                tn += 1
+                outcome = "true_negative"
         cases.append(
             {
                 "skill": skill,
                 "case_index": case_index,
                 "should_trigger": expected,
-                "runs": runs,
+                "attempted_runs": len(observations),
+                "completed_runs": runs,
+                "failed_runs": failures,
                 "trigger_count": triggers,
-                "trigger_rate": round(trigger_rate, 4),
+                "trigger_rate": round(trigger_rate, 4) if trigger_rate is not None else None,
                 "majority_trigger": predicted,
+                "outcome": outcome,
             }
         )
 
@@ -130,7 +178,10 @@ def aggregate(rows: list[dict[str, object]]) -> dict[str, object]:
     negatives = tn + fp
     return {
         "summary": {
-            "cases": total,
+            "attempted_runs": attempted,
+            "completed_runs": completed,
+            "failed_runs": failed,
+            "classified_cases": total,
             "true_positive": tp,
             "true_negative": tn,
             "false_positive": fp,
@@ -152,7 +203,7 @@ def main() -> int:
     manifest.add_argument("output", type=Path)
     manifest.add_argument("--repetitions", type=int, default=5)
 
-    agg = sub.add_parser("aggregate", help="aggregate completed observation JSONL")
+    agg = sub.add_parser("aggregate", help="aggregate completed/error observation JSONL")
     agg.add_argument("observations", type=Path)
     agg.add_argument("output", type=Path)
 
@@ -165,7 +216,10 @@ def main() -> int:
 
     result = aggregate(load_observations(args.observations))
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    args.output.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     print(json.dumps(result["summary"], sort_keys=True))
     return 0
 
