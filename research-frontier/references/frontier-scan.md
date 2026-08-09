@@ -23,6 +23,47 @@ primary_sources_checked: <count>
 The scan date is not the literature cutoff. A source published before the cutoff can still be newly
 discovered; record both facts when it matters.
 
+## Effective state for stacked PRs is an overlay, not necessarily the leaf HEAD
+
+Do not assume that the newest-looking or deepest PR contains every correction made earlier in the
+stack. An ancestor can move after a descendant was branched, leaving the descendant **behind** while
+both PRs remain open and individually valid.
+
+Before freezing claims for a stacked programme:
+
+1. list every live PR that contributes to the programme, with its current head commit and base;
+2. compare adjacent stack members or otherwise detect whether an ancestor head changed after the
+   descendant's base point;
+3. when the same path exists in multiple live PRs, determine which PR currently owns the latest
+   applicable version rather than trusting the leaf copy;
+4. construct the effective research state as a documented **overlay of live heads**;
+5. record stack drift explicitly and, when useful, recommend a later rebase/re-stack as repository
+   hygiene — but do not silently substitute stale descendant content for a newer ancestor correction.
+
+The research scan answers "what is the programme currently proposing?", not "what files happen to
+exist in one convenient branch?"
+
+A useful state record is:
+
+```yaml
+effective_state:
+  default_branch: <commit>
+  overlays:
+    - pr: 101
+      head: <commit>
+      owns: [paper.md]
+    - pr: 102
+      head: <commit>
+      owns: [experiments/protocol-a.md]
+      drift: "descendants still contain the pre-correction copy of protocol-a.md"
+    - pr: 103
+      head: <commit>
+      owns: [experiments/protocol-b.md]
+```
+
+If the overlay cannot be reconstructed confidently, mark the affected claim as `state-ambiguous`
+and resolve that ambiguity before making a novelty or supersession judgment.
+
 ## Step A — freeze the live obligations
 
 Before reading candidates, write a compact ledger:
@@ -190,6 +231,8 @@ Repository-specific machinery overrides this table when it already defines a cle
 ## Quality checks before closing a scan
 
 - Did we accidentally scan a stale branch instead of the effective state?
+- In a stacked programme, did an ancestor move after a descendant branched?
+- Does the chosen snapshot silently contain an older copy of a claim/protocol than another live PR?
 - Did any conclusion come from a ranking/AI summary rather than the primary source?
 - Did keyword mismatch cause us to miss a semantic collision?
 - Did shared vocabulary get mislabeled as a collision?
