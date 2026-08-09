@@ -1,44 +1,88 @@
 ---
 name: meme-image
 description: |
-  Generate recognizable image memes for blog posts, essays, and Markdown contexts, primarily via memegen.link. Use when the user asks for a classic meme template populated with custom text or when a long-form post needs an image-meme beat. Do not use for original diagrams, SVG explainers, photographs, or high-stakes/serious material where meme register is inappropriate.
+  Generate and place image memes in blog posts, essays, and Markdown contexts using recognizable templates, custom backgrounds, self-hosted renders, or original generated visuals. Use when a post needs a visual meme beat or when the user asks to explore several meme-image candidates. Do not use for high-stakes/serious material where meme register would trivialize the subject.
 ---
 
 # meme-image
 
-Use recognizable image-meme templates when their cultural shorthand carries part of the joke. The skill's job is **editorial selection first, URL mechanics second**.
+Choose and generate image memes as editorial objects. The goal is not to keep reaching for the five templates that are easiest to remember. The skill should balance **fit, surprise, visual variety, and publishing durability**.
 
 ## When to use
 
 Use when the user wants:
 
 - a classic image meme with custom text;
-- a comparison/escalation/reaction/choice meme;
-- a galaxy-brain, Drake, Distracted Boyfriend, Two Buttons, Change My Mind, This Is Fine, or equivalent recognizable format;
-- occasional image-meme rhythm inside a long, non-serious post.
+- several image-meme candidates for a post;
+- comparison, escalation, reaction, choice, confusion, resignation, thesis, or another visual-comedic beat;
+- occasional meme-image rhythm inside long non-serious prose;
+- exploration of less-obvious templates or alternative meme-generation routes.
 
 Do not use when:
 
-- the visual should be an original diagram, SVG, chart, or explainer;
+- the visual should primarily explain rather than joke (prefer a diagram/chart/explainer);
 - the user wants a photograph rather than a meme format;
-- the material is legal, medical, condolence/grief, abuse, suicide, or otherwise serious enough that the meme would trivialize the subject;
-- a text meme or ordinary prose beat would do the job better.
+- the material is legal, medical, condolence/grief, abuse, suicide, or otherwise serious enough that a meme would trivialize it;
+- a text meme or ordinary prose beat clearly does the job better.
 
 ## Always-needed editorial contract
 
-1. **Choose by function, not fame.** Identify what the beat must do before choosing a template.
-2. **The template carries meaning.** Do not force text into a recognizable format whose native joke structure does not fit.
-3. **Keep line text short.** A meme is visual compression, not a paragraph renderer.
-4. **Accessibility remains required.** Deliver useful alt text whenever the meme is embedded.
-5. **Do not overpopulate a post.** Image memes are heavier than headers, text memes, diagrams, footnotes, or pull quotes.
-6. **Serious/confessional passages get fewer memes.** As emotional weight rises, image memes are usually the first visual-rest type to disappear.
-7. **Verify generated assets when publication depends on them.** Do not assume a guessed template ID or URL works.
+1. **Choose by function, not fame.** Identify what the beat must do before final selection.
+2. **Exploration must sometimes defeat salience.** In open-ended multi-candidate work, do not let the same famous templates dominate merely because they are easy to recall.
+3. **The visual grammar carries meaning.** Do not force text into a template whose native joke structure does not fit.
+4. **Keep line text short.** A meme is visual compression, not a paragraph renderer.
+5. **Accessibility remains required.** Every embedded meme needs useful alt text.
+6. **Do not overpopulate a post.** Image memes are heavier than headings, text memes, diagrams, footnotes, or pull quotes.
+7. **Serious/confessional passages get fewer memes.** As emotional weight rises, image memes are usually the first rest type to disappear.
+8. **Verify generated assets when publication depends on them.** Do not assume a guessed template ID, background URL, or renderer output works.
+9. **Preserve provenance.** Record whether an asset came from a stock template, custom background, local render, or original image generation when that distinction matters.
+
+## Two selection modes
+
+### Editorial mode
+
+Use when the user wants one or a very small number of publishable memes.
+
+Fit dominates. Explore the live catalog, but do not sacrifice the post merely to satisfy novelty. A surprising template is valuable only if its visual grammar improves the joke.
+
+### Exploration mode
+
+Use when the user asks for several candidates, wants more variance, is testing the skill, or asks to discover memes rather than merely render a known one.
+
+Default batch: **5 candidates**.
+
+- **3 sampled slots** — chosen by an actual random draw from the live template catalog. The draw is binding: attempt to make each sampled template work.
+- **2 editorial slots** — freely selected as best-fit candidates from the catalog or another generation route.
+
+For another requested batch size `N`, reserve roughly 60% for sampled slots (`ceil(0.6 * N)`) and the remainder for editorial slots.
+
+A sampled template may be rejected only for a concrete reason such as unsafe baggage, incompatible number/layout of text slots, unreadable result, or genuinely nonsensical semantics. Record the rejection briefly and **draw a replacement**. "Another famous template fits better" is not sufficient reason to evade the draw.
+
+The sampled candidates are not required to win publication. Their purpose is to force the search into regions the model would otherwise ignore.
+
+## Diversity constraints for a candidate batch
+
+- no duplicate template in the same batch;
+- normally no more than two candidates from the same joke family;
+- avoid making all five candidates variants of reject/prefer or reaction-only grammar;
+- when prior-use context is available, downweight or exclude templates used very recently unless they are clearly the best editorial fit;
+- treat Drake, Two Buttons, Distracted Boyfriend, This Is Fine, Galaxy Brain and other highly salient defaults as ordinary candidates, not privileged fallbacks;
+- diversity means different **visual/comedic structures**, not only different template IDs.
+
+Useful batch metrics:
+
+- distinct template ratio;
+- distinct family ratio;
+- sampled-survival rate;
+- recent-template repetition rate;
+- subjective quality of sampled vs editorial slots;
+- cross-run template overlap for the same prompt/post.
 
 ## Visual-rhythm heuristic
 
 For ordinary non-serious long-form prose, aim for some kind of visual/rest beat roughly every 400–500 words when the page would otherwise become a wall of text. That beat does **not** have to be an image meme.
 
-Image memes should normally be only a minority of those rests. Other options include text memes, diagrams, SVGs, maps, footnotes, pull quotes, and section headings.
+Image memes should normally be only a minority of those rests.
 
 Default density for image memes:
 
@@ -47,51 +91,49 @@ Default density for image memes:
 - 1500–2500: usually 2–3;
 - over 2500: usually cap around 3–4 unless the form itself is intentionally meme-heavy.
 
-Avoid placing two image memes back-to-back in the reading rhythm. If there is no other visual/rest beat between them, give them substantial prose distance.
-
-## Register
-
-Default to meme-friendly treatment only for clearly non-serious writing. A philosophical or technical post can be irreverent without becoming a meme collage.
-
-For serious register, if an image meme is appropriate at all, keep it exceptional and require a clear editorial reason. Do not use image memes merely to satisfy a density heuristic.
+Avoid placing two image memes back-to-back in the reading rhythm.
 
 ## Workflow
 
-1. **Identify the beat.** Comparison, escalation, reaction, choice, confusion, resignation, thesis, etc.
-2. **Choose the template deliberately.** If the user did not explicitly name one, consult [`references/template-discovery.md`](references/template-discovery.md) for live-catalog lookup and debiasing rather than relying on memory.
-3. **Compose compact text.** Prefer a few words per slot; rewrite instead of cramming.
-4. **Build and verify the asset.** Use [`references/api-and-embedding.md`](references/api-and-embedding.md) for memegen.link URL syntax, encoding, parameters, HTTP verification, and embedding details.
-5. **Embed accessibly.** Provide descriptive alt text; use the surrounding publishing system's preferred Markdown/HTML conventions.
-6. **Check local rhythm.** Make sure the meme is not crowding another image meme or trivializing a passage that should breathe on its own.
-7. **Explain the choice briefly.** The user should know why that template fits the joke better than the obvious alternatives.
+1. **Read the surrounding passage/post.** Determine register and whether an image meme deserves the visual weight.
+2. **Identify candidate beats.** Comparison, escalation, reaction, choice, confusion, resignation, thesis, etc.
+3. **Choose selection mode.** Editorial or exploration.
+4. **Discover, and when exploring, actually draw.** Read [`references/template-discovery.md`](references/template-discovery.md). Do not simulate randomness by choosing "random-looking" templates yourself.
+5. **Choose a generation route.** Read [`references/generation-routes.md`](references/generation-routes.md) when a stock Memegen template is not obviously the right production route.
+6. **Compose compact text.** Prefer a few words per slot; rewrite instead of cramming.
+7. **Build and verify the asset.** For Memegen use [`references/api-and-embedding.md`](references/api-and-embedding.md). For other routes preserve the same verification and accessibility requirements.
+8. **Judge subjectively.** Evaluate template semantics, joke quality, legibility, freshness, integration with the post, and whether the image earns its space.
+9. **Embed accessibly.** Use the publishing system's preferred Markdown/HTML conventions and useful alt text.
+10. **Check local rhythm and redundancy.** A good meme can still be the wrong meme if another visual or joke already occupies the beat.
+11. **Record exploration evidence when useful.** Keep the sampled IDs, rejections, finalists, and selected route so repeated runs can be audited for variance.
 
-## Template selection resources
+## Resources
 
-- [`references/template-discovery.md`](references/template-discovery.md): live catalog, keyword lookup, random draw, function-first selection, fallback when no template fits.
-- [`references/shortlists.md`](references/shortlists.md): non-canonical memory aid grouped by useful template families.
-- [`references/api-and-embedding.md`](references/api-and-embedding.md): URL construction, path escaping, query parameters, testing, Markdown/HTML embedding, third-party-service boundary.
+- [`references/template-discovery.md`](references/template-discovery.md): live catalog, true random drawing, salience debiasing, cooldown and family diversity.
+- [`references/generation-routes.md`](references/generation-routes.md): predefined templates, custom backgrounds/overlays, self-hosted rendering, original generated visuals, optional alternate services.
+- [`references/shortlists.md`](references/shortlists.md): non-canonical memory aid; never the complete candidate universe.
+- [`references/api-and-embedding.md`](references/api-and-embedding.md): Memegen URL construction, path escaping, query parameters, testing and embedding.
 
-Load these only when the workflow reaches that branch.
+Load references only when the workflow reaches that branch.
 
 ## What to deliver
 
-For a single meme request, deliver:
+For a single meme request, deliver the ready-to-paste embed plus a short reason for the choice.
 
-1. ready-to-paste embeddable Markdown or the publishing format requested;
-2. the underlying image URL when useful;
-3. one short reason for the template choice.
+For exploration batches, show which candidates were **sampled** and which were **editorial picks**. If a sampled template was rejected, show the replacement and the brief rejection reason. Do not hide a failed draw.
 
-For multiple candidates, show a small set of meaningfully different options rather than many near-duplicates.
-
-For visual-rhythm work across a long post, propose insertion points individually so the user can accept/reject each beat.
+For visual-rhythm work across a long post, place/propose memes at individual insertion points so each can be accepted or rejected independently.
 
 ## Definition of Done
 
 The task is complete when:
 
-- the template's native semantics fit the intended beat;
-- text is short enough to render cleanly;
-- the generated asset is valid when verification is feasible/relevant;
+- template/visual grammar fits the intended beat;
+- exploration work used actual randomness rather than model intuition alone;
+- sampled slots were attempted rather than silently replaced by familiar defaults;
+- the batch has meaningful family/template diversity;
+- text renders legibly;
+- production route and asset were verified when feasible/relevant;
 - embedding includes useful accessibility text;
 - meme density fits the local register and surrounding visuals;
-- conditional API/catalog mechanics were loaded only when needed.
+- the result can feed the next benchmark cycle with evidence about both quality and variance.

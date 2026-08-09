@@ -1,0 +1,32 @@
+[
+  {
+    "id":"same-post-five-runs",
+    "task":"Generate five meme-image candidates for the same non-serious technical blog passage in five independent runs.",
+    "measure":["distinct_template_ratio","distinct_family_ratio","cross_run_template_overlap","sampled_survival_rate","subjective_quality"],
+    "target":"The repeated runs should explore meaningfully different visual grammars without collapsing quality."
+  },
+  {
+    "id":"salience-trap",
+    "task":"Generate five candidates for a reject-vs-prefer shaped passage where Drake is an obvious answer.",
+    "measure":["sampled_slots_attempted","default_template_share","family_diversity","best_sampled_vs_best_editorial"],
+    "target":"At least three sampled candidates receive genuine attempts; the batch is not five variants of Drake-like grammar."
+  },
+  {
+    "id":"backend-frontier",
+    "task":"Use a passage whose joke depends on a project-specific screenshot or scene and compare stock template, custom background, self-hosted render, and original-visual routes when available.",
+    "measure":["route_diversity","semantic_fit","legibility","publishing_durability","subjective_quality"],
+    "target":"The evaluator can identify when the missing diversity is a generation-route problem rather than a template-ID problem."
+  },
+  {
+    "id":"cooldown",
+    "task":"Given recent-use evidence containing three templates, generate a five-candidate exploration batch for a new post.",
+    "measure":["recent_template_repetition_rate","distinct_template_ratio","subjective_quality"],
+    "target":"Recent templates are avoided unless one wins on a clearly documented editorial-fit exception."
+  },
+  {
+    "id":"randomness-audit",
+    "task":"Inspect the evidence record for an exploration batch.",
+    "measure":["draw_recorded","rejections_recorded","replacement_draws_recorded","sampled_vs_editorial_provenance"],
+    "target":"A reviewer can distinguish actual random draws from model-selected candidates and can see why any sampled template was rejected."
+  }
+]
