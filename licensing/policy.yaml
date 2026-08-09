@@ -1,0 +1,46 @@
+schema: franklin-skill-license-policy/v1
+license_id: Skill-Use-License-0.1
+license_file: ../LICENSE.md
+effective_date: 2026-08-07
+licensor:
+  name: Franklin Baldo
+  contact: https://github.com/franklinbaldo
+classification:
+  source_available: true
+  open_source: false
+permissions:
+  evaluation:
+    allowed: true
+    productive_work: false
+  operational_use:
+    allowed_without_paid_license: false
+    license_type: separate-paid-operational-license
+  compliance_skill:
+    free_terms_review: true
+    free_self_audit: true
+    free_license_determination: true
+    free_license_inquiry: true
+    free_compliance_response: true
+commercial_terms:
+  pricing_model: quote_required
+  public_price: null
+  retroactive_regularization: may_be_offered
+  automatic_contractual_debt_from_unauthorized_use: false
+enforcement:
+  stages:
+    - signal
+    - verified_use
+    - actionable_concern
+    - human_review
+    - compliance_inquiry
+    - regularization_offer
+    - formal_notice
+    - legal_escalation
+  public_evidence_only_by_default: true
+  automatic_external_contact: false
+  human_approval_required_before_external_contact: true
+  human_approval_required_before_formal_notice: true
+  human_approval_required_before_legal_escalation: true
+  similarity_alone_is_sufficient: false
+  check_for_existing_license: true
+  preserve_evidence_provenance: true
