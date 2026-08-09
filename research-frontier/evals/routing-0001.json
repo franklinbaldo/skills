@@ -1,0 +1,72 @@
+[
+  {
+    "id": "frontier-positive-cutting-edge",
+    "target_skill": "research-frontier",
+    "query": "meu paper tem várias PRs abertas; verifica o estado efetivo e compara os claims vivos com a literatura mais recente para ver se ainda estamos no cutting edge",
+    "should_trigger": true,
+    "tags": ["frontier", "active-pr-stack", "novelty"]
+  },
+  {
+    "id": "frontier-positive-prior-art",
+    "target_skill": "research-frontier",
+    "query": "faz um frontier scan deste programa e diz quais trabalhos recentes realmente mudam nossos baselines, controles ou fronteira de novidade",
+    "should_trigger": true,
+    "tags": ["frontier", "prior-art", "experiments"]
+  },
+  {
+    "id": "frontier-positive-negative-evidence",
+    "target_skill": "research-frontier",
+    "query": "procura semanticamente trabalhos que possam colidir com esta hipótese; se não achar nada material, registra a cobertura e o resultado negativo em vez de inventar mudança",
+    "should_trigger": true,
+    "tags": ["frontier", "negative-evidence", "semantic-search"]
+  },
+  {
+    "id": "frontier-positive-refresh",
+    "target_skill": "research-frontier",
+    "query": "antes do próximo experimento, atualiza a fronteira externa e vê se apareceu algum método novo que torne nosso preregistro falsamente verde ou ofereça um controle melhor",
+    "should_trigger": true,
+    "tags": ["frontier", "preregistration", "controls"]
+  },
+  {
+    "id": "frontier-hard-negative-summary",
+    "target_skill": "research-frontier",
+    "query": "resume este paper do arXiv em cinco parágrafos",
+    "should_trigger": false,
+    "tags": ["hard-negative", "one-paper-summary"]
+  },
+  {
+    "id": "frontier-hard-negative-search",
+    "target_skill": "research-frontier",
+    "query": "me passa dez papers interessantes sobre interpretabilidade para eu ler no fim de semana",
+    "should_trigger": false,
+    "tags": ["hard-negative", "generic-paper-search"]
+  },
+  {
+    "id": "frontier-hard-negative-software-review",
+    "target_skill": "research-frontier",
+    "query": "review dessa PR de TypeScript e procura bugs, falsos verdes e invariantes quebrados",
+    "should_trigger": false,
+    "tags": ["hard-negative", "software-review"]
+  },
+  {
+    "id": "frontier-hard-negative-bibliography",
+    "target_skill": "research-frontier",
+    "query": "formata estas vinte referências em BibTeX e organiza por autor",
+    "should_trigger": false,
+    "tags": ["hard-negative", "bibliography"]
+  },
+  {
+    "id": "frontier-collision-loop-engineering",
+    "target_skill": "research-frontier",
+    "query": "a literatura mudou e quero saber quais claims e experimentos do meu programa precisam mudar por causa disso",
+    "should_trigger": true,
+    "tags": ["collision", "research-frontier-not-benchmark-loop"]
+  },
+  {
+    "id": "frontier-collision-loop-engineering-negative",
+    "target_skill": "research-frontier",
+    "query": "meu benchmark de skills está saturado; cria novos evals e decide se surgiu uma capacidade irmã",
+    "should_trigger": false,
+    "tags": ["collision", "loop-engineering"]
+  }
+]
