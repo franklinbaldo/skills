@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "okf-agent-skills/**"
+      - "experiments/metered-public-0001/**"
       - ".github/workflows/skill-tests.yml"
   push:
     branches: [main]
@@ -24,3 +25,14 @@ jobs:
           python-version: "3.12"
       - name: Run okf-agent-skills tests
         run: python -m unittest discover -s okf-agent-skills/tests -v
+      - uses: astral-sh/setup-uv@v6
+      - name: Smoke Experiment 0001 review fixes
+        run: |
+          set -o pipefail
+          EXP=experiments/metered-public-0001
+          python "$EXP/count_usage.py"
+          OKF="uvx --from git+https://github.com/franklinbaldo/okf-parser.git okf-parser"
+          $OKF check "$EXP"
+          $OKF inventory "$EXP"
+          $OKF graph "$EXP"
+          $OKF duckdb "$EXP" /tmp/metered-public-0001.duckdb --overwrite
