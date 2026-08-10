@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Materialize canonical audit views in an okf-parser DuckDB artifact."""
+"""Materialize canonical static audit views in an okf-parser DuckDB artifact."""
 
 from __future__ import annotations
 
@@ -11,20 +11,10 @@ import duckdb
 
 VIEW_NAMES = (
     "eval_coverage",
-    "benchmark_challenge_coverage",
-    "benchmark_mutation_surface",
-    "benchmark_catalog_surface",
-    "benchmark_health",
     "skill_relations",
     "mentions_without_edge",
     "isolated_skills",
     "resource_surface",
-    "routing_observations",
-    "routing_observation_mismatches",
-    "routing_runs",
-    "routing_run_coverage",
-    "routing_case_results",
-    "routing_skill_results",
 )
 
 
