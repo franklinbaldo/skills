@@ -164,3 +164,13 @@ A repository-wide analysis is complete when:
 6. repeated architecture questions use canonical relational views when possible;
 7. every reported rule is classified by authority and traces back to source;
 8. runtime/quality claims are deferred to real-use postmortems rather than inferred from static data.
+
+## Real-use postmortem
+
+After any material use of this skill, perform a brief self-postmortem before ending the task:
+assess whether routing was correct, whether the skill materially improved/neutral/degraded the
+result, what concrete instruction mattered, and any friction or workaround. Routine success
+stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and add
+evidence to an existing matching issue or open a sanitized **Skill use feedback** issue. Never
+publish secrets, private/confidential facts, credentials, or personal data, and do not interrupt
+the user's task merely to report feedback.
