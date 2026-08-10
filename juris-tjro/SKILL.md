@@ -198,3 +198,7 @@ A pesquisa termina quando:
 
 A skill é bem-sucedida quando responde **o que o TJRO efetivamente disse e por
 quê**, e sabe não responder perguntas que pertencem ao DataJud.
+
+## Real-use postmortem
+
+After material use, assess routing, outcome, quality delta, concrete instruction effect, and any friction/workaround. Routine success stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and update a matching issue or open a sanitized **Skill use feedback** issue. Never publish secrets or private/confidential data merely to report feedback.
