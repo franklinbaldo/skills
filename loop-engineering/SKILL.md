@@ -1,157 +1,178 @@
 ---
 name: loop-engineering
 description: >-
-  Design and evolve self-improving loops for Agent Skills, evals and benchmark systems.
-  Use when a skill, benchmark, routing system or quality-eval process should improve
-  continuously through evidence, harder tests, methodological innovation, lateral
-  decomposition into new skills, or routing/pollination between neighboring skills.
-  Do not use for one-off prompt polishing or for changing a skill without a measurable
-  feedback loop.
+  Evolve Agent Skills from real-use evidence. Use when production use, a postmortem,
+  a feedback issue, a workaround, a routing mistake, a quality regression, or a
+  repeated positive surprise reveals something worth preserving or changing. Do not
+  replace real-use evidence with synthetic benchmark machinery when the actual users
+  and agents can report what happened.
 ---
 
-# Engineer the loop, not only the current answer
+# Learn from use, not from a laboratory substitute
 
-The object of improvement is the **whole learning loop**:
+The primary loop is:
 
 ```text
-skill behavior
-→ evidence
+real skill use
+→ mandatory self-postmortem
+→ actionable feedback issue when warranted
 → diagnosis
-→ skill change
-→ stronger benchmark
-→ new evaluation method
-→ broader/lateral opportunities
-→ repeat
+→ smallest justified change
+→ regression memory when useful
+→ real use again
 ```
 
-A successful cycle must improve more than the current score. It should leave behind a system
-that can discover the next failure, including failures nobody thought to encode before.
+Static evals are useful as regression memory. They are not a substitute for observing what
+happened during actual work.
+
+Read [`references/production-feedback-loop.md`](references/production-feedback-loop.md) before
+changing a skill from feedback.
 
 ## Invariants
 
-1. **Evidence before tuning.** Do not rewrite a skill merely because a change sounds better.
-2. **The benchmark evolves too.** Preserve valid regressions while continuously increasing
-   coverage, difficulty, diversity and methodological power.
-3. **No benchmark teaching.** Do not rewrite expected outcomes or descriptions merely to make
-   known cases green.
-4. **Innovation is required.** When current metrics saturate, invent or try a more revealing
-   evaluation method instead of declaring completion.
-5. **Vertical and lateral evolution are both valid.** Improve an existing skill when the same
-   capability remains coherent; split or create a sibling skill when a newly discovered
-   capability has a distinct purpose, trigger boundary or evaluation surface.
-6. **Skills may pollinate each other.** A skill can route to, recommend, sequence with or help
-   produce another skill when evidence shows a stable neighboring capability.
-7. **Coverage can expand sideways.** Saturation in one axis is a prompt to inspect adjacent
-   unmet intents, recurring handoffs and capabilities hiding in failure/near-miss cases.
-8. **Keep provenance.** Simulation, real host observations, quality judgments and human
-   decisions remain distinguishable.
+1. **Every material use ends with a postmortem.** The agent evaluates whether the skill was the
+   right choice and whether it materially improved the work.
+2. **Self-report is evidence, not self-congratulation.** Claims such as "worked well" need a
+   concrete effect: a decision changed, an error avoided, a useful branch discovered, a bad
+   action prevented, or a workaround required.
+3. **Issues are gated.** Do not open GitHub issues for routine success, cosmetic preference or
+   vague dissatisfaction. Open one when there is actionable learning.
+4. **Preserve negative and positive learning.** Failures matter, but so do surprising successful
+   behaviors that should be protected from future regressions.
+5. **Deduplicate before opening.** Search existing feedback issues and add evidence to a matching
+   issue when the same underlying problem is already tracked.
+6. **Protect private context.** Never publish secrets, private case facts, credentials, personal
+   data or confidential material just to make a feedback report reproducible.
+7. **Regression tests follow incidents; they do not manufacture incidents.** Add or strengthen
+   evals after diagnosis when they help preserve a learned boundary.
+8. **Keep the system small.** Do not build host adapters, synthetic repeated-run ledgers, routing
+   simulators or benchmark ontologies merely to approximate evidence available from real use.
 
-## Per-cycle protocol
+## Mandatory postmortem
 
-For each cycle answer all five questions:
+After a material skill use, assess internally:
 
-1. **What did we learn?** Identify observed failures, unstable boundaries, blind spots or
-   newly solved capabilities.
-2. **What should change in the skill?** Make the smallest justified behavioral change.
-3. **How should the benchmark become harder?** Add regressions, held-out challenges,
-   collisions, adversarial paraphrases, continuations or another useful frontier.
-4. **What new evaluation method should we try?** Consider catalog perturbation, mutation
-   testing, multi-turn routing, counterfactual skill/no-skill, cross-host/model comparisons,
-   calibration, blind pairwise judging or a new design suggested by the current uncertainty.
-5. **Is there a lateral opportunity?** Ask whether an observed recurring capability should:
-   - remain inside the skill;
-   - become a reference/workflow branch;
-   - become a sibling skill;
-   - become a routing/handoff relation between skills;
-   - be discarded as incidental.
+- **routing** — was this the right skill, too early/late, unnecessary, or should another skill
+  have been used?
+- **outcome** — `success`, `partial`, or `failure`;
+- **quality delta** — did the skill likely make the result `improved`, `neutral`, `degraded`, or
+  is the counterfactual `unknown`?
+- **effective instruction** — what concrete part of the skill changed the work?
+- **friction** — ambiguity, missing context, unavailable tool, bad handoff, unnecessary step,
+  conflicting instruction, host limitation, or other obstacle;
+- **workaround** — whether the agent had to bypass or reinterpret the skill to finish;
+- **definition of done** — whether the skill actually met its own success criteria;
+- **next action** — `none`, `feedback issue`, `regression candidate`, or a concrete capability
+  gap worth investigating.
 
-Read [`references/evolution-loop.md`](references/evolution-loop.md) before designing a new
-benchmark method or deciding whether to split/create a skill.
+A useful compact mental record is:
 
-## Vertical improvement
+```text
+skill: <name>
+outcome: success | partial | failure
+routing: correct | questionable | wrong
+quality_delta: improved | neutral | degraded | unknown
+friction: none | <concrete friction>
+workaround_required: true | false
+learning: <concrete evidence>
+feedback: none | issue
+```
 
-Use vertical improvement when the same skill purpose remains stable and the new evidence
-clarifies its trigger, workflow or output contract.
+The postmortem itself is ephemeral unless the result is useful to preserve.
 
-Typical actions:
+## When to open a feedback issue
 
-- tighten or widen a routing description based on evidence;
-- add a missing branch/reference;
-- improve instructions for a recurring failure;
-- add regression and held-out evals;
-- add a new quality rubric dimension;
-- reduce ambiguity with neighboring skills.
+Open or update an issue when at least one of these is true:
 
-Do not create a new skill merely because a section is getting long.
+- routing was wrong or materially questionable;
+- the skill degraded the result;
+- the task ended partial/failure because of the skill contract;
+- a workaround was required;
+- an instruction was contradictory, ambiguous or materially incomplete;
+- a required capability/tool was absent in real use;
+- a host-specific behavior materially changed the result;
+- the same missing case recurs;
+- a surprising positive behavior or method is valuable enough to protect;
+- several small postmortems reveal the same pattern.
 
-## Lateral evolution and pollination
+Classify the issue when useful as one or more of:
 
-Look for lateral evolution when repeated evidence reveals a **distinct job** rather than a
-mere edge case.
+- `routing`
+- `instruction`
+- `tooling`
+- `missing-case`
+- `workaround`
+- `quality`
+- `host-specific`
+- `positive-learning`
 
-Signals include:
+## What an issue should contain
 
-- the same near-miss repeatedly appears but should not trigger the current skill;
-- users repeatedly need a neighboring step before/after the current skill;
-- one branch has different evidence, tools, safety constraints or definition of done;
-- two skills repeatedly co-activate or hand work to each other;
-- a benchmark collision reveals an unnamed intermediate capability;
-- output-quality gains depend on a reusable method that benefits multiple skills.
+Preserve factual evidence, not a speculative fix:
 
-Before splitting, state the candidate new skill's purpose and trigger boundary in one
-sentence. If that cannot be done cleanly, keep learning before creating it.
+- skill name;
+- agent/host when relevant;
+- sanitized summary of the real task;
+- what happened;
+- what was expected;
+- quality delta and why;
+- concrete friction/workaround;
+- artifact/PR/commit reference when safe and available;
+- whether a similar issue already exists.
 
-When a sibling skill is justified, add explicit evals for:
+Diagnosis and remediation can happen later. Do not make the reporter invent a root cause merely
+to fill the issue.
 
-- when the parent should trigger but the sibling should not;
-- when the sibling should trigger but the parent should not;
-- legitimate handoff/composition cases;
-- out-of-domain controls.
+## Turning feedback into changes
 
-## Benchmark R&D
+When enough evidence exists:
 
-Treat benchmark design as research, not fixture maintenance. The benchmark should continually
-try to expose behavior the current test suite cannot see.
+1. reconstruct the actual failure or success pattern from the issues;
+2. separate routing, instruction, tooling, host and missing-capability causes;
+3. choose the smallest change that addresses the evidence;
+4. preserve valid old behavior;
+5. add a regression case only when it protects a learned contract or failure boundary;
+6. re-use the changed skill in real work and inspect the next postmortem.
 
-Do not measure progress only by accuracy. Also track whether the evaluation surface gained:
+Do not optimize for issue count, eval count or benchmark accuracy. Optimize for fewer repeated
+production failures and more reliably useful skill behavior.
 
-- new covered skills/intents;
-- harder semantic boundaries;
-- held-out frontier size;
-- mutation kill rate;
-- stability under irrelevant catalog changes;
-- useful cross-skill collisions;
-- multi-turn coverage;
-- new evaluation modes;
-- newly discovered blind spots.
+## Lateral evolution
 
-A score can fall while the system improves if the benchmark became materially more revealing.
+A sibling skill or explicit handoff is justified only when repeated real-use evidence reveals a
+distinct job with its own trigger and definition of done. One synthetic collision or one clever
+example is not enough.
 
-## Relationship to other skills
+Possible outcomes are:
 
-Use [`../okf-agent-skills/SKILL.md`](../okf-agent-skills/SKILL.md) for deterministic projection,
-observation ingestion and relational inspection of the skills corpus.
+```text
+A. improve the existing skill
+B. add a branch/reference
+C. clarify a handoff to an existing sibling
+D. create a sibling skill
+E. do nothing yet; collect more real-use evidence
+```
 
-Use [`../software-review/SKILL.md`](../software-review/SKILL.md) when reviewing the correctness
-of an implementation/PR/RFC produced by the loop.
+Prefer the smallest coherent option.
 
-When authoring or changing a skill, follow the current upstream skill-creation guidance and
-preserve realistic trigger evals; this skill governs the **evolution loop**, not a competing
-skill format or runtime.
+## Relationship to static evals
 
-## Definition of done for one cycle
+Keep useful `eval_queries.json` cases as regressions for known boundaries. New cases should most
+often trace back to a real incident, a repeated near-miss, or a concrete learning from actual use.
+Synthetic adversarial exploration remains optional diagnostic work, never the evidence gate for
+improving a skill.
 
-A loop cycle is complete only when:
+## Definition of done for one learning cycle
 
-- evidence and provenance are recorded;
-- the chosen skill change is justified by that evidence;
-- valid old evals remain regressions;
-- the benchmark gained a harder or broader frontier;
-- at least one benchmark-method innovation was considered, and used when it can answer an
-  unresolved question better than existing metrics;
-- lateral opportunities were explicitly assessed;
-- any new/split skill has its own trigger boundary and evals;
-- the next cycle has a frontier capable of finding something the current cycle could not.
+A cycle is complete when:
 
-The goal is not a permanently green benchmark. The goal is a system that keeps becoming
-better at discovering how it is still wrong, incomplete or too narrow.
+- the triggering real-use evidence is preserved in an issue or other durable artifact when needed;
+- the postmortem identifies a concrete quality/routing effect rather than a vague impression;
+- duplicate feedback is consolidated;
+- the change is the smallest one justified by the evidence;
+- a regression is added only when it protects something learned;
+- no private material was leaked into feedback;
+- the changed skill returns to real use, where the next postmortem can falsify the improvement.
+
+The goal is not a permanently green benchmark. The goal is skills that become more useful because
+they remember what actually happened when agents tried to use them.
