@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-labelledby="title desc">
+  <title id="title">Four Markdown files expanding into an absurd enterprise architecture</title>
+  <desc id="desc">A small stack of four Markdown records on the left points into a huge architecture of boxes named MeteringPlan, AuditPlan, EnvironmentAssessment, SigningKey, Policy Engine, Billing Bus, and Interplanetary SAP.</desc>
+  <rect width="960" height="540" fill="white"/>
+  <g font-family="system-ui, sans-serif" fill="#111" stroke="#111">
+    <text x="120" y="55" font-size="24" text-anchor="middle" stroke="none">the actual problem</text>
+    <rect x="45" y="95" width="150" height="52" rx="8" fill="none" stroke-width="2"/>
+    <rect x="55" y="165" width="150" height="52" rx="8" fill="none" stroke-width="2"/>
+    <rect x="65" y="235" width="150" height="52" rx="8" fill="none" stroke-width="2"/>
+    <rect x="75" y="305" width="150" height="52" rx="8" fill="none" stroke-width="2"/>
+    <text x="120" y="128" text-anchor="middle" font-size="18" stroke="none">UsageStatement.md</text>
+    <text x="130" y="198" text-anchor="middle" font-size="18" stroke="none">InvoiceRequest.md</text>
+    <text x="140" y="268" text-anchor="middle" font-size="18" stroke="none">Invoice.md</text>
+    <text x="150" y="338" text-anchor="middle" font-size="18" stroke="none">Receipt.md</text>
+    <path d="M245 225 H340" fill="none" stroke-width="3"/>
+    <path d="M330 215 L350 225 L330 235" fill="none" stroke-width="3"/>
+    <text x="610" y="55" font-size="24" text-anchor="middle" stroke="none">three hours of architecture later</text>
+    <g fill="none" stroke-width="2">
+      <rect x="380" y="90" width="190" height="58" rx="8"/>
+      <rect x="600" y="90" width="190" height="58" rx="8"/>
+      <rect x="380" y="175" width="190" height="58" rx="8"/>
+      <rect x="600" y="175" width="190" height="58" rx="8"/>
+      <rect x="380" y="260" width="190" height="58" rx="8"/>
+      <rect x="600" y="260" width="190" height="58" rx="8"/>
+      <rect x="490" y="355" width="210" height="72" rx="10" stroke-width="4"/>
+    </g>
+    <g font-size="19" text-anchor="middle" stroke="none">
+      <text x="475" y="125">MeteringPlan</text>
+      <text x="695" y="125">AuditPlan</text>
+      <text x="475" y="210">EnvironmentAssessment</text>
+      <text x="695" y="210">SigningKey</text>
+      <text x="475" y="295">Policy Engine</text>
+      <text x="695" y="295">Billing Bus</text>
+      <text x="595" y="385" font-size="25">INTERPLANETARY SAP</text>
+      <text x="595" y="411" font-size="16">for four Markdown files</text>
+    </g>
+    <g fill="none" stroke-width="1.5">
+      <path d="M475 148 V175"/><path d="M695 148 V175"/>
+      <path d="M475 233 V260"/><path d="M695 233 V260"/>
+      <path d="M475 318 L555 355"/><path d="M695 318 L635 355"/>
+    </g>
+    <text x="480" y="495" font-size="21" text-anchor="middle" stroke="none">maybe ask what the parser already does</text>
+  </g>
+</svg>
