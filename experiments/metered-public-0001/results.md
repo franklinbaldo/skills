@@ -26,7 +26,7 @@ No subagent case was added because this execution environment did not provide a 
 
 The committed `count_usage.py` reads only factual `status: experiment_evidence` records for the governed Skill, requires productive execution to have started, requires `counted: true`, rejects duplicate `invocation_id` values, and counts unique logical invocations.
 
-GitHub Actions run `31401638071` executed it against the committed corpus and printed:
+GitHub Actions executed it against the committed corpus and printed:
 
 ```text
 usage-0001.md  mp0001-A  +1
@@ -77,44 +77,50 @@ The resulting `InvoiceRequest` is intentionally simulated. The Addendum already 
 
 The first smoke, GitHub Actions run `31401466334`, failed usefully after the deterministic counter had already returned 5. `okf-parser check` reported `OKF001` for `README.md` and `operational-license.md` because they lacked YAML frontmatter. The evidence was not rewritten; the corpus defect was fixed minimally by making both ordinary `type: Note` OKF documents. No licensing-specific protocol type was added.
 
-The second smoke, run `31401638071`, used `okf-parser` commit `8cf97286868aafd8fbda8e82f7b32bf342324fdd` and passed all four requested surfaces:
+The second smoke, run `31401638071`, used `okf-parser` commit `8cf97286868aafd8fbda8e82f7b32bf342324fdd` and exposed only the expected warning that this results document did not yet exist.
+
+The final smoke, GitHub Actions run `31401788036`, executed the now-complete corpus and passed all requested surfaces with no diagnostics:
 
 ```text
 check:
-  concept_count: 9
+  concept_count: 10
   conformant: true
-  diagnostics: 1 warning (results.md did not yet exist)
+  diagnostics: 0
 
 inventory:
   InvoiceRequest: 1
-  Note: 2
+  Note: 3
   UsageStatement: 6
 
 graph:
-  nodes: 9
-  edges: 14
+  nodes: 10
+  edges: 23
   weakly_connected_components: 1
   directed_acyclic: true
 
 duckdb:
-  concept_count: 9
+  concept_count: 10
   conformant: true
-  link_count: 15
-  diagnostic_count: 1
+  link_count: 23
+  diagnostic_count: 0
 ```
 
-The remaining warning was expected at that intermediate commit because this `results.md` file had not yet been created. A final smoke is required after this file exists; its exact output belongs below.
+Recording these final smoke outputs changes no concept identity or Markdown relation in the validated corpus.
 
 ## Result against success criteria
 
-So far the substantive metering semantics pass:
+**PASS.**
 
 - authorization existed before productive use;
 - each attempt has a reconstructible `invocation_id`;
 - continuation, retry, helper, and abort behavior produced deterministic classifications;
 - two independent counts both return `usage_total = 5`;
 - grant, license id, policy reference, policy digest, and Skill commit are reconstructible;
+- `okf-parser` validates the complete corpus with zero diagnostics;
+- the graph contains one connected DAG with the expected explicit Markdown relations;
+- DuckDB materializes the concepts and links without a licensing-specific database or schema layer;
 - the economic transition is mechanically reconstructible without money or a billing service;
-- the first OKF defect was a corpus-format issue, fixed with the smallest generic OKF change.
+- no RFC or licensing-protocol change was required;
+- the only defect discovered was generic OKF corpus conformance, fixed with the smallest possible frontmatter addition.
 
-Final status remains pending only the smoke of the now-complete corpus.
+Experiment 0001 therefore supports the minimal architecture as written. No special licensing infrastructure is needed for this scope.
