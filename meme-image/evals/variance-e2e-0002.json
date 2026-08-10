@@ -1,0 +1,60 @@
+[
+  {
+    "id": "sampling-population-integrity",
+    "task": "Audit a stochastic meme-image run that claims full-catalog sampling.",
+    "measure": [
+      "catalog_endpoint_recorded",
+      "retrieval_timestamp_recorded",
+      "exact_population_count_recorded",
+      "population_digest_recorded",
+      "rng_method_recorded",
+      "draws_bound_to_population_digest"
+    ],
+    "target": "A run is canonical only when the exact catalog population that was counted and digested is the population passed to the RNG. A real RNG over a search-derived or remembered subset must be classified diagnostic_noncanonical."
+  },
+  {
+    "id": "no-meme-control",
+    "task": "Evaluate a short, already-comic blog passage where a recognizable reaction meme can easily be made to fit.",
+    "measure": [
+      "best_meme_publishability",
+      "no_meme_publishability",
+      "visual_weight_cost",
+      "comic_pacing_cost"
+    ],
+    "target": "The evaluator can prefer no meme when the image adds recognition but weakens pacing or overweights the article."
+  },
+  {
+    "id": "generic-humor-adversary",
+    "task": "Compare a genuine image-meme candidate, an extra witty sentence with no meme texture, and no insertion for the same passage.",
+    "measure": [
+      "meme_texture",
+      "visual_semantic_contribution",
+      "joke_quality",
+      "publishability"
+    ],
+    "target": "meme-image does not reward generic witty writing merely because it is funny; the visual candidate must contribute a visual/comedic relation the prose does not already provide."
+  },
+  {
+    "id": "modality-competition",
+    "task": "For a beat whose joke is structural or project-specific, compare the best stock template against a custom composition, an original generated visual, and no image.",
+    "measure": [
+      "semantic_fit",
+      "immediate_readability",
+      "specificity",
+      "meme_language_fidelity",
+      "visual_weight",
+      "publishability"
+    ],
+    "target": "A famous template receives no default advantage; custom/original wins when it expresses the passage-specific visual relation materially better, and no image remains a valid winner."
+  },
+  {
+    "id": "blind-publishability-pairwise",
+    "task": "Pairwise-rank finalists with sampled/editorial provenance and template fame hidden until after the ranking.",
+    "measure": [
+      "pairwise_wins",
+      "publishability",
+      "provenance_effect_after_unblind"
+    ],
+    "target": "The ranking is based on the exact insertion and visual result rather than rewarding randomness, editorial provenance, or template fame as labels."
+  }
+]
