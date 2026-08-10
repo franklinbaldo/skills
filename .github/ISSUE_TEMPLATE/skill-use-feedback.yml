@@ -1,0 +1,126 @@
+name: Skill use feedback
+description: Report actionable learning from a real Agent Skill use postmortem.
+title: "feedback(<skill>): "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this only for actionable learning from real skill use. Routine success stays ephemeral. Search for an existing matching feedback issue first and add evidence there when possible. Never include secrets, private case facts, credentials, personal data, or confidential material.
+
+  - type: input
+    id: skill
+    attributes:
+      label: Skill
+      description: Exact skill name.
+      placeholder: software-review
+    validations:
+      required: true
+
+  - type: input
+    id: host
+    attributes:
+      label: Agent / host
+      description: Record the agent/host only when relevant to the behavior.
+      placeholder: Claude Code, Codex, Antigravity, unknown
+    validations:
+      required: false
+
+  - type: textarea
+    id: task
+    attributes:
+      label: Sanitized real task
+      description: Minimum context needed to understand what the skill was trying to do.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Outcome
+      options:
+        - success
+        - partial
+        - failure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: routing
+    attributes:
+      label: Routing
+      options:
+        - correct
+        - questionable
+        - wrong
+    validations:
+      required: true
+
+  - type: dropdown
+    id: quality_delta
+    attributes:
+      label: Quality delta from using the skill
+      description: Counterfactual judgment versus likely work without the skill.
+      options:
+        - improved
+        - neutral
+        - degraded
+        - unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What concretely happened?
+      description: Name the instruction/decision/error avoided/friction/positive surprise. Avoid vague scores such as "worked well".
+    validations:
+      required: true
+
+  - type: textarea
+    id: friction
+    attributes:
+      label: Friction or workaround
+      description: Ambiguity, missing context/tool, bad handoff, host limitation, unnecessary step, workaround, or "none".
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What would better behavior look like?
+      description: State the desired behavior without requiring a root-cause diagnosis or proposed implementation.
+    validations:
+      required: true
+
+  - type: input
+    id: provenance
+    attributes:
+      label: Safe provenance
+      description: Public PR/commit/artifact/issue reference when useful and safe.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: category
+    attributes:
+      label: Signals
+      options:
+        - label: routing
+        - label: instruction
+        - label: tooling
+        - label: missing-case
+        - label: workaround
+        - label: quality
+        - label: host-specific
+        - label: positive-learning
+
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Reporting hygiene
+      options:
+        - label: I searched for an existing issue covering the same underlying problem.
+          required: true
+        - label: I removed private, confidential, credential, and personal data from this report.
+          required: true
