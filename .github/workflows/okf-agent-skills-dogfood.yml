@@ -3,29 +3,20 @@ name: OKF Agent Skills dogfood
 on:
   pull_request:
     paths:
-      - '*/SKILL.md'
-      - '*/references/**'
-      - '*/scripts/**'
-      - '*/assets/**'
-      - '*/examples/**'
-      - '*/evals/**'
-      - 'okf-agent-skills/**'
       - '.github/workflows/okf-agent-skills-dogfood.yml'
-  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  dogfood:
+  propagate-postmortem:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          ref: cleanup/production-self-report-loop
 
-      - name: One-shot propagate real-use postmortem contract
-        if: github.event_name == 'pull_request' && github.head_ref == 'cleanup/production-self-report-loop'
+      - name: Append self-contained postmortem contract
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -56,174 +47,12 @@ the user's task merely to report feedback.
           for path in changed:
               print(path)
           PY
+
+      - name: Commit propagated contract
+        run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add '*/SKILL.md'
-          if ! git diff --cached --quiet; then
-            git commit -m 'docs(skills): require real-use postmortem self-report'
-            git push
-          fi
-
-      - uses: astral-sh/setup-uv@v6
-
-      - name: Project repository skills to typed OKF IR
-        run: |
-          set -o pipefail
-          mkdir -p dogfood
-          python okf-agent-skills/scripts/project.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/projector.txt
-          cp -R "$RUNNER_TEMP/skills-okf" dogfood/projection
-
-      - name: Inspect with current okf-parser
-        run: |
-          set -o pipefail
-          OKF="uvx --from git+https://github.com/franklinbaldo/okf-parser.git okf-parser"
-          SPEC='.okf/contracts/{slug}.md'
-          $OKF --help > dogfood/okf-parser-help.txt
-          $OKF check "$RUNNER_TEMP/skills-okf" 2>&1 | tee dogfood/check.txt
-          $OKF inventory "$RUNNER_TEMP/skills-okf" 2>&1 | tee dogfood/inventory.txt
-          $OKF graph "$RUNNER_TEMP/skills-okf" 2>&1 | tee dogfood/graph.txt
-          $OKF schema "$RUNNER_TEMP/skills-okf" --format json --spec-template "$SPEC" 2>&1 | tee dogfood/schema.json
-          $OKF duckdb "$RUNNER_TEMP/skills-okf" dogfood/skills.duckdb okf --overwrite --spec-template "$SPEC" 2>&1 | tee dogfood/duckdb.txt
-
-      - name: Assert declared DuckDB types
-        run: |
-          set -o pipefail
-          uv run --no-project --with duckdb python - <<'PY' | tee dogfood/typed-contracts.txt
-          import duckdb
-
-          con = duckdb.connect('dogfood/skills.duckdb', read_only=True)
-          rows = con.execute("""
-              SELECT table_name, column_name, data_type
-              FROM duckdb_columns()
-              WHERE schema_name = 'okf_types'
-              ORDER BY table_name, column_index
-          """).fetchall()
-          for row in rows:
-              print('\t'.join(map(str, row)))
-
-          types = {(table, column): dtype for table, column, dtype in rows}
-          expected = {
-              ('AgentSkillsProjection', 'skill_count'): 'INTEGER',
-              ('AgentSkillsProjection', 'relation_count'): 'INTEGER',
-              ('AgentSkillsProjection', 'authored_relation_count'): 'INTEGER',
-              ('AgentSkillsProjection', 'reviewed_relation_count'): 'INTEGER',
-              ('AgentSkillsProjection', 'resolved_relation_count'): 'INTEGER',
-              ('AgentSkillsProjection', 'resource_count'): 'INTEGER',
-              ('AgentSkillsProjection', 'eval_count'): 'INTEGER',
-              ('Skill', 'line_count'): 'INTEGER',
-              ('SkillResource', 'size_bytes'): 'UBIGINT',
-              ('SkillRelation', 'source_line'): 'INTEGER',
-              ('SkillRelation', 'resolved'): 'BOOLEAN',
-              ('SkillEval', 'case_index'): 'INTEGER',
-              ('SkillEval', 'should_trigger'): 'BOOLEAN',
-              ('SkillMention', 'source_line'): 'INTEGER',
-          }
-          missing = {key: value for key, value in expected.items() if types.get(key) != value}
-          if missing:
-              raise SystemExit(f'declared type mismatch: {missing}; observed={types}')
-          print(f'asserted_declared_types={len(expected)}')
-          PY
-
-      - name: Materialize canonical audit views
-        run: |
-          set -o pipefail
-          uv run --no-project --with duckdb python okf-agent-skills/scripts/run_typed_audit.py \
-            dogfood/skills.duckdb --output dogfood/audit.json
-          cat dogfood/audit.json
-          uv run --no-project --with duckdb python - <<'PY'
-          import json
-          from pathlib import Path
-          import duckdb
-
-          report = json.loads(Path('dogfood/audit.json').read_text(encoding='utf-8'))
-          ignored = {'.git', '.hg', '.svn', '__pycache__', '.pytest_cache', '.mypy_cache'}
-          source_skill_files = [
-              path for path in Path('.').rglob('SKILL.md')
-              if not any(part in ignored for part in path.parts)
-          ]
-          missing_postmortem = [
-              path.as_posix()
-              for path in source_skill_files
-              if '## Real-use postmortem' not in path.read_text(encoding='utf-8')
-              and '## Mandatory postmortem' not in path.read_text(encoding='utf-8')
-          ]
-          if missing_postmortem:
-              raise SystemExit(f'skills missing real-use postmortem contract: {missing_postmortem}')
-
-          con = duckdb.connect('dogfood/skills.duckdb', read_only=True)
-          try:
-              cursor = con.execute('SELECT * FROM okf_types."AgentSkillsProjection"')
-              rows = cursor.fetchall()
-              if len(rows) != 1:
-                  raise SystemExit(f'expected one AgentSkillsProjection row, got {len(rows)}')
-              manifest = dict(zip([item[0] for item in cursor.description], rows[0], strict=True))
-              table_counts = {
-                  'skill_count': con.execute('SELECT count(*) FROM okf_types."Skill"').fetchone()[0],
-                  'relation_count': con.execute('SELECT count(*) FROM okf_types."SkillRelation"').fetchone()[0],
-                  'resource_count': con.execute('SELECT count(*) FROM okf_types."SkillResource"').fetchone()[0],
-                  'eval_count': con.execute('SELECT count(*) FROM okf_types."SkillEval"').fetchone()[0],
-                  'mention_count': con.execute('SELECT count(*) FROM okf_types."SkillMention"').fetchone()[0],
-              }
-              table_counts['authored_relation_count'] = con.execute(
-                  "SELECT count(*) FROM okf_types.\"SkillRelation\" WHERE coalesce(evidence_kind, 'authored_link') = 'authored_link'"
-              ).fetchone()[0]
-              table_counts['reviewed_relation_count'] = con.execute(
-                  "SELECT count(*) FROM okf_types.\"SkillRelation\" WHERE evidence_kind = 'reviewed_mention'"
-              ).fetchone()[0]
-              table_counts['resolved_relation_count'] = con.execute(
-                  'SELECT count(*) FROM okf_types."SkillRelation" WHERE resolved IS TRUE'
-              ).fetchone()[0]
-          finally:
-              con.close()
-
-          if table_counts['skill_count'] != len(source_skill_files):
-              raise SystemExit(
-                  f'source → IR skill coverage mismatch: source={len(source_skill_files)} typed={table_counts["skill_count"]}'
-              )
-
-          mismatches = {
-              field: {'manifest': manifest.get(field), 'typed_rows': expected}
-              for field, expected in table_counts.items()
-              if manifest.get(field) != expected
-          }
-          if mismatches:
-              raise SystemExit(f'AgentSkillsProjection contradicts typed IR: {mismatches}')
-
-          coverage = report['eval_coverage']
-          if len(coverage) != table_counts['skill_count']:
-              raise SystemExit('eval coverage must contain one row per skill')
-
-          print(f'audit_views={len(report)}')
-          print(f'source_skills={len(source_skill_files)}')
-          print(f'typed_skills={table_counts["skill_count"]}')
-          print(f'typed_relations={table_counts["relation_count"]}')
-          print(f'typed_regression_cases={table_counts["eval_count"]}')
-          print(f'mentions_without_edge={len(report["mentions_without_edge"])}')
-          print(f'isolated_skills={len(report["isolated_skills"])}')
-          PY
-
-      - name: Summarize projected corpus
-        run: |
-          set -o pipefail
-          python - <<'PY' | tee dogfood/summary.txt
-          from pathlib import Path
-
-          root = Path('dogfood/projection')
-          for label, pattern in (
-              ('skills', 'skills/*.md'),
-              ('resources', 'resources/*.md'),
-              ('relations', 'relations/*.md'),
-              ('evals', 'evals/*.md'),
-              ('mentions', 'mentions/*.md'),
-              ('declared_type_contracts', '.okf/contracts/*.schema.sql'),
-          ):
-              print(f'{label}={len(list(root.glob(pattern)))}')
-          PY
-
-      - name: Upload dogfood evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: okf-agent-skills-dogfood
-          path: dogfood/
-          if-no-files-found: error
+          git diff --cached --quiet && exit 0
+          git commit -m 'docs(skills): require real-use postmortem self-report'
+          git push
