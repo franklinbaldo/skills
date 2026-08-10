@@ -1,0 +1,110 @@
+name: Meme image canonical sampling
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/meme-image-canonical-sampling.yml'
+      - 'meme-image/**'
+  workflow_dispatch:
+
+jobs:
+  sample:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch, hash, and sample the exact live catalog
+        env:
+          MEMEGEN_TEMPLATES_URL: https://api.memegen.link/templates/
+        run: |
+          set -euo pipefail
+          mkdir -p canonical-sampling
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import secrets
+          import urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          out = Path('canonical-sampling')
+          url = os.environ['MEMEGEN_TEMPLATES_URL']
+
+          request = urllib.request.Request(
+              url,
+              headers={'User-Agent': 'franklinbaldo-skills-meme-image-e2e/1.0'},
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              raw = response.read()
+              status = getattr(response, 'status', None)
+              content_type = response.headers.get('content-type')
+
+          catalog_path = out / 'memegen-templates.json'
+          catalog_path.write_bytes(raw)
+          digest = hashlib.sha256(raw).hexdigest()
+          catalog = json.loads(raw)
+          if not isinstance(catalog, list) or not catalog:
+              raise SystemExit('live catalog is not a non-empty JSON array')
+
+          # Preserve the exact population used by the RNG. Do not deduplicate IDs:
+          # population semantics are the live response entries as observed.
+          rng = secrets.SystemRandom()
+          if len(catalog) < 20:
+              raise SystemExit(f'catalog unexpectedly small: {len(catalog)}')
+
+          def draw(n=20):
+              return [
+                  {
+                      'id': item.get('id'),
+                      'name': item.get('name'),
+                      'lines': item.get('lines'),
+                      'styles': item.get('styles', []),
+                  }
+                  for item in rng.sample(catalog, n)
+              ]
+
+          evidence = {
+              'observed_at_utc': datetime.now(timezone.utc).isoformat(),
+              'source_url': url,
+              'http_status': status,
+              'content_type': content_type,
+              'raw_bytes': len(raw),
+              'sha256': digest,
+              'population_count': len(catalog),
+              'population_semantics': 'entries in the exact raw live /templates/ JSON response; duplicates preserved',
+              'rng': 'secrets.SystemRandom',
+              'draws': {
+                  'license_post': draw(),
+                  'librarian_post': draw(),
+                  'rug_pull_post': draw(),
+                  'license_repeat_1': draw(),
+                  'license_repeat_2': draw(),
+                  'license_repeat_3': draw(),
+                  'license_repeat_4': draw(),
+                  'license_repeat_5': draw(),
+              },
+          }
+          (out / 'draws.json').write_text(
+              json.dumps(evidence, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          (out / 'summary.txt').write_text(
+              '\n'.join([
+                  f"source_url={url}",
+                  f"raw_bytes={len(raw)}",
+                  f"sha256={digest}",
+                  f"population_count={len(catalog)}",
+                  'rng=secrets.SystemRandom',
+              ]) + '\n',
+              encoding='utf-8',
+          )
+          print((out / 'summary.txt').read_text())
+          PY
+
+      - name: Upload canonical sampling evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: meme-image-canonical-sampling
+          path: canonical-sampling/
+          if-no-files-found: error
