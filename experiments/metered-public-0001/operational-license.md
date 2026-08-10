@@ -1,3 +1,12 @@
+---
+type: Note
+id: metered-public-0001-operational-license
+role: operational_license_addendum
+license_id: Skill-Use-License-0.1
+policy_ref: policy.yaml
+policy_sha256: "sha256:1ec50793a004226e2480a9eb552fdd9821b3766738eb5f2595cbe1fa9cff6831"
+---
+
 # Operational License Addendum — Experiment 0001
 
 Effective upon this document being committed to the `experiment/metered-public-0001` branch of `franklinbaldo/skills`.
