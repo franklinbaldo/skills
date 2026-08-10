@@ -147,3 +147,13 @@ Instead of "let's do a greenfield exercise":
 
 > "Let's do a blank-sheet redesign, driven by first principles, and then reconcile it against
 > the brownfield constraints of the repo."
+
+## Real-use postmortem
+
+After any material use of this skill, perform a brief self-postmortem before ending the task:
+assess whether routing was correct, whether the skill materially improved/neutral/degraded the
+result, what concrete instruction mattered, and any friction or workaround. Routine success
+stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and add
+evidence to an existing matching issue or open a sanitized **Skill use feedback** issue. Never
+publish secrets, private/confidential facts, credentials, or personal data, and do not interrupt
+the user's task merely to report feedback.
