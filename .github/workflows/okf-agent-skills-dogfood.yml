@@ -13,11 +13,56 @@ on:
       - '.github/workflows/okf-agent-skills-dogfood.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   dogfood:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+
+      - name: One-shot propagate real-use postmortem contract
+        if: github.event_name == 'pull_request' && github.head_ref == 'cleanup/production-self-report-loop'
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          footer = '''
+
+## Real-use postmortem
+
+After any material use of this skill, perform a brief self-postmortem before ending the task:
+assess whether routing was correct, whether the skill materially improved/neutral/degraded the
+result, what concrete instruction mattered, and any friction or workaround. Routine success
+stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and add
+evidence to an existing matching issue or open a sanitized **Skill use feedback** issue. Never
+publish secrets, private/confidential facts, credentials, or personal data, and do not interrupt
+the user's task merely to report feedback.
+'''
+
+          changed = []
+          for path in sorted(Path('.').glob('*/SKILL.md')):
+              if path.as_posix() == 'loop-engineering/SKILL.md':
+                  continue
+              text = path.read_text(encoding='utf-8')
+              if '## Real-use postmortem' in text or '## Mandatory postmortem' in text:
+                  continue
+              path.write_text(text.rstrip() + footer, encoding='utf-8')
+              changed.append(path.as_posix())
+          print(f'updated={len(changed)}')
+          for path in changed:
+              print(path)
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add '*/SKILL.md'
+          if ! git diff --cached --quiet; then
+            git commit -m 'docs(skills): require real-use postmortem self-report'
+            git push
+          fi
 
       - uses: astral-sh/setup-uv@v6
 
@@ -96,6 +141,14 @@ jobs:
               path for path in Path('.').rglob('SKILL.md')
               if not any(part in ignored for part in path.parts)
           ]
+          missing_postmortem = [
+              path.as_posix()
+              for path in source_skill_files
+              if '## Real-use postmortem' not in path.read_text(encoding='utf-8')
+              and '## Mandatory postmortem' not in path.read_text(encoding='utf-8')
+          ]
+          if missing_postmortem:
+              raise SystemExit(f'skills missing real-use postmortem contract: {missing_postmortem}')
 
           con = duckdb.connect('dogfood/skills.duckdb', read_only=True)
           try:
