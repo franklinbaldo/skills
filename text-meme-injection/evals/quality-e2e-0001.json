@@ -1,0 +1,38 @@
+[
+  {
+    "id": "memory-borges",
+    "register": "dry-observational",
+    "request": "Deixa este trecho um pouco mais leve com humor de internet, sem perder o tom ensaístico.",
+    "source": "A memória não arquiva o passado: ela o reescreve toda vez que o consulta. Borges percebeu isso antes de a psicologia transformar a intuição em experimento. Funes parece ter recebido o dom perfeito e descoberto, tarde demais, que lembrar de tudo é uma forma particularmente eficiente de não conseguir pensar.",
+    "baseline": "A memória não arquiva o passado: ela o reescreve toda vez que o consulta. Borges percebeu isso antes de a psicologia transformar a intuição em experimento. Funes parece ter recebido o dom perfeito e descoberto, tarde demais, que lembrar de tudo é uma forma particularmente eficiente de não conseguir pensar. Menos, Funes.",
+    "candidate": "A memória não arquiva o passado: ela o reescreve toda vez que o consulta. Borges percebeu isso antes de a psicologia transformar a intuição em experimento. Funes recebeu a memória perfeita e descobriu o pequeno detalhe operacional: lembrar de tudo ocupava justamente o espaço necessário para pensar.",
+    "notes": "Tests whether local comic compression beats a catalog catchphrase in a literary paragraph."
+  },
+  {
+    "id": "framework-abstraction",
+    "register": "tech-dev-blog",
+    "request": "Coloca uma respirada de humor aqui sem transformar em post de meme.",
+    "source": "Toda abstração começa como uma tentativa honesta de remover repetição. O problema aparece quando ela passa a exigir um glossário, três factories e uma reunião para explicar a função que substituiu duas linhas de código. Nesse ponto a equipe já não está reduzindo complexidade; está apenas mudando o CEP dela.",
+    "baseline": "Toda abstração começa como uma tentativa honesta de remover repetição. O problema aparece quando ela passa a exigir um glossário, três factories e uma reunião para explicar a função que substituiu duas linhas de código. Nesse ponto a equipe já não está reduzindo complexidade; está apenas mudando o CEP dela. Tá comédia.",
+    "candidate": "Toda abstração começa como uma tentativa honesta de remover repetição. O problema aparece quando ela passa a exigir um glossário, três factories e uma reunião para explicar a função que substituiu duas linhas de código. A complexidade não foi embora; ganhou onboarding.",
+    "notes": "Tests semantic compression and domain-native humor versus an appended reaction phrase."
+  },
+  {
+    "id": "moving-boxes",
+    "register": "personal-confessional",
+    "request": "Dá uma leve ironizada, mas mantém a voz íntima.",
+    "source": "Eu achava que mudar de apartamento seria principalmente decidir onde colocar os livros. Na prática, passei uma tarde inteira avaliando quais cabos misteriosos eu ainda precisava conservar, como se cada carregador sem aparelho fosse uma promessa de reencontro futuro.",
+    "baseline": "Eu achava que mudar de apartamento seria principalmente decidir onde colocar os livros. Na prática, passei uma tarde inteira avaliando quais cabos misteriosos eu ainda precisava conservar, como se cada carregador sem aparelho fosse uma promessa de reencontro futuro. Vai dar certo.",
+    "candidate": "Eu achava que mudar de apartamento seria principalmente decidir onde colocar os livros. Na prática, passei uma tarde inteira diante de cabos sem aparelho, preservando cada um com a fé de quem acredita que o dono daquela entrada proprietária ainda vai voltar para casa.",
+    "notes": "Tests whether humor can emerge from the author's existing image instead of importing a meme phrase."
+  },
+  {
+    "id": "algorithm-taste",
+    "register": "cultural-criticism",
+    "request": "Deixa esse trecho mais solto e com uma textura de internet discreta.",
+    "source": "As plataformas dizem que estão aprendendo nosso gosto, mas o processo também funciona ao contrário. Depois de meses recebendo recomendações calculadas a partir de escolhas anteriores, começamos a reconhecer como desejo aquilo que o sistema aprendeu a prever. O espelho não apenas reflete; ele treina o rosto.",
+    "baseline": "As plataformas dizem que estão aprendendo nosso gosto, mas o processo também funciona ao contrário. Depois de meses recebendo recomendações calculadas a partir de escolhas anteriores, começamos a reconhecer como desejo aquilo que o sistema aprendeu a prever. O espelho não apenas reflete; ele treina o rosto. The math is mathing.",
+    "candidate": "As plataformas dizem que estão aprendendo nosso gosto, mas o processo também funciona ao contrário. Depois de meses recebendo recomendações calculadas a partir de escolhas anteriores, começamos a reconhecer como desejo aquilo que o sistema aprendeu a prever. O algoritmo acerta tanto o nosso gosto que, em algum momento, fica difícil saber de quem era a resposta do gabarito.",
+    "notes": "Tests voice-preserving irony and argument contribution versus a conspicuous loanword catchphrase."
+  }
+]
