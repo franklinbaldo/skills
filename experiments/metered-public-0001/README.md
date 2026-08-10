@@ -1,3 +1,9 @@
+---
+type: Note
+id: metered-public-0001-readme
+role: experiment_readme
+---
+
 # Experiment 0001 — deterministic invocation metering
 
 This corpus dogfoods the minimal `metered_public` protocol merged in #58 against real internal productive use of [`okf-agent-skills`](../../okf-agent-skills/SKILL.md).
