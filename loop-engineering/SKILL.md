@@ -66,7 +66,10 @@ For each cycle answer all five questions:
    - be discarded as incidental.
 
 Read [`references/evolution-loop.md`](references/evolution-loop.md) before designing a new
-benchmark method or deciding whether to split/create a skill.
+benchmark method or deciding whether to split/create a skill. Consult
+[`references/lateral-opportunities-0001.md`](references/lateral-opportunities-0001.md) for the
+current evidence-backed opportunity map; update that map rather than creating sibling skills
+from intuition alone.
 
 ## Vertical improvement
 
