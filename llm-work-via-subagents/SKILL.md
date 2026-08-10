@@ -74,3 +74,7 @@ subagents are strictly better. When in doubt at human scale, spawn.
   subagents. NOT an API loop.
 - "Translate this one paragraph" → just do it inline; not a batch, no subagents needed.
 - "Re-tag this 40k-row dataset nightly in CI" → scripted batch call (the exception).
+
+## Real-use postmortem
+
+After material use, assess routing, outcome, quality delta, concrete instruction effect, and any friction/workaround. Routine success stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and update a matching issue or open a sanitized **Skill use feedback** issue. Never publish secrets or private/confidential data merely to report feedback.
