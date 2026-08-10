@@ -283,3 +283,7 @@ O review termina quando:
 O objetivo não é provar que o reviewer consegue imaginar mais coisas. É aumentar
 a probabilidade de que a mudança **faça exatamente o que promete no sistema que
 realmente existe**.
+
+## Real-use postmortem
+
+After material use, assess routing, outcome, quality delta, concrete instruction effect, and any friction/workaround. Routine success stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and update a matching issue or open a sanitized **Skill use feedback** issue. Never publish secrets or private/confidential data merely to report feedback.

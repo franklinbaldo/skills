@@ -148,3 +148,13 @@ not on `PATH`.
 - **Using `bw` mode for photos/color-heavy figures:** If the PDF has high-resolution colored graphs, photos, or diagrams where color is critical, `bw` mode will binarize them into high-contrast black and white, making them unreadable. Use `color` or `gray` mode for these files.
 - **Giving up when `--jbig2` falls back to CCITT G4:** the `jbig2` CLI is a system package, not a PyPI dependency `uv run --with` can install, so `compress.py` prints a warning and transparently falls back to CCITT G4 when it's missing rather than failing the whole run. That warning includes accurate install guidance for the current machine — just follow it and re-run `compress.py --jbig2`, the same way you'd install any other missing CLI tool. Don't treat the fallback as a hard limitation.
 - **Assuming every package manager has a one-line `jbig2enc` install:** it doesn't. Fedora's and Arch's official repos don't package the encoder at all — only `apt-get` (Debian/Ubuntu) and `brew` (macOS) do. `_jbig2_install_hint()` in `compress.py` reflects this; don't "fix" it to always print a single `<pkg-manager> install jbig2enc` command, that would just print commands that fail on those distros.
+
+## Real-use postmortem
+
+After any material use of this skill, perform a brief self-postmortem before ending the task:
+assess whether routing was correct, whether the skill materially improved/neutral/degraded the
+result, what concrete instruction mattered, and any friction or workaround. Routine success
+stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and add
+evidence to an existing matching issue or open a sanitized **Skill use feedback** issue. Never
+publish secrets, private/confidential facts, credentials, or personal data, and do not interrupt
+the user's task merely to report feedback.

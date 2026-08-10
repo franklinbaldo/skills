@@ -170,3 +170,7 @@ carries the intended reader, and uses publishing conventions only after the post
 has emerged.
 
 When in doubt: **preserve the author, not the preset. Draft something worth reacting to.**
+
+## Real-use postmortem
+
+After material use, assess routing, outcome, quality delta, concrete instruction effect, and any friction/workaround. Routine success stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and update a matching issue or open a sanitized **Skill use feedback** issue. Never publish secrets or private/confidential data merely to report feedback.

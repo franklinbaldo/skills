@@ -105,7 +105,7 @@ Avoid placing two image memes back-to-back in the reading rhythm.
 8. **Judge subjectively.** Evaluate template semantics, joke quality, legibility, freshness, integration with the post, and whether the image earns its space.
 9. **Embed accessibly.** Use the publishing system's preferred Markdown/HTML conventions and useful alt text.
 10. **Check local rhythm and redundancy.** A good meme can still be the wrong meme if another visual or joke already occupies the beat.
-11. **Record exploration evidence when useful.** Keep the sampled IDs, rejections, finalists, and selected route so repeated runs can be audited for variance.
+11. **Preserve useful real-use evidence.** Keep sampled IDs, concrete rejections, finalists, and the selected route when they explain a postmortem finding or an actionable feedback issue. Do not persist exploration telemetry merely for its own sake.
 
 ## Resources
 
@@ -136,4 +136,8 @@ The task is complete when:
 - production route and asset were verified when feasible/relevant;
 - embedding includes useful accessibility text;
 - meme density fits the local register and surrounding visuals;
-- the result can feed the next benchmark cycle with evidence about both quality and variance.
+- useful learning can flow into the real-use postmortem without requiring a synthetic benchmark cycle.
+
+## Real-use postmortem
+
+After material use, assess routing, outcome, quality delta, concrete instruction effect, and any friction/workaround. Routine success stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and update a matching issue or open a sanitized **Skill use feedback** issue. Never publish secrets or private/confidential data merely to report feedback.

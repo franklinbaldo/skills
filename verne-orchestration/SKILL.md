@@ -246,3 +246,7 @@ A issue deve descrever **experiência real**, não abstrata:
 - Jules API docs: https://developers.google.com/jules/api/reference/rest
 - API key: https://jules.google.com/settings#api
 - Orchestration Protocol: `ORCHESTRATION_PROTOCOL.md` no repo verne (pode não existir; nesse caso, use o protocolo inline e o schema JSON desta skill)
+
+## Real-use postmortem
+
+After material use, assess routing, outcome, quality delta, concrete instruction effect, and any friction/workaround. Routine success stays ephemeral. Skill-level learning belongs in `franklinbaldo/skills`; Verne product bugs may still belong in `franklinbaldo/verne`. Deduplicate first and never publish secrets or private/confidential data merely to report feedback.

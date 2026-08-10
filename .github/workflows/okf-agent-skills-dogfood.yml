@@ -9,7 +9,6 @@ on:
       - '*/assets/**'
       - '*/examples/**'
       - '*/evals/**'
-      - '.okf/**'
       - 'okf-agent-skills/**'
       - '.github/workflows/okf-agent-skills-dogfood.yml'
   workflow_dispatch:
@@ -29,16 +28,12 @@ jobs:
           python okf-agent-skills/scripts/project.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/projector.txt
           cp -R "$RUNNER_TEMP/skills-okf" dogfood/projection
 
-      - name: Import observations and inspect with current okf-parser
+      - name: Inspect with current okf-parser
         run: |
           set -o pipefail
           OKF="uvx --from git+https://github.com/franklinbaldo/okf-parser.git okf-parser"
           SPEC='.okf/contracts/{slug}.md'
           $OKF --help > dogfood/okf-parser-help.txt
-          if [ -s .okf/agent-skills-routing-observations.jsonl ]; then
-            $OKF import .okf/agent-skills-routing-observations.jsonl "$RUNNER_TEMP/skills-okf" \
-              --type SkillRoutingObservation --id-column observation_id --write 2>&1 | tee dogfood/import-observations.txt
-          fi
           $OKF check "$RUNNER_TEMP/skills-okf" 2>&1 | tee dogfood/check.txt
           $OKF inventory "$RUNNER_TEMP/skills-okf" 2>&1 | tee dogfood/inventory.txt
           $OKF graph "$RUNNER_TEMP/skills-okf" 2>&1 | tee dogfood/graph.txt
@@ -70,8 +65,6 @@ jobs:
               ('AgentSkillsProjection', 'resolved_relation_count'): 'INTEGER',
               ('AgentSkillsProjection', 'resource_count'): 'INTEGER',
               ('AgentSkillsProjection', 'eval_count'): 'INTEGER',
-              ('AgentSkillsProjection', 'routing_repetitions'): 'INTEGER',
-              ('AgentSkillsProjection', 'planned_routing_run_count'): 'INTEGER',
               ('Skill', 'line_count'): 'INTEGER',
               ('SkillResource', 'size_bytes'): 'UBIGINT',
               ('SkillRelation', 'source_line'): 'INTEGER',
@@ -143,45 +136,15 @@ jobs:
           if mismatches:
               raise SystemExit(f'AgentSkillsProjection contradicts typed IR: {mismatches}')
 
-          planned_formula = table_counts['eval_count'] * manifest['routing_repetitions']
-          if manifest['planned_routing_run_count'] != planned_formula:
-              raise SystemExit(
-                  f'planned routing count mismatch: manifest={manifest["planned_routing_run_count"]} formula={planned_formula}'
-              )
-          if report['routing_observation_mismatches']:
-              raise SystemExit(f'stale/mismatched routing observations: {report["routing_observation_mismatches"][:5]}')
-
           coverage = report['eval_coverage']
           if len(coverage) != table_counts['skill_count']:
               raise SystemExit('eval coverage must contain one row per skill')
-          covered = [row for row in coverage if row['has_routing_evals']]
-          uncovered = [row for row in coverage if not row['has_routing_evals']]
-          if not covered or not uncovered:
-              raise SystemExit('routing coverage audit must distinguish covered and uncovered skills')
-
-          run_coverage = report['routing_run_coverage']
-          planned = sum(row['planned_runs'] for row in run_coverage)
-          observed = sum(row['observed_runs'] for row in run_coverage)
-          failed = sum(row['failed_runs'] for row in run_coverage)
-          pending = sum(row['pending_runs'] for row in run_coverage)
-          if planned != planned_formula or observed + failed + pending != planned:
-              raise SystemExit(
-                  f'incoherent routing audit: planned={planned} observed={observed} failed={failed} pending={pending}'
-              )
-          if len(report['routing_case_results']) != table_counts['eval_count']:
-              raise SystemExit('routing case results must contain one row per eval')
 
           print(f'audit_views={len(report)}')
           print(f'source_skills={len(source_skill_files)}')
           print(f'typed_skills={table_counts["skill_count"]}')
           print(f'typed_relations={table_counts["relation_count"]}')
-          print(f'typed_routing_cases={table_counts["eval_count"]}')
-          print(f'routing_repetitions={manifest["routing_repetitions"]}')
-          print(f'routing_runs_planned={planned}')
-          print(f'routing_runs_observed={observed}')
-          print(f'routing_runs_failed={failed}')
-          print(f'routing_runs_pending={pending}')
-          print(f'routing_observations={len(report["routing_observations"])}')
+          print(f'typed_regression_cases={table_counts["eval_count"]}')
           print(f'mentions_without_edge={len(report["mentions_without_edge"])}')
           print(f'isolated_skills={len(report["isolated_skills"])}')
           PY
@@ -191,7 +154,6 @@ jobs:
           set -o pipefail
           python - <<'PY' | tee dogfood/summary.txt
           from pathlib import Path
-          import re
 
           root = Path('dogfood/projection')
           for label, pattern in (
@@ -203,11 +165,6 @@ jobs:
               ('declared_type_contracts', '.okf/contracts/*.schema.sql'),
           ):
               print(f'{label}={len(list(root.glob(pattern)))}')
-          manifest = (root / 'projection.md').read_text(encoding='utf-8')
-          for field in ('routing_repetitions', 'planned_routing_run_count'):
-              match = re.search(rf'^{field}: (\d+)$', manifest, re.M)
-              if match:
-                  print(f'{field}={match.group(1)}')
           PY
 
       - name: Upload dogfood evidence

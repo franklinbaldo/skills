@@ -233,3 +233,7 @@ An enforcement investigation is complete when:
 9. correspondence and subsequent evidence are appended to the case record; and
 10. legal escalation, if any, is handed to a human decision-maker with a provenance-rich
     packet rather than an agent-generated verdict.
+
+## Real-use postmortem
+
+After material use, assess routing, outcome, quality delta, concrete instruction effect, and any friction/workaround. Routine success stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and update a matching issue or open a sanitized **Skill use feedback** issue. Never publish secrets or private/confidential data merely to report feedback.

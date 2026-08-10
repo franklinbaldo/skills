@@ -67,3 +67,7 @@ Python work under this skill is complete when:
 - any proposed lint-policy change is distinguished from ordinary code remediation.
 
 The goal is not to satisfy Ruff cosmetically. It is to leave code that naturally satisfies the repository's chosen static contract.
+
+## Real-use postmortem
+
+After material use, assess routing, outcome, quality delta, concrete instruction effect, and any friction/workaround. Routine success stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and update a matching issue or open a sanitized **Skill use feedback** issue. Never publish secrets or private/confidential data merely to report feedback.

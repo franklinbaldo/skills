@@ -1,6 +1,6 @@
 # skills
 
-A collection of [Claude Code agent skills](https://docs.claude.com/en/docs/claude-code/skills) by Franklin Baldo, plus Lean 4 tooling for legal formalization.
+A collection of [Agent Skills](https://agentskills.io/) by Franklin Baldo, plus Lean 4 tooling for legal formalization.
 
 ## Install and use
 
@@ -30,7 +30,15 @@ Use a skill without making installation semantics part of this repository:
 npx skills use franklinbaldo/skills --skill software-review --agent claude-code
 ```
 
-`npx skills` owns discovery, selection, agent-specific installation paths, symlink/copy behavior, updates, removal, and supported-agent integration. This repository owns the skills themselves, their tests/evals, and repository-specific analysis. See [`okf-agent-skills/references/tooling-boundary.md`](okf-agent-skills/references/tooling-boundary.md).
+`npx skills` owns discovery, selection, agent-specific installation paths, symlink/copy behavior, updates, removal, and supported-agent integration. This repository owns the skills themselves, static regression evals, and repository-specific analysis. See [`okf-agent-skills/references/tooling-boundary.md`](okf-agent-skills/references/tooling-boundary.md).
+
+## Learning from real use
+
+Every skill carries a compact **real-use postmortem** instruction in its own `SKILL.md`. After a material use, the agent should assess whether the skill was the right choice, whether it improved or degraded the result, what concrete instruction mattered, and whether friction or a workaround occurred.
+
+Routine success stays ephemeral. When a postmortem reveals actionable learning, the agent should search existing `franklinbaldo/skills` issues and add evidence to a matching issue or open a sanitized new **Skill use feedback** issue. Failures, routing mistakes, missing tooling/cases, quality degradation, recurring workarounds, host-specific differences, and valuable positive surprises are all valid feedback. Secrets, private case facts, credentials, personal data, and confidential material must never be published just to report skill behavior.
+
+The system-level protocol lives in [`loop-engineering`](loop-engineering/SKILL.md) and [`loop-engineering/references/production-feedback-loop.md`](loop-engineering/references/production-feedback-loop.md). Static `eval_queries.json` cases remain regression memory; they are not the primary observability mechanism and are not expanded into synthetic repeated-run benchmarks by this repository.
 
 ## Skills
 
@@ -47,7 +55,7 @@ npx skills use franklinbaldo/skills --skill software-review --agent claude-code
 | [license-enforcement](license-enforcement/SKILL.md) | Audit public evidence of operational skill use, build provenance-rich compliance cases, and prepare guarded licensing outreach with mandatory human approval before external action. |
 | [litebox](litebox/SKILL.md) | Adapt Linux-only CLI workflows to locked-down Windows with LiteBox when native Linux, WSL, containers, VMs, or admin installation are unavailable. |
 | [llm-work-via-subagents](llm-work-via-subagents/SKILL.md) | Do bulk LLM work with parallel subagents instead of API-key scripts. |
-| [loop-engineering](loop-engineering/SKILL.md) | Engineer self-improving loops in which skills, benchmarks, evaluation methods, coverage, and neighboring skills co-evolve from evidence. |
+| [loop-engineering](loop-engineering/SKILL.md) | Evolve skills from real-use postmortems, deduplicated feedback issues, concrete quality effects, workarounds, and production learning. |
 | [meme-image](meme-image/SKILL.md) | Generate image memes via the memegen.link API for markdown content. |
 | [notebooklm-processos](notebooklm-processos/SKILL.md) | Turn large case files into grounded, provenance-preserving evidence for the next legal or institutional decision. |
 | [okf-agent-skills](okf-agent-skills/SKILL.md) | Inspect and govern Agent Skills through a derived OKF relational/graph projection while keeping Agent Skills as the source format. |

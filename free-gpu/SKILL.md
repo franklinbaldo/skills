@@ -120,3 +120,7 @@ Official references:
 - <https://github.com/googlecolab/google-colab-cli>
 - <https://github.com/Kaggle/kaggle-cli>
 - <https://docs.astral.sh/uv/getting-started/installation/>
+
+## Real-use postmortem
+
+After material use, assess routing, outcome, quality delta, concrete instruction effect, and any friction/workaround. Routine success stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and update a matching issue or open a sanitized **Skill use feedback** issue. Never publish secrets or private/confidential data merely to report feedback.

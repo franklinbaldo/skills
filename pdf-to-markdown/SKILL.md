@@ -73,3 +73,7 @@ Generate an `INDEX.md` file in the case directory containing:
 - **Clean Layouts:** Ensure tables are properly converted to Markdown tables.
 - **Maintain Metadata:** Preserve date, time, authors, and signature metadata at the top of each document.
 - **Keep Original PDF Link:** Provide a link back to the original PDF for reference.
+
+## Real-use postmortem
+
+After material use, assess routing, outcome, quality delta, concrete instruction effect, and any friction/workaround. Routine success stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and update a matching issue or open a sanitized **Skill use feedback** issue. Never publish secrets or private/confidential data merely to report feedback.
