@@ -48,6 +48,7 @@ The system-level protocol lives in [`loop-engineering`](loop-engineering/SKILL.m
 | [blank-sheet-redesign](blank-sheet-redesign/SKILL.md) | Redesign an existing artifact from a blank sheet by first principles, then reconcile it against brownfield constraints — software or legal strategy. |
 | [brazilian-web-design](brazilian-web-design/SKILL.md) | Research Brazilian visual culture, consult the Cobogó OKF corpus, and translate references into concrete, accessible interface grammar without ornamental brasilidade. |
 | [cobogo-design-review](cobogo-design-review/SKILL.md) | Improve websites, pages, patterns and components through a Cobogó loop: Brazilian-grammar imagination → concept image → real rendered capture → gap classification → smallest useful convergence, without treating generated visuals as factual authority. |
+| [cobogo-consumer-synergy](cobogo-consumer-synergy/SKILL.md) | Analyze Cobogó consumers as a portfolio, detect reusable needs, route authority across repositories, coordinate adoption work, and feed factual evidence back into the OKF registry. |
 | [convert-to-pdfa](convert-to-pdfa/SKILL.md) | Convert PDFs to PDF/A-1b, PDF/A-2b, or PDF/A-3b and validate the archival result. |
 | [datajud](datajud/SKILL.md) | Query case metadata (docket + movements) from any Brazilian court via the CNJ DataJud public API. |
 | [franklin-blog](franklin-blog/SKILL.md) | Write posts for Franklin's blog, preserving his voice via draft-and-react workflow. |
