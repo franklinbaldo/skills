@@ -82,7 +82,8 @@ fn main() -> ExitCode {
         command.status().map_err(|error| error.to_string())
     });
     match result {
-        Ok(status) => ExitCode::from(status.code().unwrap_or(1) as u8),
+        Ok(status) if status.success() => ExitCode::SUCCESS,
+        Ok(_) => ExitCode::FAILURE,
         Err(message) => {
             eprintln!("{message}\n{}", usage());
             ExitCode::FAILURE

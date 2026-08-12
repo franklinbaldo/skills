@@ -39,9 +39,10 @@ The repository includes:
   pinned upstream declaration changes.
 
 The validated combination was Windows x86-64, LiteBox commit
-`7af6242f0729c1f0224161c7cec0afc114994cf6`, Rust 1.97.1 gnullvm,
-LLVM-MinGW 20260616, Alpine 3.22.1, and Codex 0.147.0. Re-check upstream before
-updating any pin. Build locally:
+`7af6242f0729c1f0224161c7cec0afc114994cf6`, Rust
+`1.97.1-x86_64-pc-windows-gnullvm`, LLVM-MinGW 20260616, Alpine 3.22.1 at
+manifest digest `sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1`,
+and Codex 0.147.0. Re-check upstream before updating any pin. Build locally:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass `

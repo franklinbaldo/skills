@@ -14,10 +14,9 @@ $CodexUrl = "https://github.com/openai/codex/releases/download/rust-v$CodexVersi
 $LlvmVersion = '20260616'
 $LlvmSha256 = 'b9b68a4d276e16fa25802aaba458e4638f64b3884c290aaccdc2d87083b6ca35'
 $LlvmUrl = "https://github.com/mstorsjo/llvm-mingw/releases/download/$LlvmVersion/llvm-mingw-$LlvmVersion-ucrt-x86_64.zip"
-$RustToolchain = 'stable-x86_64-pc-windows-gnullvm'
-$RootfsImage = 'docker.io/library/alpine:3.22.1'
+$RustToolchain = '1.97.1-x86_64-pc-windows-gnullvm'
+$RootfsImage = 'docker.io/library/alpine@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1'
 
-$SkillRoot = Split-Path -Parent $PSScriptRoot
 $Source = Join-Path $OutputDirectory 'src'
 $Downloads = Join-Path $OutputDirectory 'downloads'
 $LlvmRoot = Join-Path $OutputDirectory "llvm-mingw-$LlvmVersion-ucrt-x86_64"
@@ -94,6 +93,9 @@ if (Test-Path $Stage) {
 New-Item -ItemType Directory -Force (Join-Path $Stage 'usr\local\bin') | Out-Null
 Invoke-Checked tar @('-xzf', $CodexArchive, '-C', $Stage)
 $downloaded = Get-ChildItem $Stage -Recurse -File | Where-Object Name -eq 'codex-x86_64-unknown-linux-musl' | Select-Object -First 1
+if ($null -eq $downloaded) {
+    throw 'Expected codex-x86_64-unknown-linux-musl not found in the pinned archive.'
+}
 $rewriter = Join-Path $Source 'target\release\litebox_syscall_rewriter.exe'
 Invoke-Checked $rewriter @($downloaded.FullName, '--output', (Join-Path $Stage 'usr\local\bin\codex'))
 if (Test-Path $Tar) { Remove-Item -LiteralPath $Tar -Force }
