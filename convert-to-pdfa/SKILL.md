@@ -82,12 +82,32 @@ available:
 - Windows: install the official 64-bit Ghostscript build and add
   `gswin64c.exe` to `PATH`, or install `ghostscript` inside WSL.
 
-On locked-down x86-64 Windows without WSL or permission to install software,
-consult the [`litebox`](../litebox/SKILL.md) adaptation lesson and its
-[Ghostscript recipe](../litebox/references/task-recipes.md). It teaches the
-agent to package Linux Ghostscript, bridge the source and result, and validate
-the PDF/A output. LiteBox changes how Ghostscript runs; it does not relax any
-conformance check.
+**No admin rights on Windows? Try extraction before WSL or LiteBox.** The
+official Windows installer (`gs<version>w64.exe` from
+[`ArtifexSoftware/ghostpdl-downloads`](https://github.com/ArtifexSoftware/ghostpdl-downloads/releases))
+is a plain NSIS package. Running it needs elevation, but *unpacking* it does
+not:
+
+```powershell
+& "C:\Program Files\7-Zip\7z.exe" x gs10071w64.exe -o<dest_dir>
+```
+
+This produces a working `bin\gswin64c.exe` plus the `lib\`, `Resource\`, and
+`iccprofiles\` directories it needs — no install, no UAC prompt. Add
+`<dest_dir>\bin` to `PATH` (a user-level `PATH` edit needs no admin either)
+so `_native_ghostscript()`'s `shutil.which` lookup finds it, or pass
+`--backend native` after exporting `PATH` for the current session. Confirmed
+working end-to-end (including a real `-dPDFA=2` conversion) on Windows
+without any elevated action, with 7-Zip already present; if 7-Zip itself
+isn't installed, it also installs without admin (portable build, or
+`winget install 7zip.7zip --scope user` where available).
+
+Only fall back to WSL or the `litebox` adaptation lesson (see
+[Ghostscript recipe](../litebox/references/task-recipes.md)) when this
+extraction route is unavailable — e.g. no way to run 7-Zip or an equivalent
+archive tool on the target machine. LiteBox changes how Ghostscript runs; it
+does not relax any conformance check, and needs a real Linux ELF build +
+packaging step that a native Windows binary makes unnecessary.
 
 For normative validation, install the official Java-based veraPDF CLI and add
 `verapdf` (`verapdf.bat` on Windows) to `PATH`. `uvx pdfa-parser` is a

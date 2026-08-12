@@ -5,8 +5,23 @@ domain skill first; its validation rules remain authoritative.
 
 ## Ghostscript for PDF/A
 
-Ghostscript is a promising LiteBox exercise because it is a bounded CPU CLI,
-but PDF/A conversion needs more than the executable.
+**Check for a native Windows binary before starting this exercise at all.**
+Ghostscript already ships an official Windows build (an NSIS installer);
+extracting it with `7z x gs<version>w64.exe -o<dest>` (no admin, no UAC)
+yields a working `gswin64c.exe` in seconds — see the "No admin rights on
+Windows?" note in
+[`convert-to-pdfa/SKILL.md`](../../convert-to-pdfa/SKILL.md#dependencies).
+That is almost always faster and simpler than the LiteBox route below, which
+is for the genuinely locked-down case where extracting an archive isn't an
+option either (no 7-Zip or equivalent available, no way to run it). A prior
+session skipped this check, assumed no admin-free Windows path existed, and
+spent real effort packaging a Linux Ghostscript build through
+`litebox_packager` + the Windows-userland runner before discovering the
+extraction trick.
+
+Ghostscript is a promising LiteBox exercise when the native-binary route is
+genuinely unavailable — it's a bounded CPU CLI, but PDF/A conversion needs
+more than the executable.
 
 1. Package `gs`, its shared libraries, Resource tree, fonts required by the
    source, `PDFA_def.ps`, and the selected ICC profile.
