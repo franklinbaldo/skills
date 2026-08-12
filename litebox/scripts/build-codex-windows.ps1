@@ -7,7 +7,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$LiteBoxCommit = '1870778c9d5a4ddfb0bce91c4d6f63a2c01f798b'
+$LiteBoxCommit = 'e8aa71226bc316fcec17bce3a50d82d6224adb78'
 $LiteBoxRepository = 'https://github.com/franklinbaldo/litebox.git'
 $CodexVersion = '0.147.0'
 $CodexSha256 = '0246e2e773834e07f0fb5249ed6ebad12e4591e608f8c7bb97dd6a9690544c36'
@@ -108,5 +108,5 @@ Invoke-Checked tar @('--format', 'ustar', '-rf', $Tar, '-C', $Stage, 'usr/local/
 } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $OutputDirectory 'build-record.json')
 
 if (-not $SkipProbe) {
-    Invoke-Checked $Launcher @('--runner', $Runner, '--initial-files', $Tar, '--env', 'HOME=/tmp', '--env', 'LANG=C.UTF-8', '--program', '/usr/local/bin/codex', '--', '--version')
+    Invoke-Checked $Launcher @('run', '--env', 'HOME=/tmp', '--env', 'LANG=C.UTF-8', $Tar, '/usr/local/bin/codex', '--version')
 }

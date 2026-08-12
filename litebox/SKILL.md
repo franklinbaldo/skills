@@ -93,6 +93,10 @@ Hyper-V, or WSL.
    versions as an audited example to update deliberately, not as floating
    defaults.
 
+   Treat `litebox` as the primary interface. Prefer `litebox run IMAGE PROGRAM
+   [ARG...]`, `litebox image build|inspect|encrypt`, `litebox rewrite`, and
+   `litebox doctor`; do not call the installed runner directly in normal use.
+
 5. **Run the smallest probe.** Start with `--version`, `--help`, or a
    deterministic one-line transformation. Then exercise, separately:
    filesystem reads, stdout, DNS/TLS, authentication, WebSockets, and output

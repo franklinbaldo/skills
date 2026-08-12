@@ -39,7 +39,7 @@ The repository includes:
 
 The original runner validation used upstream LiteBox commit
 `7af6242f0729c1f0224161c7cec0afc114994cf6`. The current recipe pins fork
-commit `1870778c9d5a4ddfb0bce91c4d6f63a2c01f798b`, which contains that lineage
+commit `e8aa71226bc316fcec17bce3a50d82d6224adb78`, which contains that lineage
 plus the launcher and Windows allocation work. The remaining validated inputs
 are Windows x86-64, Rust
 `1.97.1-x86_64-pc-windows-gnullvm`, LLVM-MinGW 20260616, Alpine 3.22.1 at
@@ -61,7 +61,7 @@ For repeated use, install a pinned fork commit once:
 
 ```powershell
 uv tool install `
-  git+https://github.com/franklinbaldo/litebox@1870778c9d5a4ddfb0bce91c4d6f63a2c01f798b
+  git+https://github.com/franklinbaldo/litebox@e8aa71226bc316fcec17bce3a50d82d6224adb78
 litebox --help
 ```
 
@@ -69,18 +69,17 @@ Use `uvx` instead when the command should exist only for one invocation:
 
 ```powershell
 uvx --from `
-  git+https://github.com/franklinbaldo/litebox@1870778c9d5a4ddfb0bce91c4d6f63a2c01f798b `
+  git+https://github.com/franklinbaldo/litebox@e8aa71226bc316fcec17bce3a50d82d6224adb78 `
   litebox --help
 ```
 
 Run any entrypoint through the installed command:
 
 ```powershell
-litebox `
-  --runner .\.litebox\litebox-runner.exe `
-  --initial-files .\.litebox\codex-litebox.tar `
+litebox run `
   --env HOME=/tmp --env LANG=C.UTF-8 `
-  --program /usr/local/bin/codex -- --version
+  .\.litebox\codex-litebox.tar `
+  /usr/local/bin/codex --version
 ```
 
 Do not use `--forward-env`. Pass only explicit `--env NAME=VALUE` entries.
@@ -200,10 +199,8 @@ required by the chosen entrypoint are present.
 Confirm the exact entrypoint path inside the TAR, then:
 
 ```powershell
-.\litebox_runner_linux_on_windows_userland.exe `
-  --initial-files .\program-litebox.tar `
-  --env "LANG=C.UTF-8" `
-  /usr/bin/PROGRAM --help
+litebox run --env "LANG=C.UTF-8" `
+  .\program-litebox.tar /usr/bin/PROGRAM --help
 ```
 
 Use `--env` only for values that are safe to expose in the local process
