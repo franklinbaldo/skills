@@ -1,0 +1,27 @@
+schema: franklin-skill-license-policy/v1
+policy_id: metered-public-experiment-0001
+license_id: Skill-Use-License-0.1
+status: experimental
+activation:
+  requires_explicit_operational_grant: true
+commercial_terms:
+  pricing_model: metered_public
+metering:
+  metric: invocation
+  scope: principal_skill
+  counter: cumulative
+  free_allowance: 3
+  allowance_reset: never
+  billing_unit: 2
+  rounding: ceiling
+  coverage: paid_block_watermark
+metric_semantics:
+  invocation: one_productive_execution_attempt
+  principal_skill: primary_governed_skill_for_the_task
+  continuation_same_invocation_id_counts_again: false
+  automatic_retry_same_invocation_id_counts_again: false
+  subagent_with_governed_skill_as_principal_counts: true
+  helper_skill_called_inside_principal_counts_as_principal: false
+  abort_after_productive_execution_begins_counts: true
+  routing_or_evaluation_before_productive_execution_counts: false
+  multiple_outputs_same_invocation_id_counts_again: false
