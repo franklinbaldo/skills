@@ -39,7 +39,7 @@ The repository includes:
 
 The original runner validation used upstream LiteBox commit
 `7af6242f0729c1f0224161c7cec0afc114994cf6`. The current recipe pins fork
-commit `a26b3ceac9a194d13bf43af57dc7a72f7d196cce`, which contains that lineage
+commit `1870778c9d5a4ddfb0bce91c4d6f63a2c01f798b`, which contains that lineage
 plus the launcher and Windows allocation work. The remaining validated inputs
 are Windows x86-64, Rust
 `1.97.1-x86_64-pc-windows-gnullvm`, LLVM-MinGW 20260616, Alpine 3.22.1 at
@@ -52,8 +52,8 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 ```
 
 The script downloads source/artifacts, verifies published SHA-256 values,
-installs the pinned launcher with `uv tool install`, compiles the runner with
-static CRT, creates a Linux rootfs TAR, writes
+installs and compiles the pinned launcher, runner, rewriter, and packager with
+`uv tool install` and static CRT, creates a Linux rootfs TAR, writes
 `.litebox/build-record.json`, and probes `codex --version`. Generated EXEs are
 local build products; distribute source and let each client compile.
 
@@ -61,7 +61,7 @@ For repeated use, install a pinned fork commit once:
 
 ```powershell
 uv tool install `
-  git+https://github.com/franklinbaldo/litebox@a26b3ceac9a194d13bf43af57dc7a72f7d196cce
+  git+https://github.com/franklinbaldo/litebox@1870778c9d5a4ddfb0bce91c4d6f63a2c01f798b
 litebox --help
 ```
 
@@ -69,7 +69,7 @@ Use `uvx` instead when the command should exist only for one invocation:
 
 ```powershell
 uvx --from `
-  git+https://github.com/franklinbaldo/litebox@a26b3ceac9a194d13bf43af57dc7a72f7d196cce `
+  git+https://github.com/franklinbaldo/litebox@1870778c9d5a4ddfb0bce91c4d6f63a2c01f798b `
   litebox --help
 ```
 
@@ -134,10 +134,9 @@ reliable. Never mix an unframed TAR stream with interactive terminal output.
 
 ## Build core components from source
 
-Do not clone the repository merely to install or run the `litebox` command;
-`uv tool install` and `uvx` fetch and build it automatically. Clone a pinned
-source checkout only when the task also requires building the LiteBox runner,
-rewriter, or packager, which are not installed by the current uv package:
+Do not clone the repository to install or run the tools. `uv tool install` and
+`uvx` fetch and build the launcher, runner, rewriter, and packager automatically.
+Clone a pinned source checkout only for LiteBox core development:
 
 ```bash
 git clone https://github.com/franklinbaldo/litebox.git

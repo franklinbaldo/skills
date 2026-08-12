@@ -7,7 +7,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$LiteBoxCommit = 'a26b3ceac9a194d13bf43af57dc7a72f7d196cce'
+$LiteBoxCommit = '1870778c9d5a4ddfb0bce91c4d6f63a2c01f798b'
 $LiteBoxRepository = 'https://github.com/franklinbaldo/litebox.git'
 $CodexVersion = '0.147.0'
 $CodexSha256 = '0246e2e773834e07f0fb5249ed6ebad12e4591e608f8c7bb97dd6a9690544c36'
@@ -18,14 +18,12 @@ $LlvmUrl = "https://github.com/mstorsjo/llvm-mingw/releases/download/$LlvmVersio
 $RustToolchain = '1.97.1-x86_64-pc-windows-gnullvm'
 $RootfsImage = 'docker.io/library/alpine@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1'
 
-$Source = Join-Path $OutputDirectory 'src'
 $Downloads = Join-Path $OutputDirectory 'downloads'
 $LlvmRoot = Join-Path $OutputDirectory "llvm-mingw-$LlvmVersion-ucrt-x86_64"
 $LlvmArchive = Join-Path $Downloads "llvm-mingw-$LlvmVersion-ucrt-x86_64.zip"
 $CodexArchive = Join-Path $Downloads "codex-$CodexVersion-linux-x64.tar.gz"
 $Stage = Join-Path $OutputDirectory 'stage'
 $Tar = Join-Path $OutputDirectory 'codex-litebox.tar'
-$Runner = Join-Path $OutputDirectory 'litebox-runner.exe'
 
 function Invoke-Checked([string]$Command, [string[]]$Arguments) {
     & $Command @Arguments
@@ -47,17 +45,11 @@ if (-not [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Runtime.Int
     [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64') {
     throw 'Requires Windows x86-64.'
 }
-foreach ($command in 'git', 'cargo', 'rustup', 'tar', 'uv') {
+foreach ($command in 'rustup', 'tar', 'uv') {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "Missing command: $command" }
 }
 New-Item -ItemType Directory -Force $OutputDirectory, $Downloads | Out-Null
 
-if (-not (Test-Path (Join-Path $Source '.git'))) {
-    Invoke-Checked git @('clone', '--no-checkout', $LiteBoxRepository, $Source)
-}
-Invoke-Checked git @('-C', $Source, 'remote', 'set-url', 'origin', $LiteBoxRepository)
-Invoke-Checked git @('-C', $Source, 'fetch', '--depth', '1', 'origin', $LiteBoxCommit)
-Invoke-Checked git @('-C', $Source, 'checkout', '--detach', $LiteBoxCommit)
 if (-not (Test-Path (Join-Path $LlvmRoot 'bin\dlltool.exe'))) {
     [void](Get-Verified $LlvmUrl $LlvmArchive $LlvmSha256)
     Expand-Archive $LlvmArchive -DestinationPath $OutputDirectory -Force
@@ -66,8 +58,6 @@ $env:PATH = (Join-Path $LlvmRoot 'bin') + [IO.Path]::PathSeparator + $env:PATH
 Invoke-Checked rustup @('toolchain', 'install', $RustToolchain, '--profile', 'minimal')
 $previousRustFlags = $env:RUSTFLAGS
 $env:RUSTFLAGS = '-C target-feature=+crt-static'
-Invoke-Checked cargo @("+$RustToolchain", 'build', '--locked', '--release', '--manifest-path', (Join-Path $Source 'Cargo.toml'), '-p', 'litebox_runner_linux_on_windows_userland', '-p', 'litebox_syscall_rewriter', '-p', 'litebox_packager')
-Copy-Item (Join-Path $Source 'target\release\litebox_runner_linux_on_windows_userland.exe') $Runner -Force
 $previousRustupToolchain = $env:RUSTUP_TOOLCHAIN
 $previousCargoBuildTarget = $env:CARGO_BUILD_TARGET
 $env:RUSTUP_TOOLCHAIN = $RustToolchain
@@ -78,7 +68,12 @@ if ($null -eq $previousCargoBuildTarget) { Remove-Item Env:CARGO_BUILD_TARGET } 
 if ($null -eq $previousRustFlags) { Remove-Item Env:RUSTFLAGS } else { $env:RUSTFLAGS = $previousRustFlags }
 $uvToolBin = (& uv tool dir --bin).Trim()
 $Launcher = Join-Path $uvToolBin 'litebox.exe'
-if (-not (Test-Path $Launcher)) { throw "uv installed litebox but executable was not found at $Launcher" }
+$Runner = Join-Path $uvToolBin 'litebox-runner.exe'
+$rewriter = Join-Path $uvToolBin 'litebox-rewriter.exe'
+$packager = Join-Path $uvToolBin 'litebox-packager.exe'
+foreach ($installedTool in $Launcher, $Runner, $rewriter, $packager) {
+    if (-not (Test-Path $installedTool)) { throw "uv did not install expected tool: $installedTool" }
+}
 
 $codexHash = Get-Verified $CodexUrl $CodexArchive $CodexSha256
 if (Test-Path $Stage) {
@@ -95,10 +90,8 @@ $downloaded = Get-ChildItem $Stage -Recurse -File | Where-Object Name -eq 'codex
 if ($null -eq $downloaded) {
     throw 'Expected codex-x86_64-unknown-linux-musl not found in the pinned archive.'
 }
-$rewriter = Join-Path $Source 'target\release\litebox_syscall_rewriter.exe'
 Invoke-Checked $rewriter @($downloaded.FullName, '--output', (Join-Path $Stage 'usr\local\bin\codex'))
 if (Test-Path $Tar) { Remove-Item -LiteralPath $Tar -Force }
-$packager = Join-Path $Source 'target\release\litebox_packager.exe'
 Invoke-Checked $packager @('--oci-image', $RootfsImage, '--output', $Tar)
 Invoke-Checked tar @('--format', 'ustar', '-rf', $Tar, '-C', $Stage, 'usr/local/bin/codex')
 
