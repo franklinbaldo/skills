@@ -71,10 +71,27 @@ Hyper-V, or WSL.
    Read [the Windows userland workflow](references/windows-userland-workflow.md)
    before building or running either side.
 
-   Reuse `scripts/litebox-tools` for the generic Rust launcher and one-way
-   Windows-directory-to-TAR synchronization. For the validated Codex example,
-   use `scripts/build-codex-windows.ps1`; treat its pinned versions as an
-   audited example to update deliberately, not as floating defaults.
+   Install the generic launcher from the maintained fork. Prefer a persistent
+   tool for repeated work:
+
+   ```powershell
+   uv tool install git+https://github.com/franklinbaldo/litebox@<FULL_COMMIT>
+   litebox --help
+   ```
+
+   Use `uvx` for a disposable invocation:
+
+   ```powershell
+   uvx --from git+https://github.com/franklinbaldo/litebox@<FULL_COMMIT> `
+     litebox --help
+   ```
+
+   Always pin a full commit in automation. Use `uv tool update-shell` once if
+   an installed `litebox` is not on `PATH`. Reuse `scripts/litebox-tools` only
+   for one-way Windows-directory-to-TAR synchronization. For the validated
+   Codex example, use `scripts/build-codex-windows.ps1`; treat its pinned
+   versions as an audited example to update deliberately, not as floating
+   defaults.
 
 5. **Run the smallest probe.** Start with `--version`, `--help`, or a
    deterministic one-line transformation. Then exercise, separately:
@@ -121,6 +138,7 @@ For task-shaped examples, read
 ## Sources
 
 - https://github.com/microsoft/litebox
+- https://github.com/franklinbaldo/litebox
 - https://github.com/microsoft/litebox/tree/main/litebox_packager
 - https://github.com/microsoft/litebox/tree/main/litebox_runner_linux_on_windows_userland
 

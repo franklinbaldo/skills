@@ -8,7 +8,7 @@ interfaces can change.
 
 - [Build topology](#build-topology)
 - [Validated Windows source-only route](#validated-windows-source-only-route)
-- [Pin and build LiteBox](#pin-and-build-litebox)
+- [Build core components from source](#build-core-components-from-source)
 - [Package a Linux program](#package-a-linux-program)
 - [Run on Windows](#run-on-windows)
 - [Bridge files deliberately](#bridge-files-deliberately)
@@ -33,13 +33,15 @@ prebuilt EXE. Use a disposable builder only when local compilation is blocked.
 The repository includes:
 
 - `../scripts/build-codex-windows.ps1`: pinned, end-to-end Codex example;
-- `../scripts/litebox-tools`: generic Rust launcher and TAR synchronizer;
-- the build script's guarded allocator edit: raises the Windows allocator order
-  from 28 to 31 for an observed 512 MiB Codex allocation, and fails if the
-  pinned upstream declaration changes.
+- `https://github.com/franklinbaldo/litebox`: maintained fork containing the
+  generic `litebox` launcher and the Windows allocator adjustment;
+- `../scripts/litebox-tools`: TAR synchronizer only.
 
-The validated combination was Windows x86-64, LiteBox commit
-`7af6242f0729c1f0224161c7cec0afc114994cf6`, Rust
+The original runner validation used upstream LiteBox commit
+`7af6242f0729c1f0224161c7cec0afc114994cf6`. The current recipe pins fork
+commit `a26b3ceac9a194d13bf43af57dc7a72f7d196cce`, which contains that lineage
+plus the launcher and Windows allocation work. The remaining validated inputs
+are Windows x86-64, Rust
 `1.97.1-x86_64-pc-windows-gnullvm`, LLVM-MinGW 20260616, Alpine 3.22.1 at
 manifest digest `sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1`,
 and Codex 0.147.0. Re-check upstream before updating any pin. Build locally:
@@ -50,14 +52,31 @@ powershell -NoProfile -ExecutionPolicy Bypass `
 ```
 
 The script downloads source/artifacts, verifies published SHA-256 values,
-compiles with static CRT, creates a Linux rootfs TAR, writes
+installs the pinned launcher with `uv tool install`, compiles the runner with
+static CRT, creates a Linux rootfs TAR, writes
 `.litebox/build-record.json`, and probes `codex --version`. Generated EXEs are
 local build products; distribute source and let each client compile.
 
-Run any entrypoint through the generic Rust launcher:
+For repeated use, install a pinned fork commit once:
 
 ```powershell
-.\.litebox\litebox-launcher.exe `
+uv tool install `
+  git+https://github.com/franklinbaldo/litebox@a26b3ceac9a194d13bf43af57dc7a72f7d196cce
+litebox --help
+```
+
+Use `uvx` instead when the command should exist only for one invocation:
+
+```powershell
+uvx --from `
+  git+https://github.com/franklinbaldo/litebox@a26b3ceac9a194d13bf43af57dc7a72f7d196cce `
+  litebox --help
+```
+
+Run any entrypoint through the installed command:
+
+```powershell
+litebox `
   --runner .\.litebox\litebox-runner.exe `
   --initial-files .\.litebox\codex-litebox.tar `
   --env HOME=/tmp --env LANG=C.UTF-8 `
@@ -113,12 +132,15 @@ snapshot. Validate process spawning, concurrent writes, binary stdout, network
 transport, interruption recovery, and conflict policy before calling the bridge
 reliable. Never mix an unframed TAR stream with interactive terminal output.
 
-## Pin and build LiteBox
+## Build core components from source
 
-Use the same pinned commit on both builders:
+Do not clone the repository merely to install or run the `litebox` command;
+`uv tool install` and `uvx` fetch and build it automatically. Clone a pinned
+source checkout only when the task also requires building the LiteBox runner,
+rewriter, or packager, which are not installed by the current uv package:
 
 ```bash
-git clone https://github.com/microsoft/litebox.git
+git clone https://github.com/franklinbaldo/litebox.git
 cd litebox
 git checkout <FULL_COMMIT>
 ```

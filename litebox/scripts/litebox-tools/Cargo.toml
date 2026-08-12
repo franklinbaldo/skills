@@ -5,10 +5,6 @@ edition = "2024"
 publish = false
 
 [[bin]]
-name = "litebox-launcher"
-path = "src/launcher.rs"
-
-[[bin]]
 name = "litebox-tar-sync"
 path = "src/tar_sync.rs"
 

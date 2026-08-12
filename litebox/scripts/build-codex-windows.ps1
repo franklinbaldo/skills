@@ -7,7 +7,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$LiteBoxCommit = '7af6242f0729c1f0224161c7cec0afc114994cf6'
+$LiteBoxCommit = 'a26b3ceac9a194d13bf43af57dc7a72f7d196cce'
+$LiteBoxRepository = 'https://github.com/franklinbaldo/litebox.git'
 $CodexVersion = '0.147.0'
 $CodexSha256 = '0246e2e773834e07f0fb5249ed6ebad12e4591e608f8c7bb97dd6a9690544c36'
 $CodexUrl = "https://github.com/openai/codex/releases/download/rust-v$CodexVersion/codex-x86_64-unknown-linux-musl.tar.gz"
@@ -25,7 +26,6 @@ $CodexArchive = Join-Path $Downloads "codex-$CodexVersion-linux-x64.tar.gz"
 $Stage = Join-Path $OutputDirectory 'stage'
 $Tar = Join-Path $OutputDirectory 'codex-litebox.tar'
 $Runner = Join-Path $OutputDirectory 'litebox-runner.exe'
-$Launcher = Join-Path $OutputDirectory 'litebox-launcher.exe'
 
 function Invoke-Checked([string]$Command, [string[]]$Arguments) {
     & $Command @Arguments
@@ -47,26 +47,17 @@ if (-not [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Runtime.Int
     [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64') {
     throw 'Requires Windows x86-64.'
 }
-foreach ($command in 'git', 'cargo', 'rustup', 'tar') {
+foreach ($command in 'git', 'cargo', 'rustup', 'tar', 'uv') {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "Missing command: $command" }
 }
 New-Item -ItemType Directory -Force $OutputDirectory, $Downloads | Out-Null
 
 if (-not (Test-Path (Join-Path $Source '.git'))) {
-    Invoke-Checked git @('clone', '--no-checkout', 'https://github.com/microsoft/litebox.git', $Source)
+    Invoke-Checked git @('clone', '--no-checkout', $LiteBoxRepository, $Source)
 }
+Invoke-Checked git @('-C', $Source, 'remote', 'set-url', 'origin', $LiteBoxRepository)
 Invoke-Checked git @('-C', $Source, 'fetch', '--depth', '1', 'origin', $LiteBoxCommit)
 Invoke-Checked git @('-C', $Source, 'checkout', '--detach', $LiteBoxCommit)
-$allocatorFile = Join-Path $Source 'litebox_platform_windows_userland\src\lib.rs'
-$allocatorSource = [IO.File]::ReadAllText($allocatorFile)
-$allocatorOld = "SafeZoneAllocator<'static, 28, WindowsUserland>"
-$allocatorNew = "SafeZoneAllocator<'static, 31, WindowsUserland>"
-if ($allocatorSource.Contains($allocatorOld)) {
-    [IO.File]::WriteAllText($allocatorFile, $allocatorSource.Replace($allocatorOld, $allocatorNew))
-} elseif (-not $allocatorSource.Contains($allocatorNew)) {
-    throw 'Pinned LiteBox allocator declaration changed; review the source before building.'
-}
-
 if (-not (Test-Path (Join-Path $LlvmRoot 'bin\dlltool.exe'))) {
     [void](Get-Verified $LlvmUrl $LlvmArchive $LlvmSha256)
     Expand-Archive $LlvmArchive -DestinationPath $OutputDirectory -Force
@@ -77,9 +68,17 @@ $previousRustFlags = $env:RUSTFLAGS
 $env:RUSTFLAGS = '-C target-feature=+crt-static'
 Invoke-Checked cargo @("+$RustToolchain", 'build', '--locked', '--release', '--manifest-path', (Join-Path $Source 'Cargo.toml'), '-p', 'litebox_runner_linux_on_windows_userland', '-p', 'litebox_syscall_rewriter', '-p', 'litebox_packager')
 Copy-Item (Join-Path $Source 'target\release\litebox_runner_linux_on_windows_userland.exe') $Runner -Force
-Invoke-Checked cargo @("+$RustToolchain", 'build', '--release', '--manifest-path', (Join-Path $PSScriptRoot 'litebox-tools\Cargo.toml'))
-Copy-Item (Join-Path $PSScriptRoot 'litebox-tools\target\release\litebox-launcher.exe') $Launcher -Force
+$previousRustupToolchain = $env:RUSTUP_TOOLCHAIN
+$previousCargoBuildTarget = $env:CARGO_BUILD_TARGET
+$env:RUSTUP_TOOLCHAIN = $RustToolchain
+$env:CARGO_BUILD_TARGET = 'x86_64-pc-windows-gnullvm'
+Invoke-Checked uv @('tool', 'install', '--force', "git+$LiteBoxRepository@$LiteBoxCommit")
+if ($null -eq $previousRustupToolchain) { Remove-Item Env:RUSTUP_TOOLCHAIN } else { $env:RUSTUP_TOOLCHAIN = $previousRustupToolchain }
+if ($null -eq $previousCargoBuildTarget) { Remove-Item Env:CARGO_BUILD_TARGET } else { $env:CARGO_BUILD_TARGET = $previousCargoBuildTarget }
 if ($null -eq $previousRustFlags) { Remove-Item Env:RUSTFLAGS } else { $env:RUSTFLAGS = $previousRustFlags }
+$uvToolBin = (& uv tool dir --bin).Trim()
+$Launcher = Join-Path $uvToolBin 'litebox.exe'
+if (-not (Test-Path $Launcher)) { throw "uv installed litebox but executable was not found at $Launcher" }
 
 $codexHash = Get-Verified $CodexUrl $CodexArchive $CodexSha256
 if (Test-Path $Stage) {
