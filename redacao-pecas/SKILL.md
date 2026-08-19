@@ -20,10 +20,46 @@ traz o par vício → correção na mesma linha ("não dispõe de meios" →
 "extrapola a competência"): o contraste imediato ensina mais que a
 regra isolada. Regras, não sugestões.
 
+## Anamnese antes de qualquer linha
+
+**Nenhuma peça começa pelo texto, nem pelo esqueleto: começa pela
+anamnese do caso**, gravada em `anamnese.md` ao lado da peça. Sem
+esperar pedido, e mesmo quando o ato a responder parece trivial.
+
+Sete blocos, todos lidos dos autos por `documento_download`:
+
+1. **Partes** — quem a inicial aponta **e** quem o PJe autuou, em
+   colunas separadas. Não são a mesma coisa com a frequência que se
+   supõe, e a divergência não se anuncia.
+2. **Pedido** — o que se pede, com que causa de pedir e que valor.
+3. **Linha do tempo** — um ato por linha, com data, órgão e ID. Inclui
+   os atos do processo administrativo, quando ele instrui a inicial.
+4. **Onde o processo está** — a última decisão conhecida e o que ela
+   produziu. Se houver lacuna entre dois atos, ela entra na linha do
+   tempo como lacuna, não se preenche por inferência.
+5. **O ato a responder** — a quem se dirige, o que exige, prazo
+   conferido pelo `contar_prazo.py`, e as incongruências do texto.
+6. **O que já se fez** — peças protocoladas, citação, tarefas. "Nada, e
+   não há registro de citação" é resposta, e das mais importantes.
+7. **Lacunas** — o que falta saber, cada uma com o que ela decide.
+
+Fecha com a pergunta **há ato a praticar?**, cuja resposta admissível
+inclui "a decidir". Anamnese que só descreve o processo sem chegar a
+essa pergunta não terminou.
+
+**Por que este bloco existe.** Ele foi acrescentado depois de quatro
+versões descartadas da mesma manifestação
+(7001815-16.2026.8.22.0000, 2026-08-19). Cada versão caiu por um fato
+que a anamnese daria de saída: o objeto da ação era aposentadoria e não
+licença-prêmio; havia sentença de indeferimento da inicial cinco meses
+antes; e o polo passivo autuado no PJe divergia do apontado na inicial.
+Os três apareceram tarde, um por acidente diferente, porque a redação
+começou antes da leitura. Anamnese é barata; peça descartada não é.
+
 ## Fluxo de produção
 
-Peça longa nasce em dois tempos: primeiro o esqueleto — títulos
-assertivos (item 2) mais uma linha por seção dizendo o que ela
+Feita a anamnese, peça longa nasce em dois tempos: primeiro o esqueleto
+— títulos assertivos (item 2) mais uma linha por seção dizendo o que ela
 demonstra —, submetido a Franklin; o texto só depois da aprovação.
 O esqueleto barato de corrigir é o mesmo documento que, aprovado,
 vira o sumário-defesa. Em reescrita pós-triagem da revisao-minutas,
