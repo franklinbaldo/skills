@@ -84,6 +84,29 @@ veredito.
 
 ### 1. Fatais — qualquer um torna a peça inapta
 
+- **Devido, dirigido a nós, e a nosso favor** — perguntar **antes** de tudo,
+  inclusive antes de cabimento. Três perguntas, e basta uma falhar:
+  1. *A ordem ou o ônus se dirige ao ente que representamos?* Conferir na aba
+     de partes do PJe quem está de fato autuado no polo passivo, e não no
+     cabeçalho do documento. Autuação diverge da inicial mais do que parece:
+     em 7001815-16.2026.8.22.0000 o PJe autuou `E. D. R.` (Estado de Rondônia)
+     enquanto a inicial apontava o IPERON, e a divergência atravessou cinco
+     meses e três juízos sem ninguém notar. Peça que "cumpre" ordem dirigida a
+     outro ente é o próprio ente assumindo ônus que não tinha, por escrito.
+  2. *Qual é o resultado processual atual?* Cumprir diligência probatória em
+     feito que já se venceu, ou que está extinto, ajuda a parte contrária a
+     suprir a falha que produziu a vitória.
+  3. *A peça oferece mais do que lhe foi pedido?* Pedido que ninguém formulou,
+     via de prova que ninguém apontou, colaboração que ninguém requereu —
+     cada um amplia posição institucional de graça. A função era responder ao
+     ato; desenhar a instrução é outra coisa.
+
+  Esta camada existe porque uma revisão pode passar cinco rodadas verificando
+  se a peça está **correta** sem nunca perguntar se ela **deveria existir** —
+  e foi o que aconteceu no caso acima. Quando a resposta a qualquer das três
+  for negativa ou desconhecida, o veredito é 🔴 e o produto não é edit: é a
+  consulta que decide se há ato a praticar.
+
 - **Tempestividade**: prazo do ato, termo inicial correto (intimação, DJe,
   ciência pessoal da Fazenda), contagem em dobro quando aplicável, feriados
   locais. Fonte autoritativa: a **aba Expedientes do PJe**, conferida por
