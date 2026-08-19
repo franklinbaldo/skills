@@ -26,26 +26,49 @@ regra isolada. Regras, não sugestões.
 anamnese do caso**, gravada em `anamnese.md` ao lado da peça. Sem
 esperar pedido, e mesmo quando o ato a responder parece trivial.
 
-Sete blocos, todos lidos dos autos por `documento_download`:
+**Ela é adversarial e cética, não um retrato do processo.** Descrição
+neutra do andamento não serve: a anamnese existe para achar o que
+derruba a peça antes de a peça existir. Toda afirmação da parte
+contrária é hipótese; todo dado do sistema é hipótese; o que a peça vai
+dizer nasce daqui, não do bom senso.
 
-1. **Partes** — quem a inicial aponta **e** quem o PJe autuou, em
+Oito blocos, lidos dos autos por `documento_download`:
+
+1. **O expediente aberto, e o que ele denuncia** — começa por aqui, não
+   pela distribuição. O que chegou, a quem se dirige, o que exige, prazo
+   conferido pelo `contar_prazo.py`. Depois, quatro perguntas céticas
+   sobre o próprio ato: a quem se dirige de fato, que decisão o
+   antecede, a quem aproveita cumpri-lo, e se é preciso produzir alguma
+   coisa que já não esteja nos autos.
+2. **Como se chegou até aqui** — o expediente contextualizado nos fatos
+   anteriores: um ato por linha, com data, órgão, ID e **efeito**.
+   Inclui os atos do processo administrativo quando ele instrui a
+   inicial. Lacuna entre dois atos entra como lacuna e não se preenche
+   por inferência.
+3. **Partes** — quem a inicial aponta **e** quem o sistema autuou, em
    colunas separadas. Não são a mesma coisa com a frequência que se
    supõe, e a divergência não se anuncia.
-2. **Pedido** — o que se pede, com que causa de pedir e que valor.
-3. **Linha do tempo** — um ato por linha, com data, órgão e ID. Inclui
-   os atos do processo administrativo, quando ele instrui a inicial.
-4. **Onde o processo está** — a última decisão conhecida e o que ela
-   produziu. Se houver lacuna entre dois atos, ela entra na linha do
-   tempo como lacuna, não se preenche por inferência.
-5. **O ato a responder** — a quem se dirige, o que exige, prazo
-   conferido pelo `contar_prazo.py`, e as incongruências do texto.
+4. **Confronto** — o bloco central. **Todos** os pedidos da parte
+   contrária, um a um, com os fundamentos de cada um; e, sob cada um, o
+   que o ente já alegou ou deve alegar, **em ordem de força**. Inclui
+   deliberadamente: o pedido que não vale impugnar (e por quê
+   silenciar), e o **ponto desfavorável** — a tese habitual da carteira
+   que este caso não comporta. Anamnese que só lista o que nos favorece
+   é petição disfarçada.
+5. **Dispositivos e precedentes**, em duas listas separadas:
+   - **ancorados**, com a fonte em que foram lidos (peça, decisão,
+     item);
+   - **a levantar na fonte**, cada um com o ponto do confronto que ele
+     decide. Nunca de memória — número, data e tese vêm da fonte, e
+     entram na peça só depois de conferidos.
 6. **O que já se fez** — peças protocoladas, citação, tarefas. "Nada, e
    não há registro de citação" é resposta, e das mais importantes.
 7. **Lacunas** — o que falta saber, cada uma com o que ela decide.
+8. **Há ato a praticar?**
 
-Fecha com a pergunta **há ato a praticar?**, cuja resposta admissível
-inclui "a decidir". Anamnese que só descreve o processo sem chegar a
-essa pergunta não terminou.
+O bloco 8 admite "a decidir", e sendo essa a resposta a redação para: a
+providência é a consulta, não a peça. Anamnese que descreve o processo
+sem chegar a essa pergunta não terminou.
 
 **Por que este bloco existe.** Ele foi acrescentado depois de quatro
 versões descartadas da mesma manifestação
