@@ -55,7 +55,44 @@ registrado, não o que o ato fundamentou.
 
 ## CLI
 
-Toda interação deve passar por `scripts/datajud.py`.
+## Servidor MCP — e a CLI que vem junto
+
+`scripts/datajud_mcp.py` expõe o DataJud como **tool MCP** e, pelo mesmo código,
+como CLI. Prefira-o para a pergunta mais comum — *onde este processo está?* —
+porque ele devolve resumo e **marcos**, não a lista inteira de movimentos:
+
+```bash
+uv run datajud_mcp.py processo 7000667-67.2026.8.22.0000
+uv run datajud_mcp.py processo <cnj> --incluir-movimentos   # o payload cru
+```
+
+Medido em dois processos reais: 59 movimentos viraram 24 marcos; 138 (dois
+graus) viraram 69. O que sai é ruído estável — decurso de prazo, publicação,
+disponibilização no DJE, expedição de documento, juntada. **Filtra-se o ruído,
+não se enumeram os marcos**: a lista de códigos que importam é longa e envelhece
+a cada revisão das Tabelas Processuais Unificadas; a de ruído é curta e estável.
+
+O `uv run` resolve as dependências pelo cabeçalho PEP 723 do próprio arquivo —
+não é preciso montar comando com `--with`.
+
+## Movimento e documento envelhecem em ritmos diferentes
+
+O DataJud reflete o **registro de movimentos do próprio tribunal**. Qualquer
+cópia local dos documentos de um processo — exportação, espelho de sistema de
+gestão, PDF baixado — reflete o acervo **na data em que foi feita**, e pode
+ficar meses atrás.
+
+Daí a regra: quando o documento mais recente de que você dispõe parece antigo
+demais para a fase do processo, **não conclua que nada aconteceu**. Consulte os
+movimentos antes. A cópia dá o *teor* do que foi capturado; o DataJud dá o
+*estado*, inclusive o que veio depois.
+
+É a diferença entre "o processo parou" e "a minha cópia parou", e confundi-las
+custa caro: sentença, acórdão e trânsito em julgado são exatamente o que costuma
+estar do lado de fora do recorte.
+
+Toda interação com a API deve passar por `scripts/datajud.py` ou pelo servidor
+acima — nunca chamada direta ao endpoint.
 
 Processo:
 
