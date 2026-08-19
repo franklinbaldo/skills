@@ -75,18 +75,21 @@ a cada revisão das Tabelas Processuais Unificadas; a de ruído é curta e está
 O `uv run` resolve as dependências pelo cabeçalho PEP 723 do próprio arquivo —
 não é preciso montar comando com `--with`.
 
-## Quando o espelho do Kanoê para, o DataJud responde
+## Movimento e documento envelhecem em ritmos diferentes
 
-Padrão observado três vezes no mesmo dia (2026-08-19), no repositório
-`judicial`: o espelho de documentos do Kanoê fica **meses atrás** do processo
-real. Num caso parava em 28/04 e escondia uma sentença; noutro parava em
-07/2024 e escondia o acórdão; noutro parava em 12/02 e escondia sentença,
-trânsito e baixa.
+O DataJud reflete o **registro de movimentos do próprio tribunal**. Qualquer
+cópia local dos documentos de um processo — exportação, espelho de sistema de
+gestão, PDF baixado — reflete o acervo **na data em que foi feita**, e pode
+ficar meses atrás.
 
-O Kanoê dá o **teor** do que espelhou; o DataJud dá o **estado** — inclusive o
-que aconteceu depois. Ao investigar processo cujo último documento espelhado
-parece antigo demais para a fase, consultar o DataJud antes de concluir que nada
-aconteceu.
+Daí a regra: quando o documento mais recente de que você dispõe parece antigo
+demais para a fase do processo, **não conclua que nada aconteceu**. Consulte os
+movimentos antes. A cópia dá o *teor* do que foi capturado; o DataJud dá o
+*estado*, inclusive o que veio depois.
+
+É a diferença entre "o processo parou" e "a minha cópia parou", e confundi-las
+custa caro: sentença, acórdão e trânsito em julgado são exatamente o que costuma
+estar do lado de fora do recorte.
 
 Toda interação com a API deve passar por `scripts/datajud.py` ou pelo servidor
 acima — nunca chamada direta ao endpoint.
