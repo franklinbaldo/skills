@@ -39,7 +39,7 @@ ela vai.
 **O primeiro produto é sempre o arquivo do relatório OKF.** Em todo uso
 desta skill, o relatório de triagem sai como arquivo antes de esqueleto,
 reescrita, edits em prosa ou qualquer outro produto — e sem esperar ser
-pedido. Achado superveniente (resposta do NotebookLM, decisão de
+pedido. Achado superveniente (resposta do Gemini, decisão de
 Franklin, revisão dele sobre a própria triagem) atualiza o arquivo ou
 gera v2: **a conversa comenta, o relatório registra.** Em mais de uma
 minuta, um relatório por minuta e um veredito por minuta — nunca um
@@ -55,7 +55,7 @@ a qual peça.
 3. **Verificar ancoragem fática.** Toda afirmação da minuta sobre os autos
    (datas, IDs, o que a decisão disse, o que a parte alegou) é hipótese até
    prova em contrário. O que Claude não puder verificar pelo contexto vira
-   pergunta para o NotebookLM (ver seção própria).
+   pergunta para o Gemini (ver seção própria).
 4. **Emitir o veredito e o relatório OKF** — este passo não é adiável nem
    condicionado a pedido: é o que a skill entrega.
 5. Se 🟡: entregar os edits cirúrgicos junto com o relatório, prontos para
@@ -89,7 +89,7 @@ veredito.
   locais. Fonte autoritativa: a **aba Expedientes do PJe**, conferida por
   Franklin — o PDF dos autos geralmente não traz o expediente correto
   (especialmente em processos do IPERON), então nem o contexto nem o
-  NotebookLM resolvem esse ponto. Tempestividade entra **sempre** no
+  Gemini resolvem esse ponto. Tempestividade entra **sempre** no
   checklist de protocolo; nunca presumir.
 - **Cabimento**: a peça é a via correta para atacar aquele ato? Recurso
   cabível, hipótese legal dos embargos efetivamente presente (omissão,
@@ -185,9 +185,9 @@ Afirmações sobre os autos que podem estar simplesmente erradas: datas,
 números de ID/página, o teor do que a decisão embargada/recorrida
 efetivamente disse, o que a parte contrária efetivamente alegou, valores,
 rubricas. Assessoria trabalhando em volume comete exatamente esse tipo de
-erro — e é o tipo que o NotebookLM verifica melhor que qualquer um.
+erro — e é o tipo que o Gemini verifica melhor que qualquer um.
 
-Ferramentas de verificação além do NotebookLM — usar a fonte primária,
+Ferramentas de verificação além do Gemini — usar a fonte primária,
 nunca confiar no agregador de onde a assessoria colou:
 
 - **Jurisprudência do TJRO** citada na minuta (existência, número,
@@ -196,7 +196,7 @@ nunca confiar no agregador de onde a assessoria colou:
 - **Metadados do processo** (classe, órgão julgador, fase, linha de
   movimentação) quando o contexto não os trouxer: skill `datajud` —
   útil inclusive no passo 1 do fluxo, para calibrar fase e último ato
-  antes de formular o bloco do NotebookLM.
+  antes de formular o bloco do Gemini.
 
 ### 6. Sanções
 
@@ -343,7 +343,7 @@ porta para reescrita:
   afirmações verificáveis como quaisquer outras — e a experiência mostra
   que é onde a assessoria mais cola material corrompido de agregadores.
 
-## Verificação adversarial via NotebookLM
+## Verificação adversarial via Gemini, automática
 
 **A verificação nunca é dispensada.** Não há caso em que o bloco de
 perguntas deixe de ser montado — nem em processo administrativo (SEI),
@@ -353,10 +353,19 @@ o caminho é o veredito condicionado (seção final), nunca a dispensa.
 
 Esta skill herda o método da skill `notebooklm-processos` (blocos
 iterativos, perguntas autossuficientes sem dêixis, um fato por pergunta,
-exigência de ID/página do rodapé, Franklin como intermediário) — leia
-aquela skill se precisar do detalhe do método. O que muda aqui é a
-**orientação**: lá, as perguntas constroem uma peça; aqui, elas tentam
+exigência de ID/página do rodapé) — leia aquela skill se precisar do
+detalhe do método. Duas coisas mudam.
+
+A **orientação**: lá, as perguntas constroem uma peça; aqui, elas tentam
 **desmentir uma peça pronta**.
+
+E o **intermediário deixa de existir**. As perguntas vão ao Gemini por
+`scripts/verificar_peca.py`, com as fontes dos autos baixadas por
+`documento_download`, e as respostas voltam em arquivo próprio. Franklin
+não cola nada. A regra de um fato por pergunta continua valendo, e por
+razão medida: na primeira execução real (2026-08-19) uma pergunta
+composta voltou "confirmada em parte / desmentida em parte", que não
+serve para decidir nada.
 
 Regra de conversão: cada afirmação fática relevante da minuta vira uma
 pergunta formulada **na direção que a derruba**, não na que a confirma.
@@ -376,13 +385,13 @@ Composição do primeiro bloco (adaptar ao caso, manter enxuto):
 
 1. Inventário: rol das peças do material subido (IDs/páginas) e último
    ato judicial com data — calibra fase, prazo e o que existe.
-2. **Prazo não se verifica pelo NotebookLM.** O PDF exportado dos autos
+2. **Prazo não se verifica pelo Gemini.** O PDF exportado dos autos
    geralmente **não** traz o expediente correto — a data de intimação e
    o termo inicial constam na **aba Expedientes do PJe**, que fica fora
    do arquivo (vale em especial para IPERON). Tempestividade é sempre
    item do **checklist de protocolo**, conferido por Franklin
    diretamente no PJe, e nunca presumida a partir do PDF nem das
-   respostas do NotebookLM. Pergunta sobre citação/intimação no bloco
+   respostas do Gemini. Pergunta sobre citação/intimação no bloco
    serve no máximo como corroboração — a ausência no PDF não prova
    nada.
 3. **Existência de cada documento que a minuta cita, referencia ou diz
@@ -390,7 +399,7 @@ Composição do primeiro bloco (adaptar ao caso, manter enxuto):
    está nos autos? Com que teor? A assessoria cita documentos do SEI que
    nunca foram juntados — se o documento sustenta a peça e não está nos
    autos, ele entra no **checklist de protocolo** (anexar junto) e sua
-   transcrição é conferida no SEI, não pelo NotebookLM.
+   transcrição é conferida no SEI, não pelo Gemini.
 4. **Rastreamento de origem — sempre, em qualquer peça.** Serve para
    distinguir o que a parte pediu do que o juízo construiu:
    - "Transcreva integralmente o capítulo de pedidos da inicial (e da
@@ -467,7 +476,7 @@ veredito: <apta | apta-com-ajustes | inapta>
 riscos_fatais: <n>
 riscos_relevantes: <n>
 edits_propostos: <n>
-verificacao_notebooklm: <realizada | pendente>
+verificacao_gemini: <realizada | pendente>
 ---
 ```
 
@@ -526,7 +535,7 @@ edits de texto: documentos citados como anexo que não estão nos autos,
 transcrições a conferir no SEI, decisão estratégica a registrar antes
 da assinatura>
 
-## Verificação NotebookLM
+## Verificação Gemini
 
 <bloco de perguntas enviado e respostas integradas, ou "pendente:
 veredito condicionado às respostas 1–3">
@@ -582,11 +591,11 @@ feedback para a assessoria — sem precisar reler prosa.
 
 ## Veredito condicionado
 
-Quando a triagem depende de respostas do NotebookLM ainda não retornadas e
+Quando a triagem depende de respostas do Gemini ainda não retornadas e
 Franklin precisa de posição imediata, emitir veredito **condicionado**:
 "🟡 condicionada — apta se as respostas 1–3 confirmarem prazo e teor do
 acórdão; caso contrário 🔴". O relatório OKF sai com
-`verificacao_notebooklm: pendente` e é atualizado quando as respostas
+`verificacao_gemini: pendente` e é atualizado quando as respostas
 chegarem. Nunca emitir 🟢 incondicional sobre fato não verificado de
 consequência fatal.
 
@@ -601,8 +610,9 @@ encerrada, **oferecer o post-mortem sem esperar que ele peça**:
    - **regra nova de redação** → propor o texto para a `redacao-pecas`;
    - **falha de triagem** (o vício estava na minuta e passou) → propor o
      ajuste na camada correspondente desta skill;
-   - **pergunta de verificação que faltou** → propor a inclusão no bloco
-     do NotebookLM;
+   - **pergunta de verificação que faltou** → propor a inclusão no
+     sidecar; se o que faltou foi **fonte**, e não pergunta, o destino é
+     a lista de fontes enviadas ao script, não o texto do sidecar;
    - **decisão específica do caso** → só memória do caso, não vira regra.
 2. Entregar as propostas de edição a Franklin, arquivo por arquivo.
 3. Registrar em memória as regras enunciadas, para valerem já na sessão

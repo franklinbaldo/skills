@@ -35,9 +35,39 @@ nunca por reescrita do conteúdo.
 
 A peça nunca sai sozinha. Junto dela, sempre e sem esperar pedido, sai
 um arquivo `.md` em OKF — `<CNJ>-<peca>-verificacao.md` — contendo o
-prompt que Franklin cola no NotebookLM, com os autos como fonte, para
-conferir a peça contra o processo. Peça e sidecar saem juntos ou não
-saem.
+prompt que confere a peça contra os autos. Peça e sidecar saem juntos ou
+não saem.
+
+**O sidecar se responde sozinho.** `scripts/verificar_peca.py` manda o
+corpo do sidecar ao Gemini junto das fontes dos autos, baixadas por
+`documento_download`, e grava a resposta. Não há passo manual de colar
+prompt em lugar nenhum: verificação que depende de alguém lembrar é
+verificação que não acontece sob prazo, que é quando ela importa.
+
+```bash
+uv run --with google-genai --with keyring python scripts/verificar_peca.py \
+    <CNJ>-<peca>-verificacao.md --autos casos/<cnj>/docs
+```
+
+**A resposta vai para arquivo próprio** — `<sidecar>-respostas[-<bloco>].md`,
+que referencia o sidecar no frontmatter; o sidecar recebe só o ponteiro em
+`respostas:` e o estado em `veredito_gemini:`. Prompt e resultado têm ciclos
+de vida distintos: o prompt se reenvia a cada versão da peça, a resposta é de
+um modelo, numa data, sobre um conjunto de fontes. Fundidos, o prompt cresceria
+a cada rodada e a comparação entre rodadas — que é o registro de que a
+correção resolveu a divergência — se perderia.
+
+**Junte as fontes antes de perguntar, e confira quais são.** Na primeira
+execução real (2026-08-19) o sidecar foi enviado só com os anexos da
+inicial, e três perguntas voltaram "não encontrada" porque o despacho
+atacado não estava entre as fontes. Não era defeito da peça nem do
+prompt: era fonte faltando. A seção "fora de escopo" da resposta existe
+para expor isso — leia-a antes da conclusão.
+
+Fonte não é só PDF. Despacho e sentença do PJe vêm em HTML por
+`documento_download`; teor de expediente do Kanoê não vem em arquivo
+nenhum e precisa ser salvo como texto. O script aceita `.pdf`, `.html`,
+`.md` e `.txt`.
 
 **O que o sidecar pede, e o que não pede.** A conclusão pedida é de
 **aptidão fática**: se toda afirmação da peça sobre os autos se
@@ -51,9 +81,10 @@ de Franklin; o sidecar só lhe entrega o fato conferido.
 **Regra de derivação.** Toda afirmação da peça sobre os autos — data,
 ID, teor da decisão, o que a parte alegou, existência de documento
 citado, valor, rubrica — vira uma pergunta formulada **na direção que a
-derruba**, não na que a confirma (o método é o da skill
-`notebooklm-processos`; a orientação adversarial é a da
-`revisao-minutas`).
+derruba**, não na que a confirma (o método — perguntas
+autossuficientes, sem dêixis, um fato por pergunta, exigindo ID e página
+do rodapé — vem da skill `notebooklm-processos`, e vale igual com o
+Gemini; a orientação adversarial é a da `revisao-minutas`).
 
 Frontmatter:
 
@@ -67,12 +98,12 @@ processo: <número CNJ>
 peca_verificada: <arquivo da peça>
 orgao: <PGE-IPERON | PGE-PPI | ...>
 afirmacoes_verificaveis: <n>
-veredito_notebooklm: <pendente | apta-faticamente | com-divergencias>
+veredito_gemini: <pendente | apta-faticamente | com-divergencias>
 ```
 
 Corpo do prompt, cinco blocos:
 
-1. **Papel e fontes** — o que o NotebookLM deve fazer (conferir as
+1. **Papel e fontes** — o que o Gemini deve fazer (conferir as
    afirmações abaixo exclusivamente contra as fontes carregadas), e a
    regra de que ausência nas fontes é "não encontrada", nunca
    "desmentida".
@@ -90,13 +121,15 @@ Corpo do prompt, cinco blocos:
    desmentida / não encontrada*, mais trecho e ID/página; ao final, a
    conclusão de aptidão fática; e, por último, a lista do que ficou
    fora de escopo ("estes pontos não são verificáveis nas fontes
-   carregadas: ..."). O formato é o que faz a resposta voltar colável
-   para dentro do sidecar, em vez de virar prosa solta.
+   carregadas: ..."). O formato é o que faz a resposta voltar
+   estruturada, comparável entre rodadas, em vez de virar prosa solta.
 
-Chegadas as respostas, elas entram no próprio sidecar e
-`veredito_notebooklm` deixa de ser `pendente`. Divergência apontada não
-dispara reescrita automática: dispara correção da afirmação na peça, e
-a peça corrigida gera sidecar v2.
+O script grava as respostas em `<sidecar>-respostas[-<bloco>].md` e vira
+`veredito_gemini` para `respondido`. Divergência apontada não dispara
+reescrita automática: dispara correção da afirmação na peça, e a peça
+corrigida gera sidecar v2 — que se responde de novo, gerando outro
+arquivo de respostas. É a comparação entre os dois que registra que a
+divergência foi resolvida.
 
 ## 1. Escreva cada seção para o leitor que começa por ela
 
