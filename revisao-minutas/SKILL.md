@@ -86,6 +86,7 @@ veredito.
 
 - **Devido, dirigido a nós, e a nosso favor** — perguntar **antes** de tudo,
   inclusive antes de cabimento. Três perguntas, e basta uma falhar:
+
   1. *A ordem ou o ônus se dirige ao ente que representamos?* Conferir na aba
      de partes do PJe quem está de fato autuado no polo passivo, e não no
      cabeçalho do documento. Autuação diverge da inicial mais do que parece:
@@ -114,17 +115,22 @@ veredito.
   (especialmente em processos do IPERON), então nem o contexto nem o
   Gemini resolvem esse ponto. Tempestividade entra **sempre** no
   checklist de protocolo; nunca presumir.
+
 - **Cabimento**: a peça é a via correta para atacar aquele ato? Recurso
   cabível, hipótese legal dos embargos efetivamente presente (omissão,
   contradição, obscuridade, erro material — e não mero inconformismo),
   interesse recursal.
+
 - **Legitimidade e representação**: a peça fala pelo ente certo (Estado vs.
   IPERON), no polo certo.
+
 - **Endereçamento e rito**: juízo/órgão correto, competência, requisitos
   formais com sanção de inadmissibilidade (dialeticidade nas razões
   recursais, impugnação específica).
+
 - **Preclusão consumada**: a tese central da peça já foi decidida e não
   atacada no momento próprio.
+
 - **Pedido**: compatível com o rito e com a fundamentação; não pede o
   juridicamente impossível nem menos do que a fundamentação sustenta.
 
@@ -408,6 +414,7 @@ Composição do primeiro bloco (adaptar ao caso, manter enxuto):
 
 1. Inventário: rol das peças do material subido (IDs/páginas) e último
    ato judicial com data — calibra fase, prazo e o que existe.
+
 2. **Prazo não se verifica pelo Gemini.** O PDF exportado dos autos
    geralmente **não** traz o expediente correto — a data de intimação e
    o termo inicial constam na **aba Expedientes do PJe**, que fica fora
@@ -417,14 +424,17 @@ Composição do primeiro bloco (adaptar ao caso, manter enxuto):
    respostas do Gemini. Pergunta sobre citação/intimação no bloco
    serve no máximo como corroboração — a ausência no PDF não prova
    nada.
+
 3. **Existência de cada documento que a minuta cita, referencia ou diz
    anexar** ("doc. anexo", ofícios, notificações, certidões, pareceres):
    está nos autos? Com que teor? A assessoria cita documentos do SEI que
    nunca foram juntados — se o documento sustenta a peça e não está nos
    autos, ele entra no **checklist de protocolo** (anexar junto) e sua
    transcrição é conferida no SEI, não pelo Gemini.
+
 4. **Rastreamento de origem — sempre, em qualquer peça.** Serve para
    distinguir o que a parte pediu do que o juízo construiu:
+
    - "Transcreva integralmente o capítulo de pedidos da inicial (e da
      emenda, se houver), alínea por alínea, indicando contra qual réu
      cada pedido se dirige e qual período ou objeto abrange."
@@ -443,8 +453,10 @@ Composição do primeiro bloco (adaptar ao caso, manter enxuto):
    rito: onde a tutela pode ser concedida de ofício (art. 3º da Lei
    12.153/2009, p. ex.), a ausência de **pedido de tutela** não é vício;
    o vício é a ausência do **pedido principal** correspondente.
+
 5. As 2–4 afirmações fáticas mais carregadas de consequência na minuta,
    formuladas adversarialmente.
+
 6. Uma pergunta de varredura: "há nos autos documento, manifestação ou
    ato posterior a [data] que altere o quadro descrito acima?" — pega o
    documento que a assessoria não viu. Se a defesa depende de sequência

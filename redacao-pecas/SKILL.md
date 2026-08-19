@@ -1,6 +1,6 @@
 ---
 name: redacao-pecas
-description: >
+description: >-
   Heurísticas de redação de peças judiciais e pareceres para Franklin
   Baldo (PGE-RO). Use SEMPRE que estiver escrevendo, reescrevendo ou
   editando peça processual ou parecer — contestação, recurso, embargos,
@@ -197,6 +197,7 @@ parte contrária ataca um capítulo. Escreva cada seção como texto de
 entrada.
 
 **Pratique:**
+
 - Abra o subitem situando o leitor em uma frase — o que está em
   discussão ali e de onde vem. Recapitulação de uma linha custa nada
   e torna a seção portátil ("Uma vez lançado," → "Averbado o período,
@@ -224,6 +225,7 @@ tópico. Escrever o título por último, depois que a seção existe,
 ajuda: o título é a tese da seção comprimida.
 
 **Pratique:**
+
 - Formule o título como afirmação completa: sujeito, verbo, conclusão
   ("Do que os documentos provam e do que não provam" → "Os documentos
   juntados pelo réu registram X, não Y").
@@ -247,6 +249,7 @@ A força da peça pública está em nunca afirmar além do que os autos
 sustentam — o que também significa nunca conceder além do necessário.
 
 **Pratique:**
+
 - Descreva o que o documento registra, não o fato que ele
   supostamente prova ("as fichas comprovam a retenção" → "as fichas
   registram descontos sob a rubrica X"). O registro é fato seguro; o
@@ -269,6 +272,7 @@ sustentam — o que também significa nunca conceder além do necessário.
 ## 4. Fundamente na norma e enquadre com precisão
 
 **Pratique:**
+
 - Extraia o conceito do texto normativo, nesta ordem: primeiro a
   norma (ou a doutrina, nomeada), depois o conceito que dela decorre
   ("a averbação, em sentido técnico, é..." → "o art. X dispõe...;
@@ -307,6 +311,7 @@ sustentam — o que também significa nunca conceder além do necessário.
 ## 5. Traga o precedente pelo que ele vincula, e deixe a matéria prequestionada
 
 **Pratique:**
+
 - Vinculante entra pelo tema e pela tese: identifique por número de
   tema ou repetitivo e transcreva a tese firmada, uma vez, no
   capítulo dono ("colacione-se o seguinte julgado" + ementa de página
@@ -332,6 +337,7 @@ sustentam — o que também significa nunca conceder além do necessário.
 ## 6. Dê a cada matéria o seu capítulo, e ao juízo os seus degraus
 
 **Pratique:**
+
 - Estruture a contestação em: síntese da defesa → fatos →
   preliminares → mérito → tutela de urgência (se houver) → prova →
   pedidos. O mérito responde à petição inicial; o capítulo da tutela
@@ -367,6 +373,7 @@ A frase assertiva carrega a autoridade da peça. Diga a tese;
 demonstre-a; passe à próxima.
 
 **Pratique:**
+
 - Cada parágrafo faz um trabalho que nenhum outro faz. O que repete
   o anterior com outras palavras sai inteiro.
 - Corte deletando, não resumindo — resumir preserva a redundância em
@@ -386,6 +393,7 @@ repetir ressalva já feita → o corte.
 ## 8. Formate para o leitor do PDF
 
 **Pratique:**
+
 - Citação entre aspas sempre em itálico — bloco recuado
   (`> *"..."*`) para transcrição longa (dispositivo, ementa, norma,
   requerimento); inline (`*"..."*`) para a citação curta que é objeto
