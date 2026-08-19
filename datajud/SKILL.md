@@ -55,7 +55,41 @@ registrado, não o que o ato fundamentou.
 
 ## CLI
 
-Toda interação deve passar por `scripts/datajud.py`.
+## Servidor MCP — e a CLI que vem junto
+
+`scripts/datajud_mcp.py` expõe o DataJud como **tool MCP** e, pelo mesmo código,
+como CLI. Prefira-o para a pergunta mais comum — *onde este processo está?* —
+porque ele devolve resumo e **marcos**, não a lista inteira de movimentos:
+
+```bash
+uv run datajud_mcp.py processo 7000667-67.2026.8.22.0000
+uv run datajud_mcp.py processo <cnj> --incluir-movimentos   # o payload cru
+```
+
+Medido em dois processos reais: 59 movimentos viraram 24 marcos; 138 (dois
+graus) viraram 69. O que sai é ruído estável — decurso de prazo, publicação,
+disponibilização no DJE, expedição de documento, juntada. **Filtra-se o ruído,
+não se enumeram os marcos**: a lista de códigos que importam é longa e envelhece
+a cada revisão das Tabelas Processuais Unificadas; a de ruído é curta e estável.
+
+O `uv run` resolve as dependências pelo cabeçalho PEP 723 do próprio arquivo —
+não é preciso montar comando com `--with`.
+
+## Quando o espelho do Kanoê para, o DataJud responde
+
+Padrão observado três vezes no mesmo dia (2026-08-19), no repositório
+`judicial`: o espelho de documentos do Kanoê fica **meses atrás** do processo
+real. Num caso parava em 28/04 e escondia uma sentença; noutro parava em
+07/2024 e escondia o acórdão; noutro parava em 12/02 e escondia sentença,
+trânsito e baixa.
+
+O Kanoê dá o **teor** do que espelhou; o DataJud dá o **estado** — inclusive o
+que aconteceu depois. Ao investigar processo cujo último documento espelhado
+parece antigo demais para a fase, consultar o DataJud antes de concluir que nada
+aconteceu.
+
+Toda interação com a API deve passar por `scripts/datajud.py` ou pelo servidor
+acima — nunca chamada direta ao endpoint.
 
 Processo:
 
