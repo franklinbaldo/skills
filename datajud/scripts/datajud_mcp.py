@@ -79,10 +79,18 @@ RUIDO = {
 def _marcos(movimentos: list[dict]) -> list[dict]:
     """Movimentos que mudam o estado útil, em ordem cronológica.
 
-    Ordena pelo ``dataHora`` cru da API, em ISO, e não pela data formatada:
-    ``dd/mm/aaaa`` ordenado como texto põe 30/04 depois de 22/06. O bug
-    apareceu no primeiro teste, no resumo de um processo cujo último marco era
-    a baixa definitiva e que anunciava uma petição de dois meses antes.
+    Cada marco carrega ``_ord``, o ``dataHora`` cru da API em ISO. **Esse campo
+    é o único critério de ordenação válido, e sobrevive até o cálculo do último
+    marco global** — só então é removido, por :func:`_publicar`.
+
+    Duas armadilhas, ambas encontradas em revisão:
+
+    1. Ordenar pela data formatada ``dd/mm/aaaa`` compara como texto e põe 30/04
+       depois de 22/06.
+    2. Mesmo corrigindo a ordenação dentro de cada grau, comparar a data
+       formatada para achar o último marco **entre** graus perde segundos e
+       fuso: ``fmt_data_iso`` corta em ``HH:MM``, de modo que 09:45:01 e
+       09:45:59 empatam e o desempate cai na ordem de iteração.
     """
     saida = []
     for m in movimentos or []:
@@ -98,9 +106,12 @@ def _marcos(movimentos: list[dict]) -> list[dict]:
             }
         )
     saida.sort(key=lambda x: x["_ord"])
-    for x in saida:
-        del x["_ord"]
     return saida
+
+
+def _publicar(marcos: list[dict]) -> list[dict]:
+    """Remove a chave interna de ordenação da saída pública."""
+    return [{k: v for k, v in m.items() if k != "_ord"} for m in marcos]
 
 
 @mcp.tool
@@ -175,13 +186,14 @@ def datajud_processo(
         documentos.append(doc)
 
     # O último marco do processo é o mais recente entre TODOS os graus — não o
-    # último documento da lista, que vem ordenada por grau e não por data.
-    def _chave(marco: dict) -> str:
-        d = (marco.get("data") or "")  # dd/mm/aaaa hh:mm
-        return f"{d[6:10]}{d[3:5]}{d[0:2]}{d[11:]}" if len(d) >= 10 else ""
-
+    # último documento da lista, que vem ordenada por grau e não por data. A
+    # comparação usa o timestamp cru; a data formatada perde segundos e fuso.
     todos = [m for d in documentos for m in d["marcos"]]
-    ultimo = max(todos, key=_chave) if todos else None
+    ultimo = max(todos, key=lambda m: m["_ord"]) if todos else None
+
+    # Só agora a chave interna sai: ela precisou sobreviver ao max() acima.
+    for doc in documentos:
+        doc["marcos"] = _publicar(doc["marcos"])
     resumo = (
         f"{dj.cnj(numero)} — {tribunal.upper()} — {len(documentos)} registro(s) de grau. "
         f"Último marco: {ultimo['data']} {ultimo['nome']}." if ultimo
