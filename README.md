@@ -66,6 +66,7 @@ The system-level protocol lives in [`loop-engineering`](loop-engineering/SKILL.m
 | [paddleocr](paddleocr/SKILL.md) | Run PaddleOCR locally or on a Colab GPU and export OCR results to Markdown with performance metrics. |
 | [pdf-compression](pdf-compression/SKILL.md) | Compress image-heavy or scanned PDFs via downscaling and CCITT G4/JPEG re-encoding. |
 | [pdf-to-markdown](pdf-to-markdown/SKILL.md) | Convert court/process PDFs (PJe, SEI) into structured Markdown per document. |
+| [research-frontier](research-frontier/SKILL.md) | Keep active research programmes synchronized with external literature by mapping current work to live claims, experiments, controls and novelty boundaries. |
 | [revisao-minutas](revisao-minutas/SKILL.md) | Review existing legal and institutional drafts for concrete risk, missing context, unintended commitments, and readiness to sign, issue, or file. |
 | [ruff-strict-compliance](ruff-strict-compliance/SKILL.md) | Enforce zero-warning Ruff linting and formatting in Python projects. |
 | [software-review](software-review/SKILL.md) | Review PRs and RFCs for reproducible defects, broken invariants, false-green gates, and architecture issues calibrated to the real application. |
