@@ -1,0 +1,13 @@
+[package]
+name = "litebox-tools"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "litebox-tar-sync"
+path = "src/tar_sync.rs"
+
+[dependencies]
+tar = "0.4.46"
+walkdir = "2.5.0"

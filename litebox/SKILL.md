@@ -61,14 +61,41 @@ Hyper-V, or WSL.
    - On Windows x86-64, build or obtain
      `litebox_runner_linux_on_windows_userland.exe`.
 
-   When the Windows host has no Linux environment, use an authorized,
-   disposable Linux builder such as an existing CI job or temporary cloud
-   runtime, then download only the TAR. A Windows CI job can build the runner
-   when the host also lacks a usable Rust/MSVC toolchain. Do not upload private
-   task inputs merely to bootstrap the generic binaries.
+   On Windows x86-64, current LiteBox can also package a pinned public OCI
+   rootfs locally. Prefer the validated source-only route when Rust is
+   available: compile with the `gnullvm` toolchain plus a portable LLVM-MinGW,
+   build the TAR locally, and record SHA-256 for every result. Use a disposable
+   builder only when local source compilation is unavailable. Do not upload
+   private task inputs merely to bootstrap generic binaries.
 
    Read [the Windows userland workflow](references/windows-userland-workflow.md)
    before building or running either side.
+
+   Install the generic launcher from the maintained fork. Prefer a persistent
+   tool for repeated work:
+
+   ```powershell
+   uv tool install git+https://github.com/franklinbaldo/litebox@<FULL_COMMIT>
+   litebox --help
+   ```
+
+   Use `uvx` for a disposable invocation:
+
+   ```powershell
+   uvx --from git+https://github.com/franklinbaldo/litebox@<FULL_COMMIT> `
+     litebox --help
+   ```
+
+   Always pin a full commit in automation. Use `uv tool update-shell` once if
+   an installed `litebox` is not on `PATH`. Reuse `scripts/litebox-tools` only
+   for one-way Windows-directory-to-TAR synchronization. For the validated
+   Codex example, use `scripts/build-codex-windows.ps1`; treat its pinned
+   versions as an audited example to update deliberately, not as floating
+   defaults.
+
+   Treat `litebox` as the primary interface. Prefer `litebox run IMAGE PROGRAM
+   [ARG...]`, `litebox image build|inspect|encrypt`, `litebox rewrite`, and
+   `litebox doctor`; do not call the installed runner directly in normal use.
 
 5. **Run the smallest probe.** Start with `--version`, `--help`, or a
    deterministic one-line transformation. Then exercise, separately:
@@ -115,6 +142,7 @@ For task-shaped examples, read
 ## Sources
 
 - https://github.com/microsoft/litebox
+- https://github.com/franklinbaldo/litebox
 - https://github.com/microsoft/litebox/tree/main/litebox_packager
 - https://github.com/microsoft/litebox/tree/main/litebox_runner_linux_on_windows_userland
 
