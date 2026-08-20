@@ -20,31 +20,61 @@ A pergunta central não é “como eu escreveria isto melhor?”. É:
 > circular — e há algo no texto que cria risco, ambiguidade ou compromisso maior
 > do que o necessário?**
 
+Antes dela existe uma pergunta ainda mais básica:
+
+> **Há ato a praticar?**
+
 Trate a minuta como um ato institucional em potencial, não como exercício de
-estilo.
+estilo. Uma peça internamente correta ainda pode ser imprópria para envio se o
+ônus não se dirige ao ente representado, se o estado atual tornou a providência
+inútil ou se a minuta oferece uma iniciativa que ninguém pediu nem precisa.
 
 ## Invariantes
 
-1. **Função antes de redação.** Descubra para que o documento existe, quem deve
+1. **Necessidade antes de correção.** Antes de revisar a qualidade do ato,
+   confirme que existe ato a praticar pelo ente representado agora.
+2. **Função antes de redação.** Descubra para que o documento existe, quem deve
    agir depois dele e qual efeito concreto se espera.
-2. **Compromisso antes de elegância.** Identifique o que a assinatura afirma,
+3. **Compromisso antes de elegância.** Identifique o que a assinatura afirma,
    admite, pede, decide, reconhece, renuncia, condiciona ou promete.
-3. **Contexto ausente pode ser defeito.** Se um leitor institucional razoável
+4. **Contexto ausente pode ser defeito.** Se um leitor institucional razoável
    inevitavelmente perguntaria “por quê?”, “com base em quê?”, “o que mudou?” ou
    “o que querem que eu faça?”, trate a lacuna como parte da revisão.
-4. **Minimum sufficient commitment.** Prefira a formulação que produz o efeito
+5. **Minimum sufficient commitment.** Prefira a formulação que produz o efeito
    necessário sem ampliar tese, confissão, obrigação, pedido ou posição
    institucional por acidente.
-5. **Não confunda correção com preferência.** Só proponha edição quando ela
+6. **Não confunda correção com preferência.** Só proponha edição quando ela
    reduz risco, elimina ambiguidade material, corrige erro, fecha contexto
    necessário ou melhora de forma relevante a eficácia institucional.
-6. **Preserve o texto quando ele já funciona.** Não transforme revisão em
+7. **Preserve o texto quando ele já funciona.** Não transforme revisão em
    coautoria.
-7. **Fatos, citações e premissas materiais precisam de âncora.** Quando não
+8. **Fatos, citações e premissas materiais precisam de âncora.** Quando não
    houver suporte suficiente, marque a dependência e o impacto no veredito.
-8. **Pare cedo diante de defeito dominante.** Não polir um texto ainda inapto.
+9. **Pare cedo diante de defeito dominante.** Não polir um texto ainda inapto.
 
 ## Fluxo obrigatório
+
+### 0. Confirme que há ato a praticar
+
+Antes de avaliar cabimento, redação ou fundamento da minuta, reconstrua a razão
+para existir uma resposta **agora**. Pergunte, nesta ordem:
+
+1. **Destinatário do ônus:** a ordem, intimação, dever, faculdade ou providência
+   realmente se dirige ao ente que representamos?
+2. **Estado processual/institucional atual:** o fato ou resultado que motivou a
+   minuta continua vigente e ainda exige resposta, ou houve decisão, cumprimento,
+   perda de objeto, retratação, trânsito, baixa, acordo ou outro evento que mudou
+   a necessidade do ato?
+3. **Extensão da iniciativa:** a minuta apenas cumpre o que é devido/necessário ou
+   oferece pedido, providência, renúncia, reconhecimento, alternativa ou solução
+   que ninguém exigiu e cuja adoção cria compromisso institucional novo?
+
+Se qualquer resposta for negativa, **pare a revisão textual**. O produto passa a
+ser a conclusão de que a minuta não deve seguir, com a razão e a fonte que sustenta
+isso. Se uma resposta material for desconhecida, use veredito condicionado e
+indique a evidência necessária para decidir se existe ato a praticar.
+
+Não trate “há uma minuta pronta” como evidência de que o ato é necessário.
 
 ### 1. Reconstrua a função do documento
 
@@ -81,14 +111,15 @@ função?**
 
 Priorize, nesta ordem:
 
-1. erro que torna o ato juridicamente/processualmente inadequado;
-2. afirmação material sem suporte ou contrária à fonte;
-3. compromisso institucional desnecessariamente amplo;
-4. pedido incompatível com fundamentação ou efeito pretendido;
-5. contexto ausente que deixe o destinatário sem saber como interpretar ou agir;
-6. ambiguidade que permita leitura materialmente diferente;
-7. excesso explicativo que esconda a novidade ou providência central;
-8. forma/redação apenas quando tiver consequência prática.
+1. inexistência atual de ato a praticar pelo ente representado;
+2. erro que torna o ato juridicamente/processualmente inadequado;
+3. afirmação material sem suporte ou contrária à fonte;
+4. compromisso institucional desnecessariamente amplo;
+5. pedido incompatível com fundamentação ou efeito pretendido;
+6. contexto ausente que deixe o destinatário sem saber como interpretar ou agir;
+7. ambiguidade que permita leitura materialmente diferente;
+8. excesso explicativo que esconda a novidade ou providência central;
+9. forma/redação apenas quando tiver consequência prática.
 
 Para peças judiciais, aplique também o checklist fatal abaixo. Para verificação
 adversarial de fatos, use
@@ -115,15 +146,17 @@ institucionais.
 
 Use uma destas classes:
 
-- 🟢 **Apta** — pode seguir como está; eventuais observações não mudam a decisão
-  de enviar.
-- 🟡 **Apta com ajustes fechados** — existe uma lista curta e finita de
-  correções; feitas elas, o documento pode seguir.
-- 🔴 **Inapta** — há erro dominante, lacuna de contexto, risco institucional ou
-  volume de reconstrução incompatível com revisão cirúrgica.
+- 🟢 **Apta** — há ato a praticar e pode seguir como está; eventuais observações
+  não mudam a decisão de enviar.
+- 🟡 **Apta com ajustes fechados** — há ato a praticar e existe uma lista curta e
+  finita de correções; feitas elas, o documento pode seguir.
+- 🔴 **Inapta** — não há ato a praticar, ou há erro dominante, lacuna de contexto,
+  risco institucional ou volume de reconstrução incompatível com revisão
+  cirúrgica.
 
-Se depender de fato material ainda não confirmado, use veredito condicionado e
-identifique exatamente o que precisa ser conferido.
+Se depender de fato material ainda não confirmado — inclusive a própria necessidade
+do ato — use veredito condicionado e identifique exatamente o que precisa ser
+conferido.
 
 ### 6. Só então proponha alterações
 
@@ -142,15 +175,20 @@ fundamentação nova apenas para “fortalecer” um texto que já cumpre sua fu
 
 Quando a minuta for processual, confirme antes de qualquer polimento:
 
+- existência atual de ato a praticar pelo ente representado;
+- destinatário real da ordem, ônus ou faculdade processual;
+- estado processual atual e eventual perda/satisfação da necessidade de resposta;
 - tempestividade e fonte do termo inicial;
 - cabimento;
 - legitimidade e representação;
 - órgão, competência e rito;
 - preclusão;
 - compatibilidade entre pedido, fundamento e efeito buscado;
-- existência de omissão defensiva/recursal capaz de causar perda útil.
+- existência de omissão defensiva/recursal capaz de causar perda útil;
+- ausência de pedido ou providência excedente que crie compromisso sem necessidade.
 
-Não declare tempestividade confirmada sem a fonte processual adequada.
+Não declare tempestividade confirmada sem a fonte processual adequada. Não trate
+uma minuta existente como prova de que o ato é devido.
 
 Para taxonomia mais detalhada por tipo de peça, citações, sanções e exposição
 institucional, leia
@@ -161,7 +199,8 @@ institucional, leia
 ### Impeditivo
 
 Muda a decisão de assinar/protocolar/expedir. Deve aparecer primeiro e com
-consequência concreta.
+consequência concreta. **Ausência de ato a praticar é impeditivo**, ainda que o
+texto da minuta seja juridicamente correto em abstrato.
 
 ### Correção recomendável
 
@@ -194,7 +233,9 @@ O remédio normalmente é uma ponte curta de contexto, não uma nova seção lon
 
 Quando uma afirmação material depender dos autos, processo administrativo,
 precedente ou fonte externa, formule a pergunta que poderia **desmentir** a
-minuta. Use [`NotebookLM`](../notebooklm-processos/SKILL.md),
+minuta. Para peças processuais, inclua a pergunta que poderia desmentir a própria
+premissa de que ainda existe ato a praticar. Use
+[`NotebookLM`](../notebooklm-processos/SKILL.md),
 [`DataJud`](../datajud/SKILL.md), [`juris-tjro`](../juris-tjro/SKILL.md) ou fonte
 oficial conforme a natureza da informação; não force uma ferramenta a responder
 o que ela não contém.
@@ -206,12 +247,13 @@ quando essa etapa for necessária.
 
 Em lote ou sob pressão de prazo:
 
-1. função do documento;
-2. superfície de compromisso;
-3. impeditivos;
-4. contexto ausente;
-5. veredito;
-6. edits mínimos.
+1. há ato a praticar?;
+2. função do documento;
+3. superfície de compromisso;
+4. impeditivos;
+5. contexto ausente;
+6. veredito;
+7. edits mínimos.
 
 Reduza profundidade, não o padrão de segurança.
 
@@ -219,6 +261,8 @@ Reduza profundidade, não o padrão de segurança.
 
 A revisão termina quando:
 
+- foi confirmado que existe ato a praticar pelo ente representado, ou a ausência/
+  incerteza dessa necessidade foi tratada como resultado impeditivo/condicionado;
 - a função institucional/processual do documento está explícita;
 - o efeito esperado sobre o destinatário está claro;
 - a superfície de compromisso foi considerada;
@@ -230,8 +274,9 @@ A revisão termina quando:
 - cada edit proposto resolve um problema identificável;
 - o texto final assume **somente o necessário** para produzir o efeito pretendido.
 
-O objetivo é saber se o documento pode ir — e garantir que, quando for, ele diga
-**exatamente o suficiente** para cumprir sua função.
+O objetivo é saber primeiro **se o documento deve ir** e, somente se a resposta
+for positiva, garantir que ele diga exatamente o suficiente para cumprir sua
+função.
 
 ## Real-use postmortem
 
