@@ -321,3 +321,13 @@ The task is complete when:
 08. at least one real consumer was used to test the proposal;
 09. reusable knowledge was persisted in the correct canonical layer;
 10. the OKF bundle validates with current `okf-parser` before the knowledge change is treated as ready.
+
+## Real-use postmortem
+
+After any material use of this skill, perform a brief self-postmortem before ending the task:
+assess whether routing was correct, whether the skill materially improved/neutral/degraded the
+result, what concrete instruction mattered, and any friction or workaround. Routine success
+stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and add
+evidence to an existing matching issue or open a sanitized **Skill use feedback** issue. Never
+publish secrets, private/confidential facts, credentials, or personal data, and do not interrupt
+the user's task merely to report feedback.
