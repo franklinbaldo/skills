@@ -140,6 +140,7 @@ These are the patterns that turn a flaky notebook into a resumable one. Order ma
 
 **1. Mount Drive at the very top**, before any install or download, so the cache is
 available to every later cell:
+
 ```python
 from google.colab import drive
 drive.mount("/content/drive")
@@ -147,6 +148,7 @@ ROOT = "/content/drive/MyDrive/opf-finetune"
 ```
 
 **2. Restore-or-fetch the base model** (skip the 2.8 GB copy when it is already local):
+
 ```python
 import os, shutil
 LOCAL_BASE = "/content/base/privacy_filter"
@@ -164,6 +166,7 @@ else:
 
 **3. Save the trained checkpoint + metrics to Drive immediately after training**, so a
 runtime timeout never loses the run:
+
 ```python
 RUN = f"{ROOT}/checkpoints/{CATEGORY_VERSION}/{RUN_ID}"
 shutil.copytree("/content/out/best", RUN, dirs_exist_ok=True)

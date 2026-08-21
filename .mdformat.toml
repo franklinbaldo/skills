@@ -1,0 +1,11 @@
+# Config for `mdformat` (scripts/check_markdown_format.py, CI).
+#
+# wrap = "keep": never reflow paragraphs — SKILL.md bodies often contain
+# hand-wrapped prose or literal copied text where reflowing would change
+# line breaks and blow up the diff for no semantic reason.
+# mdformat-frontmatter (plugin) recognizes the `---\n...\n---\n` YAML
+# frontmatter block every SKILL.md starts with and passes it through
+# untouched instead of treating it as a thematic break + garbled content.
+wrap = "keep"
+number = true
+end_of_line = "lf"

@@ -36,8 +36,7 @@ size** (override with `--route`):
 Gemini model as `@gemini-free/<model>` — the Portkey Model Catalog
 integration Franklin actually registered in his dashboard, not Portkey's
 generic `@google` provider from its own docs' example, which **does not
-work on this account**: `{"status":"failure","message":"Following keys
-are not valid: google"}`. Only `x-portkey-api-key` is sent; no
+work on this account**: `{"status":"failure","message":"Following keys are not valid: google"}`. Only `x-portkey-api-key` is sent; no
 `x-portkey-provider` header and no `Authorization` passthrough — both
 were tried and both 400 against this account's actual configuration
 (the Gemini key lives in Portkey's dashboard under the `gemini-free`
@@ -143,8 +142,7 @@ being invoked from a particular skill's directory.
   current model availability rather than assuming the script is broken
   — confirmed live that not every listed model works through Portkey's
   standard chat-completions shape (e.g.
-  `deep-research-pro-preview-12-2025` 400s with `"This model only
-  supports Interactions API"` — a different Google API surface, not a
+  `deep-research-pro-preview-12-2025` 400s with `"This model only supports Interactions API"` — a different Google API surface, not a
   Portkey or auth problem).
 - `--route auto|inline|files` — `auto` (default) picks by combined track
   size against `ROUTE_SIZE_THRESHOLD_BYTES` (15MiB raw); an explicit
@@ -216,8 +214,7 @@ back on both.
 
 The `files` transport's upload/poll half of the flow (Google Files API,
 unrelated to Portkey) was separately confirmed 2026-07-16 against two
-real, full-length (5-7 min) public Suno tracks in one call (`> be me
-Borges`, `Fourteen Words`), `.mp3` via `audio_url`: upload, polling
+real, full-length (5-7 min) public Suno tracks in one call (`> be me Borges`, `Fourteen Words`), `.mp3` via `audio_url`: upload, polling
 through non-terminal states, and `audio/mp3` file parts all worked as
 designed — but that test predates routing the inference call through
 Portkey at all (it called Gemini's native `generateContent` directly),

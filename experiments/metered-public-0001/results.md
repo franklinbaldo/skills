@@ -12,13 +12,13 @@ The experiment is governed by the [Operational License Addendum](operational-lic
 
 Five real internal productive attempts were recorded:
 
-| Record | Scenario | Invocation | Count |
-| --- | --- | --- | ---: |
-| [usage-0001](usage/usage-0001.md) | normal | `mp0001-A` | 1 |
-| [usage-0002](usage/usage-0002.md) | continuation | `mp0001-B` | 1 |
-| [usage-0003](usage/usage-0003.md) | harness-preserved same-attempt retry | `mp0001-C` | 1 |
-| [usage-0004](usage/usage-0004.md) | helper Skill | `mp0001-D` | 1 |
-| [usage-0005](usage/usage-0005.md) | abort after productive start | `mp0001-E` | 1 |
+| Record                            | Scenario                             | Invocation | Count |
+| --------------------------------- | ------------------------------------ | ---------- | ----: |
+| [usage-0001](usage/usage-0001.md) | normal                               | `mp0001-A` |     1 |
+| [usage-0002](usage/usage-0002.md) | continuation                         | `mp0001-B` |     1 |
+| [usage-0003](usage/usage-0003.md) | harness-preserved same-attempt retry | `mp0001-C` |     1 |
+| [usage-0004](usage/usage-0004.md) | helper Skill                         | `mp0001-D` |     1 |
+| [usage-0005](usage/usage-0005.md) | abort after productive start         | `mp0001-E` |     1 |
 
 No subagent case was added because this execution environment did not provide a distinct subagent surface with evidence clear enough to improve the experiment.
 

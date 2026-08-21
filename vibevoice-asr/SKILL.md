@@ -23,12 +23,12 @@ com embeddings `Q6_K`; não inventar uma gradação oficial Q4/Q5/Q8 inexistente
 
 ## Escolher o modelo
 
-| Situação | Escolha |
-| --- | --- |
-| triagem, lotes, baixo custo, ausência de GPU | `--model bitnet` |
-| áudio jurídico crítico, sotaques ou máxima precisão | `--model full` em A100/H100 |
-| disponibilidade mais importante que garantir o 7B | `--model full --fallback-bitnet` |
-| a execução deve falhar se não obtiver o 7B | `--model full --no-fallback-bitnet` |
+| Situação                                            | Escolha                             |
+| --------------------------------------------------- | ----------------------------------- |
+| triagem, lotes, baixo custo, ausência de GPU        | `--model bitnet`                    |
+| áudio jurídico crítico, sotaques ou máxima precisão | `--model full` em A100/H100         |
+| disponibilidade mais importante que garantir o 7B   | `--model full --fallback-bitnet`    |
+| a execução deve falhar se não obtiver o 7B          | `--model full --no-fallback-bitnet` |
 
 No benchmark comparativo publicado pelo projeto BitNet, o WER em português foi
 22,41 no VibeVoice-ASR-7B e 24,87 no BitNet. O repositório principal publica

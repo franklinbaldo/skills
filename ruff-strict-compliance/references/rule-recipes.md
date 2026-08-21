@@ -17,48 +17,63 @@ If the project has no such config, propose adding one rather than assuming these
 ## Refactoring recipes for common rules
 
 ### Typer CLI — B008, F841
+
 Prefer `typing.Annotated` for Typer options/arguments instead of function calls as defaults.
 
 ### Mutable defaults — B006 / B008
+
 Use `None` and initialize inside the function rather than mutable/default-call expressions.
 
 ### Unused imports and variables — F401 / F841
+
 Remove unused imports and collapse throwaway assignments instead of suppressing them.
 
 ### Star imports — F403 / F405
+
 Import the exact names required rather than `from module import *`.
 
 ### Blind exceptions / Tryceratops — BLE / TRY
+
 Catch specific exceptions and translate them to domain-specific exceptions when appropriate.
 
 ### `os.path` → `pathlib` — PTH
+
 Prefer `Path` operations and explicit encodings.
 
 ### Mutable class attributes — RUF012
+
 Mark true class state as `ClassVar`, or initialize instance state in `__init__`.
 
 ### Comprehension wrappers — C4
+
 Prefer direct literals/comprehensions instead of redundant wrappers.
 
 ### Returns and unnecessary branches — RET
+
 Return expressions directly and remove `else` / `elif` after an unconditional `return` or `raise`.
 
 ### Simplify — SIM
+
 Collapse redundant nested conditions and direct boolean returns where that preserves clarity.
 
 ### Modern type syntax — UP
+
 For supported Python versions, prefer builtin generics.
 
 ### Builtin shadowing — A
+
 Use semantic names such as `user_id` and `statuses`, not `id`, `list`, `type`, etc.
 
 ### Logging interpolation — G
+
 Prefer lazy logging interpolation.
 
 ### Assertions and swallowed exceptions — S
+
 Do not use `assert` for production input validation and do not silently `pass`/`continue` in exception handlers.
 
 ### Commented-out code — ERA
+
 Delete dead commented-out code. Version control is the archive.
 
 ## Rule lookup discipline

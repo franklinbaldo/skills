@@ -66,11 +66,11 @@ cautelosos e conclusões explícitas.
 
 ### Comparação de registros
 
-| Registro workspace (proibido aqui) | Registro forense/institucional |
-|---|---|
-| "O steelman V1_a falha no §1º III check" | "O fundamento invocado presta-se a justificar qualquer decisão sobre matéria análoga, violando o art. 489, §1º, III, do CPC" |
+| Registro workspace (proibido aqui)             | Registro forense/institucional                                                                                               |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| "O steelman V1_a falha no §1º III check"       | "O fundamento invocado presta-se a justificar qualquer decisão sobre matéria análoga, violando o art. 489, §1º, III, do CPC" |
 | "O axioma compila mas a formulação é generosa" | "A premissa tem ancoragem, cabe ressalvar contudo que sua amplitude poderia abranger situações não cobertas pelo precedente" |
-| "A partição foi completada com cinco saídas" | "Não se identifica postura legítima do tribunal diante do precedente vinculante invocado" |
+| "A partição foi completada com cinco saídas"   | "Não se identifica postura legítima do tribunal diante do precedente vinculante invocado"                                    |
 
 ### Qualificadores cautelosos (usar sistematicamente)
 
@@ -84,33 +84,34 @@ cautelosos e conclusões explícitas.
 
 Para cada teorema relevante:
 
----
+______________________________________________________________________
 
 **Teorema [N] — [nome curto]**
 
 *Identificação*: [o que o teorema estabelece em termos jurídicos]
 
 *Análise dos axiomas centrais*:
+
 - Axioma `[nome]`: [análise de ancoragem, contra-argumento, formulação]
 - Axioma `[nome]`: [idem]
 
 *Força argumentativa*: [avaliação geral, com qualificadores]
 
-*Riscos e contra-ataques*: [o que a parte adversa poderia opor; se o
-counter-axiom existe e tem força comparável]
+*Riscos e contra-ataques*: \[o que a parte adversa poderia opor; se o
+counter-axiom existe e tem força comparável\]
 
 *Parecer parcial*: prosseguir com este ataque / retornar à Fase 2 para
 [instrução específica]
 
----
+______________________________________________________________________
 
-*Apreciação conjunta*: [como os ataques que prosseguem se complementam;
-lacunas de cobertura]
+*Apreciação conjunta*: \[como os ataques que prosseguem se complementam;
+lacunas de cobertura\]
 
 *Parecer final*: prosseguir para a Fase 4 / retornar à Fase 2 para os
 ataques [N] com instrução [X]
 
----
+______________________________________________________________________
 
 ## Heurística para a LLM-analista
 
@@ -125,6 +126,7 @@ Se compilar, o teorema não marca derrota — o espaço argumentativo é disputa
 ## Output esperado
 
 Documento Markdown com:
+
 - Análise por teorema (estrutura acima)
 - Apreciação conjunta
 - Parecer final explícito: lista de ataques que prosseguem para a Fase 4

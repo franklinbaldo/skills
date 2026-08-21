@@ -7,21 +7,21 @@
 teorema Lean (Fase 2) e à ficha qualitativa da Fase 3. Marcação sem um dos
 dois é inválida.
 
----
+______________________________________________________________________
 
 ## Tabela de derrotas
 
-| Atacante | Atacado | Tipo | Teorema Lean | Ref. Fase 3 | Resultado |
-|---|---|---|---|---|---|
-| P1 | A1 (Warrant) | Warrant truncado | `ataque_1_ressalva_da_ADI` | §Teorema 1 | **A1 DERROTADO** |
-| P2 | A1 (Claim) | Contradição interna | `ataque_2_contradicao_interna` | §Teorema 2 | **A1 DERROTADO** (confirma, ângulo distinto) |
-| P3 | A1 (aplicação) | Nenhuma saída legítima (art. 927) | `ataque_3_aplicacao_seletiva` | §Teorema 3 | **A1 DERROTADO** (confirma, mais abrangente) |
-| P4 | A1 (Rebuttal) | Omissão de regime constitucional | `ataque_4_autonomia_regimes` | §Teorema 4 | **A1 DERROTADO** (ângulo independente) |
-| P5 | A1 (Rebuttal) | Omissão do Parecer TCE-RO | `ataque_5_omissao_TCE` | §Teorema 5 | **A1 DERROTADO** (ângulo independente) |
-| — | A2 | Instrumental a A1 | — | — | **Cai por arrasto** |
-| — | A3 | Instrumental a A1 | — | — | **Cai por arrasto** |
+| Atacante | Atacado        | Tipo                              | Teorema Lean                   | Ref. Fase 3 | Resultado                                    |
+| -------- | -------------- | --------------------------------- | ------------------------------ | ----------- | -------------------------------------------- |
+| P1       | A1 (Warrant)   | Warrant truncado                  | `ataque_1_ressalva_da_ADI`     | §Teorema 1  | **A1 DERROTADO**                             |
+| P2       | A1 (Claim)     | Contradição interna               | `ataque_2_contradicao_interna` | §Teorema 2  | **A1 DERROTADO** (confirma, ângulo distinto) |
+| P3       | A1 (aplicação) | Nenhuma saída legítima (art. 927) | `ataque_3_aplicacao_seletiva`  | §Teorema 3  | **A1 DERROTADO** (confirma, mais abrangente) |
+| P4       | A1 (Rebuttal)  | Omissão de regime constitucional  | `ataque_4_autonomia_regimes`   | §Teorema 4  | **A1 DERROTADO** (ângulo independente)       |
+| P5       | A1 (Rebuttal)  | Omissão do Parecer TCE-RO         | `ataque_5_omissao_TCE`         | §Teorema 5  | **A1 DERROTADO** (ângulo independente)       |
+| —        | A2             | Instrumental a A1                 | —                              | —           | **Cai por arrasto**                          |
+| —        | A3             | Instrumental a A1                 | —                              | —           | **Cai por arrasto**                          |
 
----
+______________________________________________________________________
 
 ## Grafo resolutivo
 
@@ -45,7 +45,7 @@ graph LR
     A3 -.->|"suportava"| A1
 ```
 
----
+______________________________________________________________________
 
 ## Síntese argumentativa
 
@@ -71,7 +71,7 @@ por dependência de A1.
 
 ### Cobertura conjunta dos ataques vitoriosos
 
-Os cinco ataques P* cobrem integralmente o pedido dos embargos:
+Os cinco ataques P\* cobrem integralmente o pedido dos embargos:
 
 - **Omissão** (art. 1.022, I, CPC): P1 (omissão da ressalva), P4 (omissão
   do regime constitucional), P5 (omissão do parecer TCE-RO).
@@ -84,7 +84,7 @@ uma das três hipóteses de cabimento do art. 1.022 que admite enfrentamento
 em embargos de declaração (omissão e contradição), mais o vício estrutural
 de não-fundamentação pelo art. 489 c/c art. 927.
 
----
+______________________________________________________________________
 
 ## Recomendações para a Fase 5 (tradução forense)
 

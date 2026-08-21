@@ -98,12 +98,12 @@ execution and scoring as a separate step.
 
 Every reported item should carry one of these labels:
 
-| Class | Meaning | Default severity |
-| --- | --- | --- |
-| Upstream requirement | Required by the targeted specification/runtime | Error when verified |
-| Upstream recommendation | Published guidance, not conformance | Advisory |
-| Repository policy | Locally chosen requirement | Depends on repository policy |
-| Observation | Structure/metric with no rule attached | Informational |
+| Class                   | Meaning                                        | Default severity             |
+| ----------------------- | ---------------------------------------------- | ---------------------------- |
+| Upstream requirement    | Required by the targeted specification/runtime | Error when verified          |
+| Upstream recommendation | Published guidance, not conformance            | Advisory                     |
+| Repository policy       | Locally chosen requirement                     | Depends on repository policy |
+| Observation             | Structure/metric with no rule attached         | Informational                |
 
 If documentation is unclear or changed recently, downgrade the claim until verified. Never
 launder a remembered recommendation into a normative rule.

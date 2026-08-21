@@ -14,21 +14,21 @@ from quietly turning into editorial rewriting or destructive cleanup.
 
 ### Procedure
 
-1. Run the bundled audit and save the output when it will support the PR.
-2. Review every `missingFromBlog` item. Confirm it is public and not represented
-   under a different `sunoId` due to a source-side replacement.
-3. Inspect the generator's output shape without executing it. If it creates
-   version directories, do not run it.
-4. Create or generate only the missing flat stubs using current corpus shape.
-5. Copy only source-backed fields: title, source lyrics, date, image URL,
-   duration, style prompt, and clip ID.
-6. Curate 1–3 genres from RFC 0011; do not derive a long prompt-shaped list.
-7. Load `franklin-blog` and draft composer notes. When the song's context is
-   unknown, leave the notes explicitly incomplete instead of inventing a
-   creation story.
-8. Create/update the EN companion only when requested or required by the current
-   repository policy. Keep the semantic pair aligned.
-9. Re-run the audit and validation commands.
+01. Run the bundled audit and save the output when it will support the PR.
+02. Review every `missingFromBlog` item. Confirm it is public and not represented
+    under a different `sunoId` due to a source-side replacement.
+03. Inspect the generator's output shape without executing it. If it creates
+    version directories, do not run it.
+04. Create or generate only the missing flat stubs using current corpus shape.
+05. Copy only source-backed fields: title, source lyrics, date, image URL,
+    duration, style prompt, and clip ID.
+06. Curate 1–3 genres from RFC 0011; do not derive a long prompt-shaped list.
+07. Load `franklin-blog` and draft composer notes. When the song's context is
+    unknown, leave the notes explicitly incomplete instead of inventing a
+    creation story.
+08. Create/update the EN companion only when requested or required by the current
+    repository policy. Keep the semantic pair aligned.
+09. Re-run the audit and validation commands.
 10. Report source count, created count, skipped count, remaining gaps, and title
     drift separately.
 
@@ -62,13 +62,13 @@ Stop before writing when:
 
 For each candidate, gather:
 
-| Dimension | Evidence |
-| --- | --- |
-| Source status | public/private/absent, creation date, playlist membership |
-| Mirror status | PT/EN coverage, metadata completeness, title drift |
-| Quality signal | Hrönir rating, sample count, review themes |
-| Exposure signal | featured status, series position, catalog visibility |
-| Confidence | high/medium/low and why |
+| Dimension       | Evidence                                                  |
+| --------------- | --------------------------------------------------------- |
+| Source status   | public/private/absent, creation date, playlist membership |
+| Mirror status   | PT/EN coverage, metadata completeness, title drift        |
+| Quality signal  | Hrönir rating, sample count, review themes                |
+| Exposure signal | featured status, series position, catalog visibility      |
+| Confidence      | high/medium/low and why                                   |
 
 ### Judgment rules
 
@@ -118,11 +118,11 @@ For each candidate, gather:
 
 ## Validation matrix
 
-| Change | Minimum checks |
-| --- | --- |
-| Read-only report | audit command; Hrönir ranking command if used |
-| Frontmatter only | audit; prettier; `hronir:doctor`; targeted tests if available |
-| New/changed post body | audit; prettier; doctor; tests; build |
+| Change                  | Minimum checks                                                                     |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| Read-only report        | audit command; Hrönir ranking command if used                                      |
+| Frontmatter only        | audit; prettier; `hronir:doctor`; targeted tests if available                      |
+| New/changed post body   | audit; prettier; doctor; tests; build                                              |
 | Generator/script change | offline fixture test; repository test suite; build if generated content affects it |
 
 Never report an unchecked command as successful.

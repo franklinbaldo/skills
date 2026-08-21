@@ -34,6 +34,7 @@ continuam exigindo revisão ou ajuste específico.
 ## Fluxo recomendado
 
 1. Extrair o documento para Markdown ou texto sem sobrescrever o original.
+
 2. Rodar a detecção assistida em uma GPU. Sem GPU local, usar diretamente o
    wrapper Colab da seção seguinte. Em uma máquina com NVIDIA configurada:
 
@@ -46,6 +47,7 @@ continuam exigindo revisão ou ajuste específico.
 
 3. Inspecionar `documento.tagged.md`. Corrigir spans, categorias e referências
    antes de liberar a versão anonimizada.
+
 4. Gerar novamente a versão determinística após qualquer correção:
 
    ```bash

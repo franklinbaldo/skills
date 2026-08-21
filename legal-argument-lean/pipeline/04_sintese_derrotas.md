@@ -3,6 +3,7 @@
 ## Princípio crítico
 
 **Toda derrota marcada deve referenciar:**
+
 - **(a)** o teorema Lean que a sustenta formalmente, e
 - **(b)** a ficha qualitativa da Fase 3.
 
@@ -11,11 +12,11 @@ Derrotas válidas requerem ambos.
 
 ## Template de tabela de derrotas
 
-| Atacante | Atacado | Tipo | Teorema Lean | Ref. Fase 3 | Resultado |
-|---|---|---|---|---|---|
-| P1 | A1 (Warrant) | `ataque_1_nome` | §Teorema 1 | A1 DERROTADO |
-| P2 | A1 (Claim) | `ataque_2_nome` | §Teorema 2 | A1 DERROTADO (confirma) |
-| P3 | A1 (aplicação) | `ataque_3_nome` | §Teorema 3 | A1 DERROTADO (confirma) |
+| Atacante | Atacado        | Tipo            | Teorema Lean | Ref. Fase 3             | Resultado |
+| -------- | -------------- | --------------- | ------------ | ----------------------- | --------- |
+| P1       | A1 (Warrant)   | `ataque_1_nome` | §Teorema 1   | A1 DERROTADO            |           |
+| P2       | A1 (Claim)     | `ataque_2_nome` | §Teorema 2   | A1 DERROTADO (confirma) |           |
+| P3       | A1 (aplicação) | `ataque_3_nome` | §Teorema 3   | A1 DERROTADO (confirma) |           |
 
 Para ataques descartados na Fase 3, incluir linha com resultado "descartado
 na Fase 3" e referência à razão (sem teorema Lean na coluna).
@@ -42,11 +43,11 @@ para ataques vitoriosos; tracejadas para suporte instrumental.
 
 Após a tabela e o grafo, redigir síntese com três componentes:
 
-1. **Argumentos derrotados**: listar A* derrotados e o ângulo principal de
+1. **Argumentos derrotados**: listar A\* derrotados e o ângulo principal de
    cada derrota (Warrant / Claim / Data / aplicação / Rebuttal).
-2. **Argumentos sobreviventes**: A* sem derrota marcada e a razão (sem
+2. **Argumentos sobreviventes**: A\* sem derrota marcada e a razão (sem
    atacante, ou atacante descartado na Fase 3).
-3. **Cobertura conjunta dos P* vitoriosos**: os ataques que sobreviveram são
+3. **Cobertura conjunta dos P* vitoriosos*\*: os ataques que sobreviveram são
    suficientes para sustentar o pedido da peça? Há lacunas?
 
 ## Tratamento de ataques sem teorema Lean (caminho excepcional)
@@ -56,7 +57,7 @@ o teorema Lean correspondente não compilou (por razão técnica, não por falha
 dogmática):
 
 - **Não marcar como derrota na tabela principal**
-- Incluir nota de rodapé: "ataque P* tem sustentação dogmática sólida
+- Incluir nota de rodapé: "ataque P\* tem sustentação dogmática sólida
   (Fase 3, §X), mas o teorema Lean não foi concluído — derrota não marcada
   formalmente"
 - Avaliar se o caminho informal é suficiente para a Fase 5 ou se requer

@@ -425,16 +425,16 @@ Then summarize:
 
 A material Cobogó design review is complete when:
 
-1. product job, context and review scale are explicit;
-2. relevant canonical evidence was consulted;
-3. the imagination brief names a small set of operative Brazilian grammar ideas;
-4. a concept image was generated when visual divergence was material and image generation was
-   available;
-5. the real implementation was captured in a comparable state;
-6. concept-vs-real gaps were classified without treating the concept as authority;
-7. fabricated/speculative facts were rejected rather than copied into product claims;
-8. applicable canon and accessibility constraints have visible consequences;
-9. the smallest useful convergence was identified or implemented;
+01. product job, context and review scale are explicit;
+02. relevant canonical evidence was consulted;
+03. the imagination brief names a small set of operative Brazilian grammar ideas;
+04. a concept image was generated when visual divergence was material and image generation was
+    available;
+05. the real implementation was captured in a comparable state;
+06. concept-vs-real gaps were classified without treating the concept as authority;
+07. fabricated/speculative facts were rejected rather than copied into product claims;
+08. applicable canon and accessibility constraints have visible consequences;
+09. the smallest useful convergence was identified or implemented;
 10. the surface was recaptured when implementation changed;
 11. reusable learning has a persistence destination;
 12. negative evidence is preserved when it changes what should be attempted next.

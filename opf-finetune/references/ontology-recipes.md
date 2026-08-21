@@ -37,11 +37,9 @@ Goal: locate the operative part and read the result (e.g. CausaGanha: outcome st
 ["O", "dispositivo_abertura", "resultado", "ref_processual", "valor_condenacao"]
 ```
 
-- `dispositivo_abertura` (single-anchor) — opening cue of the operative part: `Ante o
-  exposto`, `Diante do exposto`, `Isto posto`, `Posto isso`. **Exactly one operative
+- `dispositivo_abertura` (single-anchor) — opening cue of the operative part: `Ante o exposto`, `Diante do exposto`, `Isto posto`, `Posto isso`. **Exactly one operative
   instance** — not transition cues like "Decido", not intermediate rulings.
-- `resultado` (short span, scoped) — the operative verb phrase: `julgo
-  procedente/improcedente/parcialmente procedente`, `nego/dou provimento`, `extingo`,
+- `resultado` (short span, scoped) — the operative verb phrase: `julgo procedente/improcedente/parcialmente procedente`, `nego/dou provimento`, `extingo`,
   `condeno`. Keep short; map surface → outcome label downstream with a rule/lookup (fewer
   categories, clearer errors). Only inside the dispositivo or an explicit mérito-chapter
   scope — never on reasoning ("merece ser julgado procedente").

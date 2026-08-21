@@ -73,15 +73,15 @@ secondary observations. A difference can both duplicate another source and prese
 superseded decision; the primary bucket decides what you do, the secondary note survives
 into the review so nobody has to rediscover it.
 
-| Bucket | Meaning | Action |
-| --- | --- | --- |
-| Ideal forgot a real constraint | The blank sheet was naive | Restore it — restate as a principle, not as a scar |
-| Existing carries necessary knowledge | Load-bearing, correctly placed | Keep, tighten the wording |
-| Existing is only history | True but no longer actionable | Move to a changelog / ADR / incident log |
-| Existing duplicates another source | Spec, test, and prose disagree eventually | Delete here, point at the source |
-| Existing preserves a superseded decision | Ratified by inertia | Drop, and say so in the commit |
-| Existing is not available to change | Fixed by authority, contract, or a consumed procedural step | Keep, and record *why* so the next reader sees a reason, not laziness |
-| Ideal is a genuine improvement | New structure, clearer contract | Adopt |
+| Bucket                                   | Meaning                                                     | Action                                                                |
+| ---------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
+| Ideal forgot a real constraint           | The blank sheet was naive                                   | Restore it — restate as a principle, not as a scar                    |
+| Existing carries necessary knowledge     | Load-bearing, correctly placed                              | Keep, tighten the wording                                             |
+| Existing is only history                 | True but no longer actionable                               | Move to a changelog / ADR / incident log                              |
+| Existing duplicates another source       | Spec, test, and prose disagree eventually                   | Delete here, point at the source                                      |
+| Existing preserves a superseded decision | Ratified by inertia                                         | Drop, and say so in the commit                                        |
+| Existing is not available to change      | Fixed by authority, contract, or a consumed procedural step | Keep, and record *why* so the next reader sees a reason, not laziness |
+| Ideal is a genuine improvement           | New structure, clearer contract                             | Adopt                                                                 |
 
 The classification *is* the work. An unclassified difference means you do not yet understand
 the system.

@@ -28,6 +28,7 @@ modern PDF features better than PDF/A-1b while targeting visual fidelity.
 
 1. Identify the input and a distinct output path. If the user did not name the
    output, let the script create `<name>-PDFA.pdf` beside the source.
+
 2. Run strict, non-raster conversion:
 
    ```bash
@@ -37,12 +38,15 @@ modern PDF features better than PDF/A-1b while targeting visual fidelity.
 
    On Windows, the script prefers native `gswin64c.exe` and automatically uses
    Ghostscript in WSL when no native executable exists.
+
 3. Read the final report. Completion requires the same page count and page
    dimensions, a PDF/A-Xb XMP identifier, ICC OutputIntent, successful
    Ghostscript parse, and no material searchable-text loss.
+
 4. If the official veraPDF CLI is installed, it runs automatically. For a
    filing that requires normative validation, add `--require-verapdf`; absence
    or rejection must fail the task.
+
 5. Only if strict conversion fails because of incompatible source content,
    explain the loss and retry with:
 
@@ -54,6 +58,7 @@ modern PDF features better than PDF/A-1b while targeting visual fidelity.
 
    Rasterization is a last resort: it removes searchable text, links,
    accessibility structure, forms, and signature validity.
+
 6. Return the output path, PDF/A part/conformance, page count, text-preservation
    result, and whether validation was veraPDF or structural.
 
