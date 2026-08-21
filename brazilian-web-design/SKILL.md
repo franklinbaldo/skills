@@ -311,13 +311,13 @@ For implementation work, add a fifth:
 
 The task is complete when:
 
-1. the interface problem was stated independently of a desired Brazilian “look”;
-2. the existing Cobogó corpus was consulted first;
-3. new references, when needed, are sourced and contextualized;
-4. observation and derived rule are clearly separated;
-5. the rule has a visible software consequence and an explicit non-use case;
-6. stereotype/extraction risk was considered;
-7. accessibility shaped the rule rather than being appended later;
-8. at least one real consumer was used to test the proposal;
-9. reusable knowledge was persisted in the correct canonical layer;
+01. the interface problem was stated independently of a desired Brazilian “look”;
+02. the existing Cobogó corpus was consulted first;
+03. new references, when needed, are sourced and contextualized;
+04. observation and derived rule are clearly separated;
+05. the rule has a visible software consequence and an explicit non-use case;
+06. stereotype/extraction risk was considered;
+07. accessibility shaped the rule rather than being appended later;
+08. at least one real consumer was used to test the proposal;
+09. reusable knowledge was persisted in the correct canonical layer;
 10. the OKF bundle validates with current `okf-parser` before the knowledge change is treated as ready.

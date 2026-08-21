@@ -8,7 +8,7 @@
 razoabilidade da formulação. Compilação Lean é condição necessária mas não
 suficiente para marcar derrota.
 
----
+______________________________________________________________________
 
 ## Teorema 1 — `ataque_1_ressalva_da_ADI`
 
@@ -50,7 +50,7 @@ teorema enfraquece — mas esse argumento não foi desenvolvido pelo acórdão.
 da transformação de cargo, embora existente em tese, foi omitido pelo
 próprio acórdão — o que reforça o vício de omissão que P1 denuncia.
 
----
+______________________________________________________________________
 
 ## Teorema 2 — `ataque_2_contradicao_interna`
 
@@ -92,7 +92,7 @@ peça pode arguir ambos sem inconsistência.
 argumentativamente complementares e podem ser apresentados como vícios
 alternativos na peça.
 
----
+______________________________________________________________________
 
 ## Teorema 3 — `ataque_3_aplicacao_seletiva`
 
@@ -140,7 +140,7 @@ da tese 1 do Tema 1306.
 *Parecer parcial*: **prosseguir**. É o ataque mais robusto e de maior
 alcance. Deve liderar a peça.
 
----
+______________________________________________________________________
 
 ## Teorema 4 — `ataque_4_autonomia_regimes`
 
@@ -181,7 +181,7 @@ da distinção.
 como omissão sobre ponto constitucional suscitado (art. 1.022, I), não como
 argumento de mérito autônomo.
 
----
+______________________________________________________________________
 
 ## Teorema 5 — `ataque_5_omissao_TCE`
 
@@ -216,7 +216,7 @@ de controle.
 P1-P3. O argumento é sólido mas depende de verificação nos autos quanto à
 efetividade da suscitação.
 
----
+______________________________________________________________________
 
 ## Apreciação conjunta
 

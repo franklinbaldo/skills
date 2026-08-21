@@ -1,6 +1,6 @@
 ---
 name: meme-image
-description: |
+description: |-
   Generate and place image memes in blog posts, essays, and Markdown contexts using recognizable templates, custom backgrounds, self-hosted renders, or original generated visuals. Use when a post needs a visual meme beat or when the user asks to explore several meme-image candidates. Do not use for high-stakes/serious material where meme register would trivialize the subject.
 ---
 
@@ -95,15 +95,15 @@ Avoid placing two image memes back-to-back in the reading rhythm.
 
 ## Workflow
 
-1. **Read the surrounding passage/post.** Determine register and whether an image meme deserves the visual weight.
-2. **Identify candidate beats.** Comparison, escalation, reaction, choice, confusion, resignation, thesis, etc.
-3. **Choose selection mode.** Editorial or exploration.
-4. **Discover, and when exploring, actually draw.** Read [`references/template-discovery.md`](references/template-discovery.md). Do not simulate randomness by choosing "random-looking" templates yourself.
-5. **Choose a generation route.** Read [`references/generation-routes.md`](references/generation-routes.md) when a stock Memegen template is not obviously the right production route.
-6. **Compose compact text.** Prefer a few words per slot; rewrite instead of cramming.
-7. **Build and verify the asset.** For Memegen use [`references/api-and-embedding.md`](references/api-and-embedding.md). For other routes preserve the same verification and accessibility requirements.
-8. **Judge subjectively.** Evaluate template semantics, joke quality, legibility, freshness, integration with the post, and whether the image earns its space.
-9. **Embed accessibly.** Use the publishing system's preferred Markdown/HTML conventions and useful alt text.
+01. **Read the surrounding passage/post.** Determine register and whether an image meme deserves the visual weight.
+02. **Identify candidate beats.** Comparison, escalation, reaction, choice, confusion, resignation, thesis, etc.
+03. **Choose selection mode.** Editorial or exploration.
+04. **Discover, and when exploring, actually draw.** Read [`references/template-discovery.md`](references/template-discovery.md). Do not simulate randomness by choosing "random-looking" templates yourself.
+05. **Choose a generation route.** Read [`references/generation-routes.md`](references/generation-routes.md) when a stock Memegen template is not obviously the right production route.
+06. **Compose compact text.** Prefer a few words per slot; rewrite instead of cramming.
+07. **Build and verify the asset.** For Memegen use [`references/api-and-embedding.md`](references/api-and-embedding.md). For other routes preserve the same verification and accessibility requirements.
+08. **Judge subjectively.** Evaluate template semantics, joke quality, legibility, freshness, integration with the post, and whether the image earns its space.
+09. **Embed accessibly.** Use the publishing system's preferred Markdown/HTML conventions and useful alt text.
 10. **Check local rhythm and redundancy.** A good meme can still be the wrong meme if another visual or joke already occupies the beat.
 11. **Preserve useful real-use evidence.** Keep sampled IDs, concrete rejections, finalists, and the selected route when they explain a postmortem finding or an actionable feedback issue. Do not persist exploration telemetry merely for its own sake.
 

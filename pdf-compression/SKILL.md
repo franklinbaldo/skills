@@ -16,9 +16,11 @@ For PDF/A or ISO 19005 conversion, use
 conformance are separate workflows.
 
 ## Overview
+
 This skill allows the agent to compress and optimize large, scanned, or image-heavy PDF files. It works by extracting images from the PDF, downscaling them to a reasonable resolution for reading, and re-encoding them with high-efficiency formats (specifically 1-bit CCITT Group 4 TIFF for black & white text, or compressed JPEG for grayscale and color images).
 
 ## Quick Start
+
 Run the helper script using `uv run` to compress a PDF. It dynamically installs the required libraries (`pymupdf` and `pillow`) so they don't have to be pre-installed globally.
 
 ```bash
@@ -30,6 +32,7 @@ uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py --inpu
 ## Utility Scripts
 
 ### `compress.py`
+
 The CLI script provides several options to control the compression style and target size:
 
 - `--input` (required): Absolute path to the source PDF file.
@@ -45,9 +48,11 @@ The CLI script provides several options to control the compression style and tar
 - `--jbig2`: For `bw`-mode pages, also try JBIG2 lossless encoding (generic-region coder only — no symbol/text-region matching, no refinement) and use it instead of CCITT G4 whenever it verifies bit-exact via a MuPDF roundtrip decode *and* the size it will actually occupy in the saved PDF beats CCITT G4's real saved size (not the intermediate TIFF container size — see Format Alternatives below). Requires the `jbig2` binary on `PATH`. **If it's missing and you (the agent) have shell access, just install it** — it's a normal OS package, not something that needs bundling or special handling: `apt-get install -y jbig2` on Debian/Ubuntu, `brew install jbig2enc` on macOS. Fedora's and Arch's *official* repos don't package the encoder at all (only Fedora's `jbig2dec` decoder, or Arch's AUR) — `compress.py` prints accurate build-from-source/AUR guidance for those rather than a command that would just fail. **On Windows** there's no native `jbig2` package to fall back on; if WSL2/Hyper-V aren't options, use the [`litebox`](../litebox/SKILL.md) skill as the adaptation lesson for carrying the Linux binary into Windows userland, then apply the same bit-exact roundtrip and size checks. It is not wired into `compress.py` automatically. See Licensing below for why this backend was safe to add.
 
 ### `process_pdf.py`
+
 This script splits a large PDF based on its bookmarks (Table of Contents), applies a customizable N-up layout, compresses each split document (with binarization, downscaling, grayscale, and rasterization fallbacks), and re-merges the optimized parts back into a single PDF with rebuilt bookmarks.
 
 Options:
+
 - `--input` (required): Absolute path to the source PDF file.
 - `--output-dir` (required): Absolute path to the directory to save the split PDFs.
 - `--mode`: Compression mode (same as `compress.py`). For documents whose bookmark contains "autos digitalizados" or "digitalizado", B&W mode is automatically forced.
@@ -55,21 +60,25 @@ Options:
 - `--nup` (default: 1): Combine N pages from the original PDF into a grid on each page of the output PDF (e.g. 2, 4, 8, etc.).
 
 ### `2up.py`
+
 This script combines consecutive pages of a PDF side-by-side (2-up layout) into a single landscape page in a new PDF, keeping text layers fully searchable.
 
 Options:
+
 - `--input` (required): Absolute path to the source PDF file.
 - `--output` (required): Absolute path to save the 2-up PDF file.
 
 ### Example Commands:
 
 **1. Compress a scanned text document to minimum size (Black & White):**
+
 ```bash
 uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py \
   --input "/path/to/document.pdf" --output "/path/to/compressed.pdf" --mode bw
 ```
 
 **2. Compress a document while preserving colors:**
+
 ```bash
 uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py \
   --input "/path/to/document.pdf" --output "/path/to/compressed.pdf" \
@@ -77,6 +86,7 @@ uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py \
 ```
 
 **3. Split, N-up (2-up), compress, and re-merge a PDF (with dynamic rasterization fallback for heavy parts):**
+
 ```bash
 uv run --no-project --with pymupdf,pillow,opencv-python,numpy \
   <skill-dir>/scripts/process_pdf.py \
@@ -84,12 +94,14 @@ uv run --no-project --with pymupdf,pillow,opencv-python,numpy \
 ```
 
 **4. Combine pages side-by-side (2-up layout) of a single PDF file directly:**
+
 ```bash
 uv run --no-project --with pymupdf <skill-dir>/scripts/2up.py \
   --input "/path/to/document.pdf" --output "/path/to/2up_document.pdf"
 ```
 
 **5. Compress a scanned document, preferring JBIG2 over CCITT G4 when it's smaller:**
+
 ```bash
 uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py \
   --input "/path/to/document.pdf" --output "/path/to/compressed.pdf" --mode bw --jbig2
@@ -135,9 +147,11 @@ the `--jbig2` backend (xref dict normalization when reusing an existing
 image object, the real-saved-size comparison, install-hint accuracy per
 package manager, and an end-to-end pixel-identity check against the G4
 path). Run it with:
+
 ```bash
 uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/test_compress_jbig2.py
 ```
+
 Tests that need the real `jbig2` binary are skipped (not failed) when it's
 not on `PATH`.
 

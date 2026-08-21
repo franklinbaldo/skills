@@ -32,6 +32,7 @@ Fields:
 - Spans should not include leading/trailing whitespace; trim before recording offsets.
 
 Always run the validator before training:
+
 ```bash
 python scripts/opf_annotate.py validate train.jsonl --label-space label_space.json
 ```

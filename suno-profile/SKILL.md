@@ -121,8 +121,7 @@ above.
    `<blog-repo>/docs/suno-curation-plan.md` is the proposed default), check
    its `Last reviewed` date per the cadence rule above and run the
    self-critique first if it's due.
-2. Read the live profile state relevant to the task (`GET
-   /api/profiles/v2/{handle}` and/or the specific clip) before drafting or
+2. Read the live profile state relevant to the task (`GET /api/profiles/v2/{handle}` and/or the specific clip) before drafting or
    changing anything — never assume the plan document or a prior session's
    summary still matches reality.
 3. Draft wording using `seo-and-taste.md`. Bring drafts to Franklin as

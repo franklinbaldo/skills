@@ -23,10 +23,10 @@ documentation — Suno does not publish a write API.
 Suno uses Clerk for auth. Two distinct secrets exist, with very different
 risk profiles:
 
-| Secret | Lifetime | Renewable without the user? | Risk if leaked |
-| --- | --- | --- | --- |
-| Bearer JWT (`Authorization` header) | ~1 hour | No — expires on its own | Low — short window, dies unattended |
-| Clerk `__client` session cookie (`auth.suno.com`, httpOnly) | Long-lived, renewable | Yes | **High — equivalent to the account password** |
+| Secret                                                      | Lifetime              | Renewable without the user? | Risk if leaked                                |
+| ----------------------------------------------------------- | --------------------- | --------------------------- | --------------------------------------------- |
+| Bearer JWT (`Authorization` header)                         | ~1 hour               | No — expires on its own     | Low — short window, dies unattended           |
+| Clerk `__client` session cookie (`auth.suno.com`, httpOnly) | Long-lived, renewable | Yes                         | **High — equivalent to the account password** |
 
 The axis that matters isn't read-vs-write, it's **interactive-vs-autonomous**.
 Interactive write sessions (Franklin present) only ever need a fresh Bearer.
@@ -243,8 +243,7 @@ captured yet; presumably exists but unmapped.
 ```
 
 **Server-enforced hard limit: 500 characters.** Confirmed by the actual
-error, not a guess: a 600-character caption is rejected with `400
-{"detail": "Caption exceeds maximum length of 500 characters."}` — the
+error, not a guess: a 600-character caption is rejected with `400 {"detail": "Caption exceeds maximum length of 500 characters."}` — the
 write is atomic (rejected outright, not truncated), so an over-length
 caption never partially applies. Note this is a display constraint on
 top of the hard limit: 500 characters is far more than reads well in the
@@ -278,6 +277,7 @@ field is a real gap, not just a style choice:
   is what `suno-curator`'s `blog-contract.md` and `audit-catalog.mjs`
   use. It does **not** carry the bio, genre tags, pin captions, or social
   links — don't expect them here.
+
 - `GET /api/profiles/v2/{handle}` — the actual profile object:
   `metadata` (display name, handle, avatar/cover URLs), `bio`
   (`profile_description`, `user_inputted_genres`, `section_order`),
@@ -287,6 +287,7 @@ field is a real gap, not just a style choice:
   `pin-caption`'s note above on where `is_pinned` shows up). This is the
   endpoint for bio/genre/pin-caption work and for `curation-plan.md`'s
   self-critique, which reads live profile state before proposing changes.
+
 - `POST /api/feed/v3` (cursor-paginated: `{"cursor": "..."}` after the
   first call, response carries `clips`, `has_more`, `next_cursor`) — the
   only endpoint that returns **every** clip regardless of visibility,
@@ -339,13 +340,13 @@ text while mapping this endpoint.
 
 ## Playlists
 
-| Action | Endpoint | Body |
-|---|---|---|
-| Create | `POST /api/playlist/create/` | `{"name": "..."}` |
-| Edit metadata | `POST /api/playlist/set_metadata` | `{"playlist_id", "name", "description", "image_url"}` (cover as a base64 `data:image/...` URI, unlike song covers) |
-| Visibility | `POST /api/playlist_reaction/{playlist_id}/set_visibility/` | `{"is_public": bool}` |
-| Add/remove/reorder songs | `POST /api/playlist/update_clips/` | `{"playlist_id", "update_type": "add"\|"remove"\|"remove_by_id"\|"reorder", "metadata": {"clip_ids": [...]}, "recommendation_metadata": {}}` |
-| Delete | `POST /api/playlist/trash/` | `{"playlist_id": "..."}` |
+| Action                   | Endpoint                                                    | Body                                                                                                                                         |
+| ------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create                   | `POST /api/playlist/create/`                                | `{"name": "..."}`                                                                                                                            |
+| Edit metadata            | `POST /api/playlist/set_metadata`                           | `{"playlist_id", "name", "description", "image_url"}` (cover as a base64 `data:image/...` URI, unlike song covers)                           |
+| Visibility               | `POST /api/playlist_reaction/{playlist_id}/set_visibility/` | `{"is_public": bool}`                                                                                                                        |
+| Add/remove/reorder songs | `POST /api/playlist/update_clips/`                          | `{"playlist_id", "update_type": "add"\|"remove"\|"remove_by_id"\|"reorder", "metadata": {"clip_ids": [...]}, "recommendation_metadata": {}}` |
+| Delete                   | `POST /api/playlist/trash/`                                 | `{"playlist_id": "..."}`                                                                                                                     |
 
 **`set_metadata` and `image_url`, confirmed live (2026-07-16):** passing
 the *existing* cover's plain `https://` URL back in `image_url` fails

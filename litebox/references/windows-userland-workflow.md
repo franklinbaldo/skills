@@ -8,10 +8,10 @@ interfaces can change.
 
 LiteBox's current workflow has two artifacts:
 
-| Artifact | Build side | Purpose |
-| --- | --- | --- |
-| Initial filesystem TAR | Linux | Contains rewritten ELF files, dependencies, and staged data |
-| Windows runner EXE | Windows x86-64 | Loads that TAR and executes its Linux entrypoint |
+| Artifact               | Build side     | Purpose                                                     |
+| ---------------------- | -------------- | ----------------------------------------------------------- |
+| Initial filesystem TAR | Linux          | Contains rewritten ELF files, dependencies, and staged data |
+| Windows runner EXE     | Windows x86-64 | Loads that TAR and executes its Linux entrypoint            |
 
 This split is the bootstrap answer when the target Windows machine has neither
 WSL nor administrator access: build the TAR in an authorized disposable Linux

@@ -126,4 +126,3 @@ you're deliberately writing a time-capsule piece.
   table.
 - **Before/after diptych** — two-line contrast under "Before:" /
   "After:" labels.
-

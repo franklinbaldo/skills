@@ -22,6 +22,7 @@ Hyper-V, or WSL.
 ## Work the escape
 
 1. **Map the constraint.** Establish:
+
    - Windows architecture;
    - why native execution, WSL, containers, a VM, and normal installation are
      unavailable;
@@ -55,6 +56,7 @@ Hyper-V, or WSL.
    key into a reusable TAR, repository, CI artifact, log, or command transcript.
 
 4. **Produce both sides of the bridge.**
+
    - On Linux, use `litebox_packager` to discover dependencies, rewrite ELF
      syscall sites, and create the initial TAR. It can package local ELF files
      or a public OCI image.
@@ -78,6 +80,7 @@ Hyper-V, or WSL.
 
 6. **Grow one capability at a time.** On failure, classify it before changing
    the package:
+
    - missing ELF/shared library or loader;
    - missing CA certificate, locale, font, profile, or data file;
    - unsupported syscall or kernel behavior;

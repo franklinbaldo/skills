@@ -15,7 +15,7 @@ O briefing para a LLM-formalizadora (que pode ser uma sessão separada de
 contexto) contém:
 
 1. **Material original**: acórdão + peça (ou trecho relevante)
-2. **Decomposição Argdown** (output da Fase 1): claims A*, claims P*, warrants,
+2. **Decomposição Argdown** (output da Fase 1): claims A\*, claims P\*, warrants,
    topologia de ataques
 
 A LLM-formalizadora lê o grafo Argdown e produz o arquivo Lean.

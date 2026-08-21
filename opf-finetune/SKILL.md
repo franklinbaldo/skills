@@ -116,9 +116,11 @@ The detail lives in the reference files; this is the spine.
    `{"text": ..., "label": [{"category": ..., "start": <char>, "end": <char>}], "info": {...}}`.
    Offsets are **character** offsets, `start` inclusive, `end` exclusive (Python
    slicing). This is where most bugs live — validate with the bundled helper:
+
    ```bash
    python scripts/opf_annotate.py validate train.jsonl
    ```
+
    Annotate fully LLM-driven (a capable model labels, evaluators verify — no human
    annotation team needed); keep the eval gold slice checked by an ensemble of
    *differently-prompted / differently-framed* evaluators so their errors decorrelate
@@ -128,12 +130,14 @@ The detail lives in the reference files; this is the spine.
    the `llm-work-via-subagents` skill. Details in `references/annotation-format.md`.
 
 3. **Train.** Hold out a real validation split.
+
    ```bash
    opf train train.jsonl \
      --validation-dataset val.jsonl \
      --label-space-json label_space.json \
      --output-dir ./ckpt_legal_v1
    ```
+
    Confirm exact flags with `opf train --help`; OpenAI ships runnable demo harnesses
    in `examples/scripts/finetuning/` worth copying. Output dir gets `config.json`,
    `model.safetensors`, `finetune_summary.json`, `USAGE.txt`.
@@ -202,8 +206,6 @@ instance**, not every occurrence: exactly one operative `dispositivo_abertura`, 
 reasoning verbs, intermediate rulings, transition cues like "Decido", or outcomes quoted
 from precedent. Multiple conflicting spans per document defeat extraction. This is the
 single error the *category-disambiguation* evaluator in the ensemble exists to catch.
-
-
 
 - **`O` must be the first entry** in `span_class_names`.
 - **Character offsets, end-exclusive.** Misaligned offsets (off-by-one, counting

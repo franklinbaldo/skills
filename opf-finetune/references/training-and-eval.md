@@ -12,6 +12,7 @@ pip install -e .          # exposes the `opf` CLI: redact / eval / train
 ```
 
 Repo layout worth knowing:
+
 - `opf/__main__.py` — unified CLI entry (`redact`, `eval`, `train`).
 - `opf/_train/` — fine-tuning runners. `opf/_eval/` — dataset loading, metrics.
 - `opf/_core/` — span conversion + decoding. `opf/_model/` — transformer + weights.
@@ -24,11 +25,13 @@ Always sanity-check the live flag surface: `opf train --help`, `opf eval --help`
 ## Train
 
 Minimal:
+
 ```bash
 opf train train.jsonl --output-dir ./ckpt
 ```
 
 Recommended (explicit validation + custom ontology):
+
 ```bash
 opf train train.jsonl \
   --validation-dataset val.jsonl \
@@ -37,6 +40,7 @@ opf train train.jsonl \
 ```
 
 Output dir contains:
+
 - `config.json` — model + label-space config.
 - `model.safetensors` — fine-tuned weights.
 - `finetune_summary.json` — run metrics/metadata (archive this per run).
@@ -96,11 +100,13 @@ decoding config in `opf/_core/`.
 ## Inference / integration
 
 CLI redaction-style output:
+
 ```bash
 opf redact --checkpoint ./ckpt_legal_v1 input.txt
 ```
 
 Or load directly with transformers and consume spans in your pipeline:
+
 ```python
 from transformers import pipeline
 
@@ -117,8 +123,7 @@ naive aggregation — use the `opf` runtime / `opf/_core` decoding when boundary
 matters (it usually does for legal regions).
 
 **Reconstructing long regions** (Warning 2): take consecutive anchor spans and fill the
-text between them in post-processing — the model marks `É o relatório` and `Ante o
-exposto`; your code labels everything between as the relatório region. Do this here, in
+text between them in post-processing — the model marks `É o relatório` and `Ante o exposto`; your code labels everything between as the relatório region. Do this here, in
 integration, not by asking the model to label every token.
 
 ## Hardware

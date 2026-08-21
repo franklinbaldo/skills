@@ -17,6 +17,7 @@ uvx --from git+https://github.com/franklinbaldo/verne verne <command>
 ```
 
 Ou defina um alias para a sessão:
+
 ```bash
 alias verne='uvx --from git+https://github.com/franklinbaldo/verne verne'
 ```
@@ -33,12 +34,12 @@ Verne lê `JULES_API_KEY` do ambiente. Sem a key, todos os comandos falham com 4
 
 > **Configuração em Ambientes Ona:** Adicione a exportação da variável `JULES_API_KEY` e o alias `alias verne='uvx --from git+https://github.com/franklinbaldo/verne verne'` ao seu repositório de [dotfiles](https://github.com/franklinbaldo/dotfiles) (`install.sh`) para persistência automática em novos ambientes.
 
-
----
+______________________________________________________________________
 
 ## Comandos principais
 
 ### Sessions
+
 ```bash
 # Criar sessão em um repositório
 verne sessions create \
@@ -61,6 +62,7 @@ verne sessions send-message <session_id> "Fix the edge case for empty files"
 ```
 
 ### Agents
+
 ```bash
 # Listar agentes disponíveis
 verne agents list
@@ -70,6 +72,7 @@ verne agents launch <agent_name> --repo franklinbaldo/pink
 ```
 
 ### PR
+
 ```bash
 # Listar PRs criados por Jules
 verne pr list --repo franklinbaldo/pink
@@ -79,30 +82,34 @@ verne pr show <pr_number> --repo franklinbaldo/pink
 ```
 
 ### Heartbeat
+
 ```bash
 # Monitorar sessões ativas e ser notificado de mudanças de estado
 verne heartbeat --interval 30
 ```
 
 ### Interactive
+
 ```bash
 # Modo interativo para criar e gerenciar sessões
 verne interactive
 ```
 
----
+______________________________________________________________________
 
 ## Orchestration Protocol (Master/Worker)
 
 Para tarefas que envolvem múltiplos repositórios, use o padrão Master/Worker documentado em `ORCHESTRATION_PROTOCOL.md` do repositório verne (não deste repo — se o arquivo não existir lá, use o protocolo inline abaixo, incluindo o schema JSON, como fallback).
 
 ### Fluxo básico
+
 1. **Master session** (sem repo) define estratégia global
 2. **Verne** cria Worker sessions por repositório
 3. Workers executam tarefas com dependências entre si
 4. Heartbeat reporta status de volta ao Master
 
 ### Schema de instrução do Master
+
 ```json
 {
   "orchestration_id": "feat-X",
@@ -125,25 +132,26 @@ Para tarefas que envolvem múltiplos repositórios, use o padrão Master/Worker 
 }
 ```
 
----
+______________________________________________________________________
 
 ## Session states
 
-| Estado | Significado | Ação |
-|---|---|---|
-| `QUEUED` | Aguardando início | Esperar |
-| `PLANNING` | Gerando plano | Esperar |
-| `AWAITING_PLAN_APPROVAL` | Plano pronto | `verne sessions approve-plan <id>` |
-| `AWAITING_USER_FEEDBACK` | Precisa de input | `verne sessions send-message <id> "..."` |
-| `IN_PROGRESS` | Executando | Esperar (~10min) |
-| `COMPLETED` | Concluído | Ver PR criado |
-| `FAILED` | Erro | Investigar e recriar |
+| Estado                   | Significado       | Ação                                     |
+| ------------------------ | ----------------- | ---------------------------------------- |
+| `QUEUED`                 | Aguardando início | Esperar                                  |
+| `PLANNING`               | Gerando plano     | Esperar                                  |
+| `AWAITING_PLAN_APPROVAL` | Plano pronto      | `verne sessions approve-plan <id>`       |
+| `AWAITING_USER_FEEDBACK` | Precisa de input  | `verne sessions send-message <id> "..."` |
+| `IN_PROGRESS`            | Executando        | Esperar (~10min)                         |
+| `COMPLETED`              | Concluído         | Ver PR criado                            |
+| `FAILED`                 | Erro              | Investigar e recriar                     |
 
----
+______________________________________________________________________
 
 ## Padrões de delegação
 
 ### Pattern 1: Review assíncrono
+
 ```bash
 # Após push de branch
 verne sessions create \
@@ -154,6 +162,7 @@ verne sessions create \
 ```
 
 ### Pattern 2: Geração de testes
+
 ```bash
 verne sessions create \
   --repo franklinbaldo/pink \
@@ -162,6 +171,7 @@ verne sessions create \
 ```
 
 ### Pattern 3: Bug fix com regression test
+
 ```bash
 verne sessions create \
   --repo franklinbaldo/pink \
@@ -169,7 +179,7 @@ verne sessions create \
   --title "Fix <bug>"
 ```
 
----
+______________________________________________________________________
 
 ## Workflow com aprovação de plano
 
@@ -191,7 +201,7 @@ verne sessions activities <id>
 verne sessions approve-plan <id>
 ```
 
----
+______________________________________________________________________
 
 ## Jules resumes automaticamente via PR comments
 
@@ -204,7 +214,7 @@ Jules monitora PRs que criou. Ao comentar no PR com feedback específico, Jules 
 
 **Use PR comments para iterar — não crie nova sessão desnecessariamente.**
 
----
+______________________________________________________________________
 
 ## Reportando bugs e sugestões
 
@@ -232,12 +242,12 @@ A issue deve descrever **experiência real**, não abstrata:
 ```
 
 **Boas issues têm:**
+
 - Comando exato que causou o problema
 - Output real (não parafraseado)
 - O que o agente precisou fazer como workaround
 
-
----
+______________________________________________________________________
 
 ## Referências
 

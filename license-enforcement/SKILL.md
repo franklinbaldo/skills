@@ -222,15 +222,15 @@ Do not turn self-audit into a presumption against the user.
 
 An enforcement investigation is complete when:
 
-1. both source and target artifacts are frozen to stable versions or locators;
-2. each material match is classified by evidentiary type;
-3. idea/method similarity is not treated as protected expression;
-4. plausible lawful explanations and counterevidence are recorded;
-5. license status is checked and `unknown` remains distinct from `unlicensed`;
-6. the case is classified as signal, verified use, or actionable concern;
-7. no external communication occurs without explicit human approval;
-8. any monetary proposal uses terms supplied or approved by the rights holder;
-9. correspondence and subsequent evidence are appended to the case record; and
+01. both source and target artifacts are frozen to stable versions or locators;
+02. each material match is classified by evidentiary type;
+03. idea/method similarity is not treated as protected expression;
+04. plausible lawful explanations and counterevidence are recorded;
+05. license status is checked and `unknown` remains distinct from `unlicensed`;
+06. the case is classified as signal, verified use, or actionable concern;
+07. no external communication occurs without explicit human approval;
+08. any monetary proposal uses terms supplied or approved by the rights holder;
+09. correspondence and subsequent evidence are appended to the case record; and
 10. legal escalation, if any, is handed to a human decision-maker with a provenance-rich
     packet rather than an agent-generated verdict.
 

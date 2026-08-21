@@ -16,14 +16,14 @@ por linha de ataque.
 
 ## Convenção adotada neste pipeline
 
-| Símbolo | Significado |
-|---|---|
-| `[A1: título]` | Claim do acórdão (posição atacada) |
-| `[P1: título]` | Claim da peça (posição atacante) |
-| `[D-A1]` | Data de A1 — base fática |
-| `[W-A1]` | Warrant de A1 — regra completa com ressalvas |
-| `<arg-A1>` | Argumento que reconstrói e sustenta A1 |
-| `<arg-P1>` | Argumento que reconstrói e sustenta P1 (e ataca A*) |
+| Símbolo        | Significado                                          |
+| -------------- | ---------------------------------------------------- |
+| `[A1: título]` | Claim do acórdão (posição atacada)                   |
+| `[P1: título]` | Claim da peça (posição atacante)                     |
+| `[D-A1]`       | Data de A1 — base fática                             |
+| `[W-A1]`       | Warrant de A1 — regra completa com ressalvas         |
+| `<arg-A1>`     | Argumento que reconstrói e sustenta A1               |
+| `<arg-P1>`     | Argumento que reconstrói e sustenta P1 (e ataca A\*) |
 
 Ataques: a última linha numerada de `<arg-P*>` com prefixo `-` aponta para
 `[A*]` (sintaxe Argdown nativa para ataque entre statements).
@@ -38,7 +38,7 @@ ressalvas e exceções.**
 
 Se o acórdão invoca um precedente com ressalva e opera com versão truncada,
 o `[W-A*]` registra o Warrant completo. A discrepância entre o Warrant
-registrado e o Warrant operado pelo acórdão é a substância do ataque de P*.
+registrado e o Warrant operado pelo acórdão é a substância do ataque de P\*.
 
 ## Gate de qualificação da omissão
 
@@ -113,19 +113,19 @@ argumentativo.
 
 **Chaves:**
 
-| Chave | Valores | Significado |
-|---|---|---|
-| `prov` | `endogena` | Tribunal chegou à conclusão por raciocínio próprio |
-| | `fonte_declarada` | Documento cita explicitamente a origem |
-| | `fonte_inferida` | Pressuposto provavelmente de documento anterior não citado |
-| | `confirmada` | Fonte inferida confirmada pelo procurador |
-| | `pendente` | Não determinado — estado honesto, não trava o pipeline |
-| `fonte` | string livre | Identificação da fonte quando `prov=fonte_declarada` ou `fonte_inferida` |
-| `local` | string livre | Página, folha, ID, evento, item ou timestamp exato |
-| `autor` | string livre | Pessoa, parte, órgão ou tribunal responsável pela afirmação |
-| `status` | `necessaria` | Sem esta claim o efeito do ato não ocorreria |
-| | `contingente` | Presente no documento mas não load-bearing — "dito de passagem" |
-| | `pendente` | Não determinável com o material disponível |
+| Chave    | Valores           | Significado                                                              |
+| -------- | ----------------- | ------------------------------------------------------------------------ |
+| `prov`   | `endogena`        | Tribunal chegou à conclusão por raciocínio próprio                       |
+|          | `fonte_declarada` | Documento cita explicitamente a origem                                   |
+|          | `fonte_inferida`  | Pressuposto provavelmente de documento anterior não citado               |
+|          | `confirmada`      | Fonte inferida confirmada pelo procurador                                |
+|          | `pendente`        | Não determinado — estado honesto, não trava o pipeline                   |
+| `fonte`  | string livre      | Identificação da fonte quando `prov=fonte_declarada` ou `fonte_inferida` |
+| `local`  | string livre      | Página, folha, ID, evento, item ou timestamp exato                       |
+| `autor`  | string livre      | Pessoa, parte, órgão ou tribunal responsável pela afirmação              |
+| `status` | `necessaria`      | Sem esta claim o efeito do ato não ocorreria                             |
+|          | `contingente`     | Presente no documento mas não load-bearing — "dito de passagem"          |
+|          | `pendente`        | Não determinável com o material disponível                               |
 
 **Exemplo anotado:**
 
@@ -153,16 +153,16 @@ e `ClaimMeta.StatusClaim` em `references/ClaimMeta.lean`.
 
 1. **Warrant completo?** Se o precedente tem ressalva, ela está em `[W-A*]`?
    Discrepância entre Warrant registrado e Warrant operado pelo acórdão = núcleo
-   do ataque de P*.
+   do ataque de P\*.
 
 2. **Tipo de ataque?** Identificar em cada `<arg-P*>`: Warrant / Claim / Data /
    aplicação Data→Claim / Rebuttal não examinado. Nomear no título do argumento.
 
-3. **A* instrumentais?** Claims A* sem atacantes diretos que sustentam A1
+3. **A* instrumentais?*\* Claims A\* sem atacantes diretos que sustentam A1
    devem ser explicitadas com `+>`. Caem por arrasto se A1 for derrotado —
    mas isso é conclusão da Fase 4, não desta fase.
 
-4. **Independência de P*?** P* que atacam A1 por ângulos distintos são
+4. **Independência de P*?*\* P\* que atacam A1 por ângulos distintos são
    argumentos independentes, mesmo que apontem para a mesma claim.
 
 5. **Anotar proveniência nas claims de dados.** Especialmente: claims com
@@ -174,8 +174,8 @@ e `ClaimMeta.StatusClaim` em `references/ClaimMeta.lean`.
 
 Um arquivo `.argdown` (ou bloco `argdown` em Markdown) com:
 
-- Todas as claims do acórdão (A*), instrumentais incluídas
-- Todas as claims da peça (P*), uma por vício identificado
+- Todas as claims do acórdão (A\*), instrumentais incluídas
+- Todas as claims da peça (P\*), uma por vício identificado
 - Todos os argumentos `<arg-A*>` e `<arg-P*>`, com Warrants completos
 - Claims de dados anotadas com `prov`, `fonte`, `local`, `autor` e `status`
 - Claims de omissão anotadas com `cognicao`

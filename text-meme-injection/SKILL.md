@@ -1,6 +1,6 @@
 ---
 name: text-meme-injection
-description: |
+description: |-
   Inject text memes into blog posts, essays, and other long-form prose to make reading lighter without breaking voice. Use when the user asks to make prose funnier, looser, less academic, or explicitly wants meme/ironic texture. Do not use for legal documents, technical docs, condolences, medical writing, or material marked as serious.
 ---
 
@@ -64,15 +64,15 @@ Never add a meme merely because the word-count heuristic says one is due.
 
 ## Workflow
 
-1. **Read the whole draft first.** Understand its shape and existing humor before proposing insertions.
-2. **Identify the register.** Decide how far the text can bend without sounding like a different writer.
-3. **Decide whether a block set piece is wanted.** Usually the answer is no.
-4. **Find inline slots.** Favor transitions, flat setup sentences, self-aware moments, or places where a compact register shift does real work.
-5. **Load the target-language catalog.** Use [`references/catalog-en.md`](references/catalog-en.md) and/or [`references/catalog-pt-br.md`](references/catalog-pt-br.md) only after suitable slots exist.
-6. **Calibrate candidates.** Consult [`references/calibration-and-antipatterns.md`](references/calibration-and-antipatterns.md) when freshness, mixed language, subculture fit, or risky register matters.
-7. **Offer a small number of candidates per slot.** Make them meaningfully different, not paraphrases of the same joke.
-8. **Run the cut test.** Reject candidates that do not improve the passage.
-9. **Show proposed changes as a diff-style list.** Let the user accept/reject individual beats.
+01. **Read the whole draft first.** Understand its shape and existing humor before proposing insertions.
+02. **Identify the register.** Decide how far the text can bend without sounding like a different writer.
+03. **Decide whether a block set piece is wanted.** Usually the answer is no.
+04. **Find inline slots.** Favor transitions, flat setup sentences, self-aware moments, or places where a compact register shift does real work.
+05. **Load the target-language catalog.** Use [`references/catalog-en.md`](references/catalog-en.md) and/or [`references/catalog-pt-br.md`](references/catalog-pt-br.md) only after suitable slots exist.
+06. **Calibrate candidates.** Consult [`references/calibration-and-antipatterns.md`](references/calibration-and-antipatterns.md) when freshness, mixed language, subculture fit, or risky register matters.
+07. **Offer a small number of candidates per slot.** Make them meaningfully different, not paraphrases of the same joke.
+08. **Run the cut test.** Reject candidates that do not improve the passage.
+09. **Show proposed changes as a diff-style list.** Let the user accept/reject individual beats.
 10. **Stop.** Do not keep searching once the agreed density/rhythm is reached.
 
 ## Catalog routing

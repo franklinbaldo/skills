@@ -15,13 +15,13 @@ capacity vary.
 
 ## Route by environment
 
-| Local environment | Preferred route |
-| --- | --- |
-| Linux or macOS | Colab CLI for one-shot or interactive jobs |
-| Windows with WSL | Colab CLI inside WSL |
-| Windows without WSL/admin | Kaggle nativo; para Colab, adaptar o cliente Linux com LiteBox |
-| Long asynchronous job | Kaggle Kernel |
-| Fast iteration and file transfer | Named Colab session |
+| Local environment                | Preferred route                                                |
+| -------------------------------- | -------------------------------------------------------------- |
+| Linux or macOS                   | Colab CLI for one-shot or interactive jobs                     |
+| Windows with WSL                 | Colab CLI inside WSL                                           |
+| Windows without WSL/admin        | Kaggle nativo; para Colab, adaptar o cliente Linux com LiteBox |
+| Long asynchronous job            | Kaggle Kernel                                                  |
+| Fast iteration and file transfer | Named Colab session                                            |
 
 The directly installed `google-colab-cli` 0.6.0 is known not to run on Windows:
 it imports Unix-only `termios` and `tty` modules. Do not instruct the agent to

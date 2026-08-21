@@ -51,14 +51,17 @@ Canonical wider draw (20):
 ### Sampled slots
 
 1. `spiderman` — **Spider-Man Pointing at Spider-Man**
+
    - attempted relation: a new licensing framework points at the knowledge/parser framework already carrying much of the same machinery;
    - fit: medium; recognizable, but the native identity/duplication grammar is only adjacent to the overengineering joke.
 
 2. `ggg` — **Good Guy Greg**
+
    - attempted relation: already having graph/DuckDB/projection machinery and choosing not to build a second enterprise stack;
    - fit: medium-low; the social-credit grammar makes the joke feel generic.
 
 3. `center` — **What is this, a Center for Ants?!**
+
    - text PT: `O que é isso?` / `Um ERP para quatro arquivos Markdown?`
    - text EN: `What is this?` / `An ERP for four Markdown files?`
    - fit: very high; the template's native joke is absurd mismatch of scale, exactly the local argument.
@@ -69,10 +72,12 @@ Sampled survival: `3/3` received genuine compositions; no replacement was needed
 ### Editorial slots
 
 4. `gru` — **Gru's Plan**
+
    - escalation from “meter four records” through more entities to “interplanetary SAP”;
    - semantically strong, but it repeats the paragraph's sequence rather than compressing it.
 
 5. custom composition — `evals/assets/round-0002-license-custom-composition.svg`
+
    - four small Markdown records feed an absurd architecture of plans, assessments, engines, buses, and an “INTERPLANETARY SAP” box;
    - more passage-specific than any stock template, but slower to parse than `center` and closer to diagram-as-joke than meme language.
 
@@ -101,21 +106,25 @@ Canonical wider draw (20):
 ### Sampled slots
 
 1. `scc` — **Sudden Clarity Clarence**
+
    - attempted relation: realization that “fusion” was actually two adjacent arrangements;
    - fit: medium-high; good realization grammar, but visually generic.
 
 2. `handshake` — **Epic Handshake**
+
    - rejected before final composition: the template natively means successful union/common ground, while the passage's explicit claim is failure to integrate;
    - replacement draw: `ski`.
 
 3. `touch` — **Principal Skinner**
+
    - attempted relation: “Is the arrangement failing to integrate the genres? No, the genres are wrong.”
    - technically workable, but it contradicts the passage's self-critical voice and therefore scores low on authorial fit.
 
 Replacement `ski` — **Super Cool Ski Instructor**
-   - text PT: `Se o baião é só adorno` / `Você vai ter duas músicas em salas separadas`
-   - text EN: `If baião is only decoration` / `You're gonna get two songs in separate rooms`
-   - fit: high; warning/consequence grammar preserves the craft diagnosis instead of flattening it into a generic comparison.
+
+- text PT: `Se o baião é só adorno` / `Você vai ter duas músicas em salas separadas`
+- text EN: `If baião is only decoration` / `You're gonna get two songs in separate rooms`
+- fit: high; warning/consequence grammar preserves the craft diagnosis instead of flattening it into a generic comparison.
 
 Initial sampled survival: `2/3`; one concrete semantic mismatch caused one replacement. Final sampled slots: `3/3` composed.
 
@@ -124,6 +133,7 @@ Initial sampled survival: `2/3`; one concrete semantic mismatch caused one repla
 4. custom split-room composition — the core relation is two adjacent rehearsal spaces with no actual musical crossing. It is specific but risks merely illustrating the sentence.
 
 5. original visual — `evals/assets/round-0002-librarian-original-visual.svg`
+
    - procedurally authored original scene: two hexagonal library/rehearsal rooms, prog-rock symbols on one side and baião rhythm on the other, with sound waves stopping at the central wall;
    - provenance: original SVG authored for this E2E, not a stock meme and not a diffusion-model output;
    - specificity: very high;
@@ -152,13 +162,16 @@ The canonical wider draw was:
 ### Sampled slots
 
 1. `spirit` — **Fake Spirit Halloween Costume**
+
    - can turn “EXIT LIQUIDITY” into a costume assembled from “already bought”, “position -7%”, “dev online”, etc.; genuinely funny but visually heavy for a short launch post.
 
 2. `captain` — **I am the Captain Now**
+
    - strongest sampled line: `Look at me / I am the exit liquidity now`;
    - high immediate recognition, but mostly restates the premise already compressed by the prose.
 
 3. `philosoraptor` — **Philosoraptor**
+
    - can question whether selling too early turns profit into a different kind of loss;
    - thematically compatible but adds abstraction where the post already moves quickly.
 

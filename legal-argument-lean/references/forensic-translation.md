@@ -34,21 +34,21 @@ what the court did. Only the second is a peça opening.
 **Vocabulary translation.** Workspace terms must not appear in the
 peça. The forensic concepts they map to:
 
-| Workspace (Lean / methodology) | Peça (forensic) |
-|---|---|
-| steelman, V_n_a/b/c | (subsumed in prose; leituras não são nomeadas) |
-| universalização vazia | motivos genéricos do art. 489 §1º III; fundamento incapaz de distinguir o caso |
-| leituras dignas de exame | (silently absent — só as leituras dignas aparecem) |
-| pressupostos sistêmicos | competência constitucional desta Casa; existência do Tema X/RG |
-| filtro de trivialidade | (silently absent — leituras triviais não aparecem) |
-| §1º III check | argumento direto pelo art. 489 §1º III |
-| caso de [Nome] | hipótese dos autos; caso concreto; decisão recorrida |
-| compila / não compila | a tese sustenta-se / não se sustenta |
-| ratio decidendi | (uso técnico OK, com parcimônia) |
-| saída legítima, espaço de saídas | postura legítima; modo de uso do precedente |
-| não-saída, fora do espaço legítimo | uso impróprio de precedente; aplicação seletiva |
-| partição (das saídas) | (silently absent — a estrutura aparece como enumeração no corpo, sem nome) |
-| trait, módulo de saída | (silently absent — categoria estrutural do Lean) |
+| Workspace (Lean / methodology)     | Peça (forensic)                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------ |
+| steelman, V_n_a/b/c                | (subsumed in prose; leituras não são nomeadas)                                 |
+| universalização vazia              | motivos genéricos do art. 489 §1º III; fundamento incapaz de distinguir o caso |
+| leituras dignas de exame           | (silently absent — só as leituras dignas aparecem)                             |
+| pressupostos sistêmicos            | competência constitucional desta Casa; existência do Tema X/RG                 |
+| filtro de trivialidade             | (silently absent — leituras triviais não aparecem)                             |
+| §1º III check                      | argumento direto pelo art. 489 §1º III                                         |
+| caso de [Nome]                     | hipótese dos autos; caso concreto; decisão recorrida                           |
+| compila / não compila              | a tese sustenta-se / não se sustenta                                           |
+| ratio decidendi                    | (uso técnico OK, com parcimônia)                                               |
+| saída legítima, espaço de saídas   | postura legítima; modo de uso do precedente                                    |
+| não-saída, fora do espaço legítimo | uso impróprio de precedente; aplicação seletiva                                |
+| partição (das saídas)              | (silently absent — a estrutura aparece como enumeração no corpo, sem nome)     |
+| trait, módulo de saída             | (silently absent — categoria estrutural do Lean)                               |
 
 **Cuidado com construções internas do Lean.** Termos inventados
 *dentro* do exercício formal para descrever sua estrutura — partição,

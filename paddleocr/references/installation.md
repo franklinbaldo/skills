@@ -25,8 +25,8 @@ an NVIDIA GPU; warn the user before processing a long PDF.
 
 Choose the official PaddlePaddle wheel index matching the environment:
 
-| CUDA | Index |
-|---|---|
+| CUDA | Index                                                    |
+| ---- | -------------------------------------------------------- |
 | 11.8 | `https://www.paddlepaddle.org.cn/packages/stable/cu118/` |
 | 12.6 | `https://www.paddlepaddle.org.cn/packages/stable/cu126/` |
 | 12.9 | `https://www.paddlepaddle.org.cn/packages/stable/cu129/` |

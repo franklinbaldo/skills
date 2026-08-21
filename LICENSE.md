@@ -92,7 +92,7 @@ To the extent a choice of law is permitted, this License is governed by the laws
 
 You may copy and redistribute the text of this License itself for reference, commentary, or adaptation to another work. Use of the name “Franklin Baldo” in an adapted license does not imply endorsement and should be removed unless factually applicable.
 
----
+______________________________________________________________________
 
 **License identifier:** `Skill-Use-License-0.1`
 

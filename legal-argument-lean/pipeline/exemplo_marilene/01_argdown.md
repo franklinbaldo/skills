@@ -13,7 +13,7 @@ acórdão manteve a sentença, invocando a ratio da ADI 3.772/STF.
 derrota é marcada aqui. Extensões admissíveis são calculadas na Fase 4
 (Síntese de derrotas), após Lean + análise subjetiva.
 
----
+______________________________________________________________________
 
 ```argdown
 ===
@@ -136,11 +136,11 @@ IPERON como fundamento autônomo contrário à acumulação.
   - [A1: acumulação lícita por ratio ADI 3.772]
 ```
 
----
+______________________________________________________________________
 
 ## Notas estruturais
 
-**Concentração em A1.** Todos os cinco P* atacam A1 por ângulos distintos
+**Concentração em A1.** Todos os cinco P\* atacam A1 por ângulos distintos
 (Warrant, Claim, aplicação Data→Claim, dois Rebuttals não examinados). A2 e
 A3 são instrumentais a A1 e caem por arrasto se A1 for derrotado.
 

@@ -95,7 +95,7 @@ prompt when the source lacks one.
 
 Portuguese:
 
-~~~~markdown
+````markdown
 ## Letra
 
 ```
@@ -105,7 +105,7 @@ Portuguese:
 ## Notas do compositor
 
 <authorial context>
-~~~~
+````
 
 English companions use `## Lyrics` and `## Composer Notes`.
 
@@ -153,8 +153,7 @@ read them to understand how Franklin groups the work on the Suno side.
 
 ## Commit and PR conventions
 
-- Commits: `tipo(escopo): resumo` — e.g. `feat(music): sync 4 new songs from
-suno`, `chore(music): rfc-0011 genre cleanup`. Hrönir evaluation sessions use
+- Commits: `tipo(escopo): resumo` — e.g. `feat(music): sync 4 new songs from suno`, `chore(music): rfc-0011 genre cleanup`. Hrönir evaluation sessions use
   their own format (`hronir: <N> matches — <agent-id>`).
 - Prose in commits/docs is Portuguese; code and identifiers English; music
   posts PT by default (see the blog's `CLAUDE.md`, "Convenções do repo").
