@@ -158,11 +158,11 @@ e `ClaimMeta.StatusClaim` em `references/ClaimMeta.lean`.
 2. **Tipo de ataque?** Identificar em cada `<arg-P*>`: Warrant / Claim / Data /
    aplicação Data→Claim / Rebuttal não examinado. Nomear no título do argumento.
 
-3. **A* instrumentais?*\* Claims A\* sem atacantes diretos que sustentam A1
+3. \**A* instrumentais?\*\* Claims A\* sem atacantes diretos que sustentam A1
    devem ser explicitadas com `+>`. Caem por arrasto se A1 for derrotado —
    mas isso é conclusão da Fase 4, não desta fase.
 
-4. **Independência de P*?*\* P\* que atacam A1 por ângulos distintos são
+4. \**Independência de P*?\*\* P\* que atacam A1 por ângulos distintos são
    argumentos independentes, mesmo que apontem para a mesma claim.
 
 5. **Anotar proveniência nas claims de dados.** Especialmente: claims com
