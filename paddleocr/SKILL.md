@@ -67,13 +67,13 @@ After installing the matching environment from
 [references/installation.md](references/installation.md):
 
 ```bash
-python scripts/ocr.py INPUT.pdf OUTPUT.md --device gpu:0
+uv run scripts/ocr.py INPUT.pdf OUTPUT.md --device gpu:0
 ```
 
 CPU fallback:
 
 ```bash
-python scripts/ocr.py INPUT.pdf OUTPUT.md --device cpu
+uv run scripts/ocr.py INPUT.pdf OUTPUT.md --device cpu
 ```
 
 Always tell the user before a CPU run that it can be much slower than a Colab

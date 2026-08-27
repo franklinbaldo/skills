@@ -61,7 +61,7 @@ Toda interação deve passar por `scripts/juris.py`.
 Busca:
 
 ```bash
-python scripts/juris.py buscar "<termo>" \
+uv run scripts/juris.py buscar "<termo>" \
   [--tipo ACÓRDÃO EMENTA SENTENÇA VOTO DECISÃO RELATÓRIO] \
   [--classe "APELAÇÃO CÍVEL"] [--orgao "2ª Câmara"] [--relator "SOBRENOME"] \
   [--contendo palavra1 "expressão exata"] \
@@ -72,20 +72,20 @@ python scripts/juris.py buscar "<termo>" \
 Documentos de um processo:
 
 ```bash
-python scripts/juris.py processo 7030969-47.2024.8.22.0001
+uv run scripts/juris.py processo 7030969-47.2024.8.22.0001
 ```
 
 Inteiro teor:
 
 ```bash
-python scripts/juris.py texto 21458095
-python scripts/juris.py texto 21458095 --max 8000
+uv run scripts/juris.py texto 21458095
+uv run scripts/juris.py texto 21458095 --max 8000
 ```
 
 Facetas:
 
 ```bash
-python scripts/juris.py facetas "improbidade" --limite 20
+uv run scripts/juris.py facetas "improbidade" --limite 20
 ```
 
 ## Estratégia de busca
@@ -103,7 +103,7 @@ Portanto:
 Exemplo:
 
 ```bash
-python scripts/juris.py buscar "18,25%" --tipo ACÓRDÃO --contendo "polícia civil"
+uv run scripts/juris.py buscar "18,25%" --tipo ACÓRDÃO --contendo "polícia civil"
 ```
 
 ## Unidade mínima de precedente

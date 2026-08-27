@@ -1,4 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+# ]
+# ///
 """Project an Agent Skills tree into a deterministic, disposable OKF bundle.
 
 This helper is intentionally stdlib-only and static: it reads source files but never

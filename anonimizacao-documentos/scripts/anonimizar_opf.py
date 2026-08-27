@@ -1,3 +1,11 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "opf @ git+https://github.com/openai/privacy-filter.git@f7f00ca7fb869683eb732c010299d901457f19c3",
+#     "torch",
+# ]
+# ///
 """Detect PII with OpenAI Privacy Filter and create reviewed/anonymized copies."""
 
 from __future__ import annotations

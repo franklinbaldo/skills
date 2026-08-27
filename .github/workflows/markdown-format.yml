@@ -25,11 +25,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install "mdformat>=1.0.0" "mdformat-frontmatter>=2.1.2" "mdformat-gfm>=1.0.0"
+      - uses: astral-sh/setup-uv@v6
       - name: Check formatting
         # No --base flag: the script reads GITHUB_ACTIONS/GITHUB_BASE_REF
         # itself and picks the right diff base for pull_request vs push.
-        run: python scripts/check_markdown_format.py
+        run: uv run scripts/check_markdown_format.py

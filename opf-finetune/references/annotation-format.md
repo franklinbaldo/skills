@@ -34,7 +34,7 @@ Fields:
 Always run the validator before training:
 
 ```bash
-python scripts/opf_annotate.py validate train.jsonl --label-space label_space.json
+uv run scripts/opf_annotate.py validate train.jsonl --label-space label_space.json
 ```
 
 ## The label space JSON

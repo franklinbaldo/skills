@@ -13,6 +13,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - uses: astral-sh/setup-uv@v6
+
     - name: Install elan
       run: |
         curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain leanprover/lean4:v4.14.0
@@ -87,7 +89,7 @@ jobs:
 
     - name: Generate axiom dependency graph (Mermaid)
       run: |
-        python3 scripts/axiom_graph.py \
+        uv run scripts/axiom_graph.py \
           --input legal-argument-lean/references/axiom_audit.txt \
           --out docs/axiom_graph.md
         echo "--- axiom_graph.md preview ---"
@@ -95,7 +97,7 @@ jobs:
 
     - name: Generate Markdown docs from Lean docstrings
       run: |
-        python3 scripts/lean_docgen_md.py \
+        uv run scripts/lean_docgen_md.py \
           --src legal-argument-lean/references \
           --out docs/references
 

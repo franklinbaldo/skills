@@ -1,4 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+# ]
+# ///
 """
 lean_docgen_md.py — Extract docstrings and declarations from Lean 4 files
 and emit one Markdown file per module.

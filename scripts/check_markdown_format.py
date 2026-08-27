@@ -1,4 +1,12 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "mdformat>=1.0.0",
+#     "mdformat-frontmatter>=2.1.2",
+#     "mdformat-gfm>=1.0.0",
+# ]
+# ///
 """Check (or apply) mdformat formatting on the repo's .md files.
 
 Ported from pge-iperon/judicial (scripts/check_markdown_format.py), which
@@ -110,7 +118,7 @@ def main():
                     fh.write(after)
 
     if unformatted and not args.fix:
-        print("\n❌ FILES NOT FORMATTED (run `python scripts/check_markdown_format.py --fix --files <path>` or `--all --fix`):\n")
+        print("\n❌ FILES NOT FORMATTED (run `uv run scripts/check_markdown_format.py --fix --files <path>` or `--all --fix`):\n")
         for f in unformatted:
             print(f"   - {f}")
         return 1

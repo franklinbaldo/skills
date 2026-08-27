@@ -1,4 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+# ]
+# ///
 """Promote explicitly reviewed semantic mentions into derived OKF graph edges.
 
 The source Agent Skills remain unchanged. A repository-local optional policy file

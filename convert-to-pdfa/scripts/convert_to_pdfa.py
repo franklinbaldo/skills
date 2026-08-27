@@ -1,3 +1,10 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "pymupdf",
+# ]
+# ///
 """Convert a PDF to PDF/A-1b, PDF/A-2b, or PDF/A-3b.
 
 Ghostscript performs the standards-aware conversion. PyMuPDF provides

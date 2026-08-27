@@ -1,3 +1,9 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+# ]
+# ///
 """Create a private Kaggle GPU script job without overwriting user files."""
 
 from __future__ import annotations

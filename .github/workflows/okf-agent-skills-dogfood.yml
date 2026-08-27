@@ -25,7 +25,7 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p dogfood
-          python okf-agent-skills/scripts/project.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/projector.txt
+          uv run okf-agent-skills/scripts/project.py . "$RUNNER_TEMP/skills-okf" | tee dogfood/projector.txt
           cp -R "$RUNNER_TEMP/skills-okf" dogfood/projection
 
       - name: Inspect with current okf-parser
@@ -82,7 +82,7 @@ jobs:
       - name: Materialize canonical audit views
         run: |
           set -o pipefail
-          uv run --no-project --with duckdb python okf-agent-skills/scripts/run_typed_audit.py \
+          uv run okf-agent-skills/scripts/run_typed_audit.py \
             dogfood/skills.duckdb --output dogfood/audit.json
           cat dogfood/audit.json
           uv run --no-project --with duckdb python - <<'PY'

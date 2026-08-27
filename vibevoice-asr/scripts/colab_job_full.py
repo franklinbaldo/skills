@@ -1,3 +1,12 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "huggingface-hub",
+#     "torch",
+#     "transformers",
+# ]
+# ///
 """Transcribe one uploaded audio file with VibeVoice-ASR-HF on a Colab GPU."""
 
 from __future__ import annotations

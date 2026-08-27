@@ -1,3 +1,9 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+# ]
+# ///
 """Replace reviewed PII tags with deterministic canonical markers."""
 
 from __future__ import annotations

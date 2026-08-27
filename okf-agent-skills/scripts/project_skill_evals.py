@@ -1,4 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+# ]
+# ///
 """Project official Agent Skills routing eval queries into an existing OKF bundle."""
 
 from __future__ import annotations

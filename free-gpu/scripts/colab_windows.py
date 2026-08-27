@@ -1,3 +1,10 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "google-colab-cli",
+# ]
+# ///
 """Run non-interactive Google Colab CLI commands on unsupported Windows hosts."""
 
 from __future__ import annotations

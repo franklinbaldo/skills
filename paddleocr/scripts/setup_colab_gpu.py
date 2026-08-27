@@ -1,3 +1,9 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+# ]
+# ///
 """Install PaddleOCR with GPU support in a dedicated Google Colab VM."""
 
 from __future__ import annotations

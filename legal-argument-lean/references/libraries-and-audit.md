@@ -55,7 +55,7 @@ These are formalization templates, not legal authorities. Inspect the axioms and
 Generate per-module documentation from Lean docstrings with the repo-root helper when working from a full checkout:
 
 ```bash
-python3 scripts/lean_docgen_md.py \
+uv run scripts/lean_docgen_md.py \
   --src legal-argument-lean/references \
   --out docs/references
 ```
@@ -90,7 +90,7 @@ Do not eyeball large audits when the full repo checkout is available. Use:
 
 ```bash
 lean file.lean > axiom_audit.txt 2>&1
-python3 scripts/axiom_graph.py \
+uv run scripts/axiom_graph.py \
   --input axiom_audit.txt \
   --out docs/axiom_graph.md
 ```
