@@ -1,0 +1,179 @@
+[
+  {
+    "path": "anonimizacao-documentos/scripts/anonimizar.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "anonimizacao-documentos/scripts/anonimizar_opf.py",
+    "already_pep723": false,
+    "external_imports": [
+      "google",
+      "opf",
+      "torch"
+    ]
+  },
+  {
+    "path": "anonimizacao-documentos/scripts/auditar_pii.py",
+    "already_pep723": false,
+    "external_imports": [
+      "litellm"
+    ]
+  },
+  {
+    "path": "anonimizacao-documentos/scripts/setup_colab_opf.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "convert-to-pdfa/scripts/convert_to_pdfa.py",
+    "already_pep723": false,
+    "external_imports": [
+      "pymupdf"
+    ]
+  },
+  {
+    "path": "datajud/scripts/datajud.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "datajud/scripts/datajud_mcp.py",
+    "already_pep723": true,
+    "external_imports": [
+      "fastmcp"
+    ]
+  },
+  {
+    "path": "free-gpu/scripts/colab_windows.py",
+    "already_pep723": false,
+    "external_imports": [
+      "colab_cli"
+    ]
+  },
+  {
+    "path": "free-gpu/scripts/create_kaggle_job.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "juris-tjro/scripts/juris.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "okf-agent-skills/scripts/project.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "okf-agent-skills/scripts/project_agent_skills.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "okf-agent-skills/scripts/project_skill_evals.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "okf-agent-skills/scripts/project_skill_mentions.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "okf-agent-skills/scripts/promote_reviewed_relations.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "okf-agent-skills/scripts/run_typed_audit.py",
+    "already_pep723": false,
+    "external_imports": [
+      "duckdb"
+    ]
+  },
+  {
+    "path": "opf-finetune/scripts/opf_annotate.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "paddleocr/scripts/ocr.py",
+    "already_pep723": false,
+    "external_imports": [
+      "paddle",
+      "paddleocr"
+    ]
+  },
+  {
+    "path": "paddleocr/scripts/setup_colab_gpu.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "pdf-compression/scripts/2up.py",
+    "already_pep723": false,
+    "external_imports": [
+      "fitz"
+    ]
+  },
+  {
+    "path": "pdf-compression/scripts/compress.py",
+    "already_pep723": false,
+    "external_imports": [
+      "PIL",
+      "cv2",
+      "fitz",
+      "numpy"
+    ]
+  },
+  {
+    "path": "pdf-compression/scripts/process_pdf.py",
+    "already_pep723": false,
+    "external_imports": [
+      "PIL",
+      "fitz"
+    ]
+  },
+  {
+    "path": "pdf-to-markdown/scripts/convert_pdf.py",
+    "already_pep723": false,
+    "external_imports": [
+      "fitz"
+    ]
+  },
+  {
+    "path": "scripts/axiom_graph.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "scripts/check_markdown_format.py",
+    "already_pep723": false,
+    "external_imports": [
+      "mdformat"
+    ]
+  },
+  {
+    "path": "scripts/lean_docgen_md.py",
+    "already_pep723": false,
+    "external_imports": []
+  },
+  {
+    "path": "vibevoice-asr/scripts/colab_job_bitnet.py",
+    "already_pep723": false,
+    "external_imports": [
+      "huggingface_hub"
+    ]
+  },
+  {
+    "path": "vibevoice-asr/scripts/colab_job_full.py",
+    "already_pep723": false,
+    "external_imports": [
+      "huggingface_hub",
+      "torch",
+      "transformers"
+    ]
+  }
+]
