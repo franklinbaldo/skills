@@ -1,0 +1,30 @@
+name: PEP 723 inventory
+
+on:
+  push:
+    branches: [chore/pep-723-standalone-scripts]
+    paths:
+      - "scripts/_pep723_inventory.py"
+      - ".github/workflows/pep723-inventory.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  inventory:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inventory standalone-script imports
+        run: python scripts/_pep723_inventory.py > .pep723-imports.json
+      - name: Publish inventory on migration branch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .pep723-imports.json
+          git commit -m "chore: record PEP 723 import inventory" || exit 0
+          git push
