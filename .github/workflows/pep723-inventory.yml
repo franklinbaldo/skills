@@ -23,10 +23,10 @@ jobs:
         run: python scripts/_pep723_inventory.py
       - name: Validate patch hygiene
         run: git diff --check
-      - name: Publish migrated scripts
+      - name: Publish migration changes
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -u -- '*.py'
+          git add -u
           git commit -m "chore: make standalone Python scripts PEP 723 self-contained" || exit 0
           git push
