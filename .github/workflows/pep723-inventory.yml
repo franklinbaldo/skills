@@ -1,4 +1,4 @@
-name: PEP 723 inventory
+name: PEP 723 migration
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  inventory:
+  migrate:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
@@ -19,12 +19,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Inventory standalone-script imports
-        run: python scripts/_pep723_inventory.py > .pep723-imports.json
-      - name: Publish inventory on migration branch
+      - name: Apply PEP 723 metadata
+        run: python scripts/_pep723_inventory.py
+      - name: Validate patch hygiene
+        run: git diff --check
+      - name: Publish migrated scripts
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add .pep723-imports.json
-          git commit -m "chore: record PEP 723 import inventory" || exit 0
+          git add -u -- '*.py'
+          git commit -m "chore: make standalone Python scripts PEP 723 self-contained" || exit 0
           git push
