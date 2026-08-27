@@ -118,7 +118,7 @@ The detail lives in the reference files; this is the spine.
    slicing). This is where most bugs live — validate with the bundled helper:
 
    ```bash
-   python scripts/opf_annotate.py validate train.jsonl
+   uv run scripts/opf_annotate.py validate train.jsonl
    ```
 
    Annotate fully LLM-driven (a capable model labels, evaluators verify — no human
@@ -247,7 +247,7 @@ single error the *category-disambiguation* evaluator in the ensemble exists to c
 - `scripts/opf_annotate.py` — validate/convert span annotations to OPF JSONL.
   `validate` (offset sanity, overlap, UTF-8, label-space coverage), `from-spans`
   (build JSONL from `(text, [(start,end,category)])`), `preview` (render spans
-  inline to eyeball boundaries). Run `python scripts/opf_annotate.py --help`.
+  inline to eyeball boundaries). Run `uv run scripts/opf_annotate.py --help`.
 
 ## Real-use postmortem
 

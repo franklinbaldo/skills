@@ -97,21 +97,21 @@ acima — nunca chamada direta ao endpoint.
 Processo:
 
 ```bash
-python scripts/datajud.py processo 7027457-61.2021.8.22.0001
-python scripts/datajud.py processo 7027457-61.2021.8.22.0001 --movimentos
+uv run scripts/datajud.py processo 7027457-61.2021.8.22.0001
+uv run scripts/datajud.py processo 7027457-61.2021.8.22.0001 --movimentos
 ```
 
 Descobrir códigos:
 
 ```bash
-python scripts/datajud.py codigos "execucao fiscal" --por classe
-python scripts/datajud.py codigos "aposentadoria" --por assunto
+uv run scripts/datajud.py codigos "execucao fiscal" --por classe
+uv run scripts/datajud.py codigos "aposentadoria" --por assunto
 ```
 
 Buscar:
 
 ```bash
-python scripts/datajud.py buscar \
+uv run scripts/datajud.py buscar \
   [--classe COD] [--assunto TEXTO] [--assunto-codigo COD] \
   [--orgao TEXTO] [--grau G1|G2|JE|TR|SUP] \
   [--de DD/MM/AAAA] [--ate DD/MM/AAAA] \
@@ -121,9 +121,9 @@ python scripts/datajud.py buscar \
 Contar e agregar:
 
 ```bash
-python scripts/datajud.py contar --classe 1116 --de 01/01/2025 --ate 31/12/2025
-python scripts/datajud.py facetas --por classe
-python scripts/datajud.py facetas --classe 1116 --por orgao --limite 10
+uv run scripts/datajud.py contar --classe 1116 --de 01/01/2025 --ate 31/12/2025
+uv run scripts/datajud.py facetas --por classe
+uv run scripts/datajud.py facetas --classe 1116 --por orgao --limite 10
 ```
 
 Use `--tribunal stj|stf|trf1|tjsp|...` quando necessário. O padrão é TJRO.
