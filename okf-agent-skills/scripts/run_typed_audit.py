@@ -1,4 +1,10 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "duckdb",
+# ]
+# ///
 """Materialize canonical static audit views in an okf-parser DuckDB artifact."""
 
 from __future__ import annotations

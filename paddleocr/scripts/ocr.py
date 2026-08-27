@@ -1,3 +1,11 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "paddleocr",
+#     "paddlepaddle",
+# ]
+# ///
 """Run PaddleOCR on one image or PDF and export Markdown plus metrics."""
 
 from __future__ import annotations

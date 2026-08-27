@@ -1,4 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+# ]
+# ///
 """Build the static Agent Skills inspection IR for current okf-parser surfaces.
 
 This frontend projects authored/static repository facts only. Real-use feedback lives in

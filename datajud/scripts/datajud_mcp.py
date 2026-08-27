@@ -1,6 +1,9 @@
+#!/usr/bin/env -S uv run --script
 # /// script
-# requires-python = ">=3.12"
-# dependencies = ["fastmcp>=2.0", "requests"]
+# requires-python = ">=3.11"
+# dependencies = [
+#     "fastmcp>=2.0",
+# ]
 # ///
 """DataJud como servidor MCP — e como CLI, pelo mesmo código.
 

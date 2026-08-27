@@ -1,3 +1,10 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "huggingface-hub",
+# ]
+# ///
 """Build VibeASR.cpp and transcribe one uploaded audio file in Colab.
 
 The local wrapper uploads /content/vibevoice-job.json and the audio before this

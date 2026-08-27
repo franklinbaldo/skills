@@ -1,4 +1,10 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "mdformat",
+# ]
+# ///
 """Check (or apply) mdformat formatting on the repo's .md files.
 
 Ported from pge-iperon/judicial (scripts/check_markdown_format.py), which

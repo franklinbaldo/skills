@@ -1,4 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+# ]
+# ///
 """
 axiom_graph.py — Parse `#print axioms` output from Lean 4 and emit
 Mermaid dependency diagrams (graph TD, sankey-beta, ishikawa-beta).

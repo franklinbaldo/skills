@@ -1,3 +1,9 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+# ]
+# ///
 """Install a pinned OpenAI Privacy Filter package in a Colab runtime."""
 
 from __future__ import annotations
