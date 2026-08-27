@@ -54,6 +54,12 @@ DEPENDENCIES: dict[str, list[str]] = {
 }
 
 PEP_BLOCK = re.compile(r"(?ms)^# /// script\n.*?^# ///\n")
+SCRIPT_CALL = re.compile(
+    r"(?<![\w-])(?:uv run\s+)?python3?\s+"
+    r"((?:[A-Za-z0-9_.-]+/)*scripts/[A-Za-z0-9_.-]+\.py)"
+)
+COUNT_USAGE_CALL = re.compile(r"(?<![\w-])(?:uv run\s+)?python3?\s+count_usage\.py")
+TEXT_SUFFIXES = {".md", ".yml", ".yaml", ".sh", ".ps1"}
 
 
 def candidates() -> list[Path]:
@@ -93,6 +99,21 @@ def migrate(path: Path, dependencies: list[str]) -> None:
     ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
 
+def migrate_callsites() -> None:
+    for path in sorted(ROOT.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES:
+            continue
+        if path.as_posix().endswith(".github/workflows/pep723-inventory.yml"):
+            continue
+        text = path.read_text(encoding="utf-8")
+        updated = SCRIPT_CALL.sub(lambda match: f"uv run {match.group(1)}", text)
+        if path.parent == SPECIAL.parent:
+            updated = COUNT_USAGE_CALL.sub("uv run count_usage.py", updated)
+        if updated != text:
+            path.write_text(updated, encoding="utf-8")
+            print(f"updated call sites in {path.relative_to(ROOT).as_posix()}")
+
+
 def main() -> None:
     found = {p.relative_to(ROOT).as_posix() for p in candidates()}
     expected = set(DEPENDENCIES)
@@ -105,6 +126,8 @@ def main() -> None:
         rel = path.relative_to(ROOT).as_posix()
         migrate(path, DEPENDENCIES[rel])
         print(f"migrated {rel}: {DEPENDENCIES[rel]}")
+
+    migrate_callsites()
 
     residual = [
         p.relative_to(ROOT).as_posix()
