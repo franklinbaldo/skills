@@ -40,84 +40,93 @@ def run_command(cmd, cwd=None):
         return res.stdout.strip()
     except subprocess.CalledProcessError as e:
         print(f"Error running command '{cmd}': {e.stderr}", file=sys.stderr)
-        return ""
+        return None
 
 
-def get_changed_files(base_ref=None):
-    """Return Markdown files changed from a safe comparison base.
+def get_changed_files(base_ref):
+    check_ref = run_command(f"git rev-parse --verify {base_ref}")
+    if not check_ref:
+        print(f"Base ref {base_ref} not found. Falling back to HEAD~1...")
+        base_ref = "HEAD~1"
+        check_ref = run_command(f"git rev-parse --verify {base_ref}")
+        if not check_ref:
+            print("Cannot determine git diff. Returning empty list.")
+            return []
 
-    In GitHub Actions PRs, use the remote base branch. On push, compare with
-    the previous commit. Locally, prefer the merge-base with origin/main (or
-    origin/master), then fall back to HEAD~1.
-    """
-    if base_ref:
-        diff_base = base_ref
-    elif os.environ.get("GITHUB_ACTIONS") == "true":
-        pr_base = os.environ.get("GITHUB_BASE_REF")
-        if pr_base:
-            diff_base = f"origin/{pr_base}"
-        else:
-            before = os.environ.get("GITHUB_EVENT_BEFORE")
-            diff_base = before if before and set(before) != {"0"} else "HEAD~1"
-    else:
-        diff_base = None
-        for remote_ref in ("origin/main", "origin/master"):
-            merge_base = run_command(f"git merge-base HEAD {remote_ref}")
-            if merge_base:
-                diff_base = merge_base
-                break
-        diff_base = diff_base or "HEAD~1"
-
-    output = run_command(f"git diff --name-only --diff-filter=ACMRTUXB {diff_base}...HEAD")
-    return [path for path in output.splitlines() if path.endswith(".md")]
+    stdout = run_command(f"git diff --name-only {base_ref}")
+    if not stdout:
+        return []
+    return [f.strip() for f in stdout.splitlines() if f.strip()]
 
 
-def get_all_markdown_files():
-    output = run_command("git ls-files '*.md'")
-    return [path for path in output.splitlines() if path]
-
-
-def should_skip(path):
-    parts = path.replace("\\", "/").split("/")
-    return any(part in EXCLUDE_DIRNAMES for part in parts)
-
-
-def check_file(path, fix=False):
-    try:
-        text = open(path, encoding="utf-8").read()
-    except OSError as e:
-        print(f"Could not read {path}: {e}", file=sys.stderr)
-        return False
-
-    formatted = mdformat.text(text, options=OPTIONS, extensions=EXTENSIONS)
-    if formatted == text:
+def is_excluded(filepath):
+    if not filepath.endswith(".md"):
         return True
-    if fix:
-        try:
-            with open(path, "w", encoding="utf-8", newline="") as handle:
-                handle.write(formatted)
-            print(f"formatted: {path}")
-            return True
-        except OSError as e:
-            print(f"Could not write {path}: {e}", file=sys.stderr)
-            return False
-    print(f"needs formatting: {path}")
-    return False
+    parts = filepath.replace("\\", "/").split("/")
+    return any(p in EXCLUDE_DIRNAMES for p in parts)
+
+
+def collect_all_files():
+    files = []
+    for root, dirs, filenames in os.walk("."):
+        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRNAMES]
+        for filename in filenames:
+            if filename.endswith(".md"):
+                files.append(os.path.join(root, filename))
+    return files
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--all", action="store_true", help="Check every tracked Markdown file")
-    parser.add_argument("--fix", action="store_true", help="Rewrite files in place")
-    parser.add_argument("--base", help="Explicit git comparison base")
+    parser = argparse.ArgumentParser(description="Check/apply mdformat on repository .md files.")
+    parser.add_argument("--all", action="store_true", help="Check every tracked .md file, not just changed ones.")
+    parser.add_argument("--base", default="origin/main", help="Base ref to diff against for changed files.")
+    parser.add_argument("--files", nargs="*", help="Specific files to check.")
+    parser.add_argument("--fix", action="store_true", help="Apply formatting in place instead of just checking.")
     args = parser.parse_args()
 
-    files = get_all_markdown_files() if args.all else get_changed_files(args.base)
-    files = [path for path in files if not should_skip(path) and os.path.exists(path)]
-    bad = [path for path in files if not check_file(path, fix=args.fix)]
-    if bad and not args.fix:
-        print(f"\n{len(bad)} Markdown file(s) need formatting.", file=sys.stderr)
+    if args.files:
+        files_to_check = args.files
+    elif args.all:
+        files_to_check = collect_all_files()
+    else:
+        base = args.base
+        if os.getenv("GITHUB_ACTIONS") == "true":
+            gh_base_ref = os.getenv("GITHUB_BASE_REF")
+            base = f"origin/{gh_base_ref}" if gh_base_ref else "HEAD~1"
+            print(f"Comparing against base: {base}")
+        else:
+            print(f"Comparing against base: {base}")
+        changed = get_changed_files(base)
+        files_to_check = [f for f in changed if not is_excluded(f)]
+
+    files_to_check = [f for f in files_to_check if not is_excluded(f) and os.path.exists(f)]
+
+    if not files_to_check:
+        print("No markdown files to check.")
+        return 0
+
+    print(f"Checking {len(files_to_check)} file(s)...")
+    unformatted = []
+    for filepath in files_to_check:
+        with open(filepath, encoding="utf-8") as fh:
+            before = fh.read()
+        after = mdformat.text(before, options=OPTIONS, extensions=EXTENSIONS)
+        if before != after:
+            unformatted.append(filepath)
+            if args.fix:
+                with open(filepath, "w", encoding="utf-8", newline="\n") as fh:
+                    fh.write(after)
+
+    if unformatted and not args.fix:
+        print("\n❌ FILES NOT FORMATTED (run `uv run scripts/check_markdown_format.py --fix --files <path>` or `--all --fix`):\n")
+        for f in unformatted:
+            print(f"   - {f}")
         return 1
+
+    if unformatted:
+        print(f"\n✅ Reformatted {len(unformatted)} file(s).")
+    else:
+        print("\n✅ All checked files are already formatted!")
     return 0
 
 
