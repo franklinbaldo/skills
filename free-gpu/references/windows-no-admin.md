@@ -41,18 +41,15 @@ user explicitly chooses to evaluate that workaround, not as the default
 Windows route:
 
 ```powershell
-uv run --no-project --with google-colab-cli python `
-  <skill-dir>\scripts\colab_windows.py version
-uv run --no-project --with google-colab-cli python `
-  <skill-dir>\scripts\colab_windows.py run --help
+uv run <skill-dir>\scripts\colab_windows.py version
+uv run <skill-dir>\scripts\colab_windows.py run --help
 ```
 
 Only after that explicit choice, use the same prefix for a non-interactive
 command:
 
 ```powershell
-uv run --no-project --with google-colab-cli python `
-  <skill-dir>\scripts\colab_windows.py run --gpu T4 job.py
+uv run <skill-dir>\scripts\colab_windows.py run --gpu T4 job.py
 ```
 
 Do not use `console` or `ssh`; they require Unix terminal facilities. The

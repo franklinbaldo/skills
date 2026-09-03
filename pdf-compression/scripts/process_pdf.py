@@ -5,6 +5,8 @@
 #     "pillow",
 #     "pymupdf",
 #     "cyclopts>=3.0",
+#     "numpy",
+#     "opencv-python-headless",
 # ]
 # ///
 import gc

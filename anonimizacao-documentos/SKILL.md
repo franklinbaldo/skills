@@ -39,9 +39,7 @@ continuam exigindo revisão ou ajuste específico.
    wrapper Colab da seção seguinte. Em uma máquina com NVIDIA configurada:
 
    ```bash
-   uv run --no-project \
-     --with "opf @ git+https://github.com/openai/privacy-filter.git@f7f00ca7fb869683eb732c010299d901457f19c3" \
-     python <skill-dir>/scripts/anonimizar_opf.py \
+   uv run <skill-dir>/scripts/anonimizar_opf.py \
      --input documento.md --device cuda
    ```
 
@@ -51,7 +49,7 @@ continuam exigindo revisão ou ajuste específico.
 4. Gerar novamente a versão determinística após qualquer correção:
 
    ```bash
-   uv run --no-project python <skill-dir>/scripts/anonimizar.py \
+   uv run <skill-dir>/scripts/anonimizar.py \
      --input documento.tagged.md
    ```
 

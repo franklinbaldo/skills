@@ -58,8 +58,7 @@ Create a directory named after the case number under the target workspace (e.g. 
 Run the python utility `convert_pdf.py` provided in the skill scripts with the appropriate options:
 
 ```bash
-uv run --no-project --with pymupdf,markitdown \
-  <skill-dir>/scripts/convert_pdf.py \
+uv run <skill-dir>/scripts/convert_pdf.py \
   --input "path/to/process.pdf" \
   --outdir "path/to/output-directory" \
   [--keep-data-uris] [--docintel-endpoint <URL>]

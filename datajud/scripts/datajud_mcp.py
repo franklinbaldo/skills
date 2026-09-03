@@ -15,11 +15,12 @@ O script resolve o transporte; este arquivo resolve a **superfície**. Três
 defeitos medidos em uso real (2026-08-19), consultando o trânsito em julgado de
 um mandado de segurança:
 
-1. **A invocação não era adivinhável.** A skill documenta
-   ``python scripts/datajud.py``, que pressupõe CWD na pasta da skill e
-   ``requests`` instalado. De outro repositório, o comando que funciona é
-   ``uv run --no-project --with requests python datajud/scripts/datajud.py``.
-   Custou duas tentativas. Como tool MCP, não há comando a montar.
+1. **A invocação não era adivinhável.** A skill documentava
+   ``python scripts/datajud.py``, que pressupõe CWD na pasta da skill e as
+   dependências já instaladas; de outro repositório era preciso remontar o
+   comando à mão. Custou duas tentativas. Hoje o cabeçalho PEP 723 reduz isso
+   a ``uv run datajud/scripts/datajud.py`` — e, como tool MCP, não há comando
+   a montar.
 
 2. **A saída não aplicava o conselho da própria skill.** O SKILL.md manda
    destacar "apenas eventos que mudam o estado útil"; `--movimentos` despeja

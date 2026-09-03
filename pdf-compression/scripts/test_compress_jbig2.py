@@ -5,6 +5,8 @@
 #     "cyclopts>=3.0",
 #     "pillow",
 #     "pymupdf",
+#     "numpy",
+#     "opencv-python-headless",
 # ]
 # ///
 """Regression tests for the --jbig2 backend in compress.py.

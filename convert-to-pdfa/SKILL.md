@@ -32,8 +32,7 @@ modern PDF features better than PDF/A-1b while targeting visual fidelity.
 2. Run strict, non-raster conversion:
 
    ```bash
-   uv run --no-project --with pymupdf \
-     <skill-dir>/scripts/convert_to_pdfa.py "/path/input.pdf" --part 2
+   uv run <skill-dir>/scripts/convert_to_pdfa.py "/path/input.pdf" --part 2
    ```
 
    On Windows, the script prefers native `gswin64c.exe` and automatically uses
@@ -51,8 +50,7 @@ modern PDF features better than PDF/A-1b while targeting visual fidelity.
    explain the loss and retry with:
 
    ```bash
-   uv run --no-project --with pymupdf \
-     <skill-dir>/scripts/convert_to_pdfa.py "/path/input.pdf" \
+   uv run <skill-dir>/scripts/convert_to_pdfa.py "/path/input.pdf" \
      --part 2 --rasterize --dpi 300
    ```
 
@@ -128,8 +126,7 @@ Run the self-contained regression suite. Real conversion tests skip only when
 neither native Ghostscript nor WSL Ghostscript is available.
 
 ```bash
-uv run --no-project --with pymupdf \
-  <skill-dir>/scripts/test_convert_to_pdfa.py -v
+uv run <skill-dir>/scripts/test_convert_to_pdfa.py -v
 ```
 
 Authoritative references:

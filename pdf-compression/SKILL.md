@@ -4,9 +4,10 @@ description: >-
   Optimize and compress large image-heavy or scanned PDFs by downscaling images and re-encoding them using CCITT Group 4 (black and white) or JPEG (grayscale/color).
   Use when compressing scanned PDFs, splitting large court PDFs by bookmarks, applying N-up (2-up/4-up) layouts, or when the user says "compress this PDF" / "PDF muito grande".
 compatibility: >-
-  Requires Python/uv; core compression installs PyMuPDF/Pillow dynamically.
-  OpenCV/numpy are optional enhancements. JBIG2 mode additionally requires a
-  `jbig2`/jbig2enc system binary; native Windows may need WSL or LiteBox for it.
+  Requires Python/uv; each script declares its Python dependencies inline
+  (PEP 723) and `uv run <script>` installs them. JBIG2 mode additionally
+  requires a `jbig2`/jbig2enc system binary; native Windows may need WSL or
+  LiteBox for it.
 ---
 
 # PDF Compression
@@ -21,10 +22,10 @@ This skill allows the agent to compress and optimize large, scanned, or image-he
 
 ## Quick Start
 
-Run the helper script using `uv run` to compress a PDF. It dynamically installs the required libraries (`pymupdf` and `pillow`) so they don't have to be pre-installed globally.
+Run the helper script with `uv run`. Each script declares its own dependencies inline (PEP 723), so `uv` installs them on demand and nothing has to be pre-installed globally.
 
 ```bash
-uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py --input <input.pdf> --output <output.pdf> --mode bw
+uv run <skill-dir>/scripts/compress.py --input <input.pdf> --output <output.pdf> --mode bw
 ```
 
 > `<skill-dir>` is resolved by `skills.sh` to the *installed* skill directory (e.g. `~/.claude/skills/pdf-compression`), not the source repo checkout. Run `skills.sh` from the repo root to install with the placeholder resolved automatically.
@@ -73,14 +74,14 @@ Options:
 **1. Compress a scanned text document to minimum size (Black & White):**
 
 ```bash
-uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py \
+uv run <skill-dir>/scripts/compress.py \
   --input "/path/to/document.pdf" --output "/path/to/compressed.pdf" --mode bw
 ```
 
 **2. Compress a document while preserving colors:**
 
 ```bash
-uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py \
+uv run <skill-dir>/scripts/compress.py \
   --input "/path/to/document.pdf" --output "/path/to/compressed.pdf" \
   --mode color --quality 55 --max-dim 1200
 ```
@@ -88,22 +89,21 @@ uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py \
 **3. Split, N-up (2-up), compress, and re-merge a PDF (with dynamic rasterization fallback for heavy parts):**
 
 ```bash
-uv run --no-project --with pymupdf,pillow,opencv-python,numpy \
-  <skill-dir>/scripts/process_pdf.py \
+uv run <skill-dir>/scripts/process_pdf.py \
   --input "/path/to/document.pdf" --output-dir "/path/to/split_dir" --threshold-kb 150 --nup 2
 ```
 
 **4. Combine pages side-by-side (2-up layout) of a single PDF file directly:**
 
 ```bash
-uv run --no-project --with pymupdf <skill-dir>/scripts/2up.py \
+uv run <skill-dir>/scripts/2up.py \
   --input "/path/to/document.pdf" --output "/path/to/2up_document.pdf"
 ```
 
 **5. Compress a scanned document, preferring JBIG2 over CCITT G4 when it's smaller:**
 
 ```bash
-uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/compress.py \
+uv run <skill-dir>/scripts/compress.py \
   --input "/path/to/document.pdf" --output "/path/to/compressed.pdf" --mode bw --jbig2
 ```
 
@@ -149,7 +149,7 @@ package manager, and an end-to-end pixel-identity check against the G4
 path). Run it with:
 
 ```bash
-uv run --no-project --with pymupdf,pillow <skill-dir>/scripts/test_compress_jbig2.py
+uv run <skill-dir>/scripts/test_compress_jbig2.py
 ```
 
 Tests that need the real `jbig2` binary are skipped (not failed) when it's
@@ -157,10 +157,10 @@ not on `PATH`.
 
 ## Common Mistakes
 
-- **Running with standard Python instead of `uv run`:** Standard python invocation might fail if `pymupdf` or `pillow` are not installed in the global environment. Always run using `uv run --no-project --with pymupdf,pillow`.
-- **Skipping `process_pdf.py`'s optional dependencies:** `process_pdf.py` can also use `opencv-python` and `numpy` for adaptive thresholding. If they're missing, it falls back automatically to plain Pillow thresholding (with a warning) rather than failing — add `uv run --no-project --with pymupdf,pillow,opencv-python,numpy` only if you want the OpenCV-based enhancement.
+- **Running with standard Python instead of `uv run`:** a plain `python` invocation fails when `pymupdf` or `pillow` are missing from the global environment. Always run `uv run <script>`, which resolves the script's own PEP 723 dependencies.
+- **Assuming OpenCV must be added by hand:** adaptive thresholding uses `opencv-python-headless` and `numpy`, and both are already declared in the scripts' PEP 723 headers. If an import still fails in some environment, the code falls back to plain Pillow thresholding with a warning rather than failing the run.
 - **Using `bw` mode for photos/color-heavy figures:** If the PDF has high-resolution colored graphs, photos, or diagrams where color is critical, `bw` mode will binarize them into high-contrast black and white, making them unreadable. Use `color` or `gray` mode for these files.
-- **Giving up when `--jbig2` falls back to CCITT G4:** the `jbig2` CLI is a system package, not a PyPI dependency `uv run --with` can install, so `compress.py` prints a warning and transparently falls back to CCITT G4 when it's missing rather than failing the whole run. That warning includes accurate install guidance for the current machine — just follow it and re-run `compress.py --jbig2`, the same way you'd install any other missing CLI tool. Don't treat the fallback as a hard limitation.
+- **Giving up when `--jbig2` falls back to CCITT G4:** the `jbig2` CLI is a system package, not a PyPI dependency a PEP 723 header can install, so `compress.py` prints a warning and transparently falls back to CCITT G4 when it's missing rather than failing the whole run. That warning includes accurate install guidance for the current machine — just follow it and re-run `compress.py --jbig2`, the same way you'd install any other missing CLI tool. Don't treat the fallback as a hard limitation.
 - **Assuming every package manager has a one-line `jbig2enc` install:** it doesn't. Fedora's and Arch's official repos don't package the encoder at all — only `apt-get` (Debian/Ubuntu) and `brew` (macOS) do. `_jbig2_install_hint()` in `compress.py` reflects this; don't "fix" it to always print a single `<pkg-manager> install jbig2enc` command, that would just print commands that fail on those distros.
 
 ## Real-use postmortem
