@@ -43,6 +43,14 @@ The conversion tool (`convert_pdf.py`) supports specific options to control how 
 
    - *Use when:* Offline, or when no cloud credentials are provided, or when `markitdown` fails. This fallback executes local extraction via PyMuPDF (`fitz`), which is extremely fast and reliable for text-searchable court PDFs.
 
+Both extractors are libraries declared in the script's PEP 723 header, not
+external commands. They differ in what they can tell you about page
+boundaries: PyMuPDF yields one chunk per real page, so the generated Markdown
+carries `<!-- Page N -->` comments; `markitdown` yields a single Markdown
+stream with no page boundaries, so documents are split by their own title
+markers and no page comments are emitted. Missing page comments mean the
+`markitdown` path ran — not that pagination was lost.
+
 ## Core Workflow
 
 ### 1. Identify Case Metadata

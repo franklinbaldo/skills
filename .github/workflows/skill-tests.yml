@@ -26,3 +26,4 @@ jobs:
           uv run --quiet anonimizacao-documentos/scripts/test_anonimizacao.py
           uv run --quiet free-gpu/scripts/test_free_gpu.py
           uv run --quiet convert-to-pdfa/scripts/test_convert_to_pdfa.py
+          uv run --quiet pdf-to-markdown/scripts/test_convert_pdf.py
