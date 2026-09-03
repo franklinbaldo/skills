@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "cyclopts>=3.0",
 # ]
 # ///
 """
@@ -28,9 +29,12 @@ Legal axiom sub-classification (for Ishikawa bones):
 """
 import re
 import sys
-import argparse
 from collections import defaultdict
 from pathlib import Path
+from typing import Annotated
+
+import cyclopts
+from cyclopts import Parameter
 
 LEAN_BUILTINS = frozenset({
     'propext', 'Classical.choice', 'Quot.sound', 'funext',
@@ -296,34 +300,49 @@ def to_markdown(deps: dict[str, list[str]],
 # CLI
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--input', required=True,
-                        help='axiom_audit.txt (or - for stdin)')
-    parser.add_argument('--out', default='docs/axiom_graph.md')
-    parser.add_argument('--effect', default='Conclusão do acórdão',
-                        help='Label for the Ishikawa effect (head of the fishbone)')
-    parser.add_argument('--pretensao', default='Pretensão do embargante',
-                        help='Label for the Sankey source node (embargante\'s claim)')
-    parser.add_argument('--conclusion', default=None,
-                        help='Label for the Sankey sink node (defaults to --effect)')
-    parser.add_argument('--include-builtins', action='store_true')
-    args = parser.parse_args()
+app = cyclopts.App(name="axiom-graph", help=__doc__)
 
-    text = sys.stdin.read() if args.input == '-' else Path(args.input).read_text()
+
+@app.default
+def main(
+    *,
+    input_path: Annotated[str, Parameter(name=["--input"])],
+    out: Path = Path('docs/axiom_graph.md'),
+    effect: str = 'Conclusão do acórdão',
+    pretensao: str = 'Pretensão do embargante',
+    conclusion: str | None = None,
+    include_builtins: bool = False,
+) -> None:
+    """Emit Mermaid diagrams from `#print axioms` output.
+
+    Parameters
+    ----------
+    input_path
+        axiom_audit.txt (or - for stdin).
+    out
+        Markdown file to write.
+    effect
+        Label for the Ishikawa effect (head of the fishbone).
+    pretensao
+        Label for the Sankey source node (embargante's claim).
+    conclusion
+        Label for the Sankey sink node (defaults to --effect).
+    include_builtins
+        Keep Lean built-in axioms in the diagrams.
+    """
+    text = sys.stdin.read() if input_path == '-' else Path(input_path).read_text()
     deps = parse_audit(text)
     if not deps:
         print('WARNING: no #print axioms output found.', file=sys.stderr)
 
-    out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(to_markdown(deps,
-                               skip_builtins=not args.include_builtins,
-                               effect=args.effect,
-                               pretensao=args.pretensao,
-                               conclusion=args.conclusion))
+                               skip_builtins=not include_builtins,
+                               effect=effect,
+                               pretensao=pretensao,
+                               conclusion=conclusion))
     print(f'Written: {out} ({len(deps)} theorems, 3 diagram formats)')
 
 
 if __name__ == '__main__':
-    main()
+    app()

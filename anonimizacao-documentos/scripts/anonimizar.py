@@ -2,16 +2,20 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "cyclopts>=3.0",
 # ]
 # ///
 """Replace reviewed PII tags with deterministic canonical markers."""
 
 from __future__ import annotations
 
-import argparse
 import re
 import sys
 from pathlib import Path
+from typing import Annotated
+
+import cyclopts
+from cyclopts import Parameter
 
 CANONICAL_TYPES = {
     "assinatura_signatario": "ASSINATURA_SIGNATARIO",
@@ -122,33 +126,38 @@ def input_files(input_path: Path) -> list[Path]:
     raise FileNotFoundError(input_path)
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Replace reviewed PII tags with deterministic markers."
-    )
-    parser.add_argument("--input", required=True, type=Path)
-    parser.add_argument(
-        "--output",
-        type=Path,
-        help="Output path; valid only when --input is one file.",
-    )
-    parser.add_argument("--force", action="store_true")
-    return parser.parse_args()
+app = cyclopts.App(name="anonimizar", help=__doc__)
 
 
-def main() -> int:
-    args = parse_args()
-    files = input_files(args.input)
-    if args.output and len(files) != 1:
+@app.default
+def main(
+    *,
+    input_path: Annotated[Path, Parameter(name=["--input"])],
+    output: Path | None = None,
+    force: bool = False,
+) -> int:
+    """Replace reviewed PII tags with deterministic markers.
+
+    Parameters
+    ----------
+    input_path
+        A *.tagged.md file or a directory containing them.
+    output
+        Output path; valid only when --input is one file.
+    force
+        Overwrite an existing output file.
+    """
+    files = input_files(input_path)
+    if output and len(files) != 1:
         raise AnonymizationError("--output requires a single input file.")
     if not files:
         raise AnonymizationError("No *.tagged.md files found.")
 
     for input_path in files:
-        output_path = args.output or default_output_path(input_path)
+        output_path = output or default_output_path(input_path)
         if input_path.resolve() == output_path.resolve():
             raise AnonymizationError("Refusing to overwrite the input file.")
-        if output_path.exists() and not args.force:
+        if output_path.exists() and not force:
             raise FileExistsError(f"Output already exists: {output_path}")
 
         text = input_path.read_text(encoding="utf-8")
@@ -161,7 +170,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
+        raise SystemExit(app())
     except (AnonymizationError, FileExistsError, FileNotFoundError, OSError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         sys.exit(1)

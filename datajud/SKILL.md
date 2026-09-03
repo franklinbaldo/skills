@@ -9,8 +9,9 @@ description: >-
   carregados e reconstrução documental, use notebooklm-processos.
 compatibility: >-
   Requires Python 3 and outbound HTTPS access to the public DataJud/CNJ API.
-  No private credential is required; the bundled stdlib client carries the CNJ
-  public API key and handles retry/backoff.
+  No private credential is required; the bundled client carries the CNJ public
+  API key and handles retry/backoff. Dependencies are declared inline (PEP 723)
+  and resolved by `uv run`.
 ---
 
 # DataJud — metadados e movimentação

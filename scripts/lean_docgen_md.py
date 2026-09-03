@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "cyclopts>=3.0",
 # ]
 # ///
 """
@@ -15,8 +16,9 @@ Usage:
 """
 import re
 import sys
-import argparse
 from pathlib import Path
+
+import cyclopts
 
 # Matches /-- ... -/ docstrings (possibly multi-line)
 DOCSTRING_RE = re.compile(r'/--\s*(.*?)\s*-/', re.DOTALL)
@@ -110,7 +112,7 @@ def entry_to_md(e: dict) -> str:
         '',
         e['doc'],
         '',
-        f"```lean",
+        "```lean",
         e['type'],
         '```',
         '',
@@ -137,16 +139,24 @@ def module_to_md(parsed: dict) -> str:
     return '\n'.join(parts)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--src', default='legal-argument-lean/references',
-                        help='Directory with .lean files')
-    parser.add_argument('--out', default='docs/references',
-                        help='Output directory for .md files')
-    args = parser.parse_args()
+app = cyclopts.App(name="lean-docgen-md", help=__doc__)
 
-    src = Path(args.src)
-    out = Path(args.out)
+
+@app.default
+def main(
+    *,
+    src: Path = Path('legal-argument-lean/references'),
+    out: Path = Path('docs/references'),
+):
+    """Emit one Markdown file per Lean module.
+
+    Parameters
+    ----------
+    src
+        Directory with .lean files.
+    out
+        Output directory for .md files.
+    """
     out.mkdir(parents=True, exist_ok=True)
 
     lean_files = sorted(src.rglob('*.lean'))
@@ -178,4 +188,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    app()

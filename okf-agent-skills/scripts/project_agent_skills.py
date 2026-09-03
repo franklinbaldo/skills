@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "cyclopts>=3.0",
 # ]
 # ///
 """Project an Agent Skills tree into a deterministic, disposable OKF bundle.
@@ -13,13 +14,14 @@ replacement for the source skills.
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import os
 import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+
+import cyclopts
 
 SKILL_FILE = "SKILL.md"
 MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
@@ -347,18 +349,26 @@ def project(root: Path, output: Path) -> tuple[list[Skill], list[Relation]]:
     return skills, relations
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", type=Path, help="Agent Skills repository/root")
-    parser.add_argument("output", type=Path, help="Disposable OKF output directory")
-    args = parser.parse_args()
+app = cyclopts.App(name="project-agent-skills", help=__doc__)
 
-    skills, relations = project(args.source, args.output)
+
+@app.default
+def main(source: Path, output: Path) -> int:
+    """Project the tree into an OKF bundle.
+
+    Parameters
+    ----------
+    source
+        Agent Skills repository/root.
+    output
+        Disposable OKF output directory.
+    """
+    skills, relations = project(source, output)
     resolved = sum(relation.resolved for relation in relations)
     print(f"projected {len(skills)} skills, {len(relations)} local links ({resolved} projected)")
-    print(args.output.resolve())
+    print(output.resolve())
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(app())

@@ -3,13 +3,19 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "pymupdf",
+#     "cyclopts>=3.0",
 # ]
 # ///
 import os
-import sys
 import re
-import argparse
 import subprocess
+import sys
+from pathlib import Path
+from typing import Annotated
+
+import cyclopts
+from cyclopts import Parameter
+
 
 def clean_text(text):
     """Clean repeating headers, footers and typical system stamps from court documents."""
@@ -127,7 +133,7 @@ def generate_index(outdir, base_pdf_name, index_entries):
         for seq, title, filename, snippet in index_entries:
             f.write(f"| {seq} | **{title}** | [{filename}](./{filename}) | {snippet} |\n")
             
-    print(f"  Generated INDEX.md successfully.")
+    print("  Generated INDEX.md successfully.")
 
 def convert_with_markitdown(pdf_path, keep_data_uris=False, docintel_endpoint=None, cu_endpoint=None):
     """Try to convert PDF with markitdown via uv run."""
@@ -176,18 +182,35 @@ def convert_with_pymupdf(pdf_path):
         print(f"PyMuPDF extraction failed: {e}")
         return None
 
-def main():
-    parser = argparse.ArgumentParser(description="Convert court process PDFs into clean structured Markdown folders.")
-    parser.add_argument("--input", required=True, help="Path to the input PDF file.")
-    parser.add_argument("--outdir", required=True, help="Directory to save the markdown files.")
-    parser.add_argument("--keep-data-uris", action="store_true", help="Keep data URIs in output.")
-    parser.add_argument("--docintel-endpoint", help="Azure Document Intelligence Endpoint URL.")
-    parser.add_argument("--cu-endpoint", help="Azure Content Understanding Endpoint URL.")
-    
-    args = parser.parse_args()
-    
-    pdf_path = os.path.abspath(args.input)
-    outdir = os.path.abspath(args.outdir)
+app = cyclopts.App(name="convert-pdf", help="Convert court process PDFs into clean structured Markdown folders.")
+
+
+@app.default
+def main(
+    *,
+    input_path: Annotated[Path, Parameter(name=["--input"])],
+    outdir: Path,
+    keep_data_uris: bool = False,
+    docintel_endpoint: str | None = None,
+    cu_endpoint: str | None = None,
+):
+    """Convert one PDF into a structured Markdown folder.
+
+    Parameters
+    ----------
+    input_path
+        Path to the input PDF file.
+    outdir
+        Directory to save the markdown files.
+    keep_data_uris
+        Keep data URIs in output.
+    docintel_endpoint
+        Azure Document Intelligence endpoint URL.
+    cu_endpoint
+        Azure Content Understanding endpoint URL.
+    """
+    pdf_path = os.path.abspath(input_path)
+    outdir = os.path.abspath(outdir)
     
     if not os.path.exists(pdf_path):
         print(f"Error: Input file does not exist: {pdf_path}")
@@ -202,9 +225,9 @@ def main():
     # Try markitdown first, fallback to PyMuPDF
     pages_data = convert_with_markitdown(
         pdf_path,
-        keep_data_uris=args.keep_data_uris,
-        docintel_endpoint=args.docintel_endpoint,
-        cu_endpoint=args.cu_endpoint
+        keep_data_uris=keep_data_uris,
+        docintel_endpoint=docintel_endpoint,
+        cu_endpoint=cu_endpoint
     )
     if not pages_data:
         pages_data = convert_with_pymupdf(pdf_path)
@@ -217,4 +240,4 @@ def main():
     print("\nConversion finished successfully!")
 
 if __name__ == "__main__":
-    main()
+    app()

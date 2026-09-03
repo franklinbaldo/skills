@@ -9,7 +9,8 @@ description: >-
   carregados, use notebooklm-processos.
 compatibility: >-
   Requires Python 3 and outbound HTTPS access to the TJRO JURIS API. The bundled
-  client is stdlib-only and does not require a private credential.
+  client needs no private credential; its dependencies are declared inline
+  (PEP 723) and resolved by `uv run`.
 ---
 
 # JURIS TJRO — teor e fundamento

@@ -1,3 +1,11 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "cyclopts>=3.0",
+#     "pymupdf",
+# ]
+# ///
 """Regression tests for convert_to_pdfa.py."""
 
 from __future__ import annotations

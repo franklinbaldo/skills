@@ -3,17 +3,20 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "litellm",
+#     "cyclopts>=3.0",
 # ]
 # ///
 """Optional external LLM audit for already-anonymized Markdown files."""
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
+
+import cyclopts
+from cyclopts import Parameter
 
 STRICT_HUNTER_PROMPT = """Você audita resíduos de PII em documentos anonimizados.
 Procure nomes e iniciais de pessoas, identificadores, contatos, endereços, datas
@@ -69,35 +72,42 @@ def input_files(path: Path) -> list[Path]:
     raise FileNotFoundError(path)
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Send anonymized text to two optional external LLM auditors."
-    )
-    parser.add_argument("--input", required=True, type=Path)
-    parser.add_argument("--model", default="gemini/gemini-2.5-flash")
-    parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument(
-        "--allow-external-transfer",
-        action="store_true",
-        help="Confirm authorization to send document text to the model provider.",
-    )
-    return parser.parse_args()
+app = cyclopts.App(name="auditar-pii", help=__doc__)
 
 
-def main() -> int:
-    args = parse_args()
-    if not args.allow_external_transfer:
+@app.default
+def main(
+    *,
+    input_path: Annotated[Path, Parameter(name=["--input"])],
+    output: Path,
+    model: str = "gemini/gemini-2.5-flash",
+    allow_external_transfer: bool = False,
+) -> int:
+    """Send anonymized text to two optional external LLM auditors.
+
+    Parameters
+    ----------
+    input_path
+        A *.anon.md file or a directory containing them.
+    output
+        JSON report path.
+    model
+        litellm model identifier.
+    allow_external_transfer
+        Confirm authorization to send document text to the model provider.
+    """
+    if not allow_external_transfer:
         raise ExternalAuditError(
             "External transfer not authorized; pass --allow-external-transfer only "
             "after confirming the document may be sent to the provider."
         )
 
-    files = input_files(args.input)
+    files = input_files(input_path)
     if not files:
         raise ExternalAuditError("No *.anon.md files found.")
 
     report: dict[str, Any] = {
-        "model": args.model,
+        "model": model,
         "warning": "LLM findings are candidates, not proof of anonymization.",
         "documents": [],
     }
@@ -108,7 +118,7 @@ def main() -> int:
             ("strict_hunter", STRICT_HUNTER_PROMPT),
             ("forensic_lgpd", FORENSIC_LGPD_PROMPT),
         ):
-            for finding in call_auditor(text, prompt, args.model):
+            for finding in call_auditor(text, prompt, model):
                 findings.append({"auditor": role, **finding})
         report["documents"].append(
             {
@@ -119,18 +129,18 @@ def main() -> int:
         )
         print(f"{path}: {len(findings)} candidate finding(s)")
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
         json.dumps(report, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
-    print(f"Sensitive audit report: {args.output}")
+    print(f"Sensitive audit report: {output}")
     return 0
 
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
+        raise SystemExit(app())
     except (
         ExternalAuditError,
         FileNotFoundError,

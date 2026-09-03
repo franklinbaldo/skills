@@ -4,13 +4,13 @@
 # dependencies = [
 #     "opf @ git+https://github.com/openai/privacy-filter.git@f7f00ca7fb869683eb732c010299d901457f19c3",
 #     "torch",
+#     "cyclopts>=3.0",
 # ]
 # ///
 """Detect PII with OpenAI Privacy Filter and create reviewed/anonymized copies."""
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import re
@@ -20,9 +20,11 @@ import uuid
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, Literal
 
+import cyclopts
 from anonimizar import anonymize_tagged_text
+from cyclopts import Parameter
 
 DEFAULT_INPUT_DIR = Path("/content/input")
 DEFAULT_OUTPUT_DIR = Path("/content/output")
@@ -218,27 +220,39 @@ def output_paths(input_path: Path, output_dir: Path) -> tuple[Path, Path, Path]:
     )
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Detect PII with OpenAI Privacy Filter and preserve review artifacts."
-    )
-    parser.add_argument("--input", type=Path)
-    parser.add_argument("--output-dir", type=Path)
-    parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
-    parser.add_argument("--checkpoint", type=Path)
-    parser.add_argument("--force", action="store_true")
-    return parser.parse_args()
+app = cyclopts.App(name="anonimizar-opf", help=__doc__)
 
 
-def main() -> int:
-    args = parse_args()
-    input_path = args.input or find_colab_input()
+@app.default
+def main(
+    *,
+    input_path: Annotated[Path | None, Parameter(name=["--input"])] = None,
+    output_dir: Path | None = None,
+    device: Literal["cpu", "cuda"] = "cuda",
+    checkpoint: Path | None = None,
+    force: bool = False,
+) -> int:
+    """Detect PII and preserve review artifacts.
+
+    Parameters
+    ----------
+    input_path
+        Document to process; defaults to the Colab upload.
+    output_dir
+        Where to write the tagged/anonymized/report files.
+    device
+        Run OPF on cpu or cuda.
+    checkpoint
+        Local OPF checkpoint; defaults to the cached/default one.
+    force
+        Overwrite existing outputs.
+    """
+    input_path = input_path or find_colab_input()
     if not input_path.is_file():
         raise FileNotFoundError(input_path)
     if input_path.suffix.lower() not in SUPPORTED_SUFFIXES:
         raise OpfAnonymizationError(f"Unsupported input type: {input_path.suffix}")
 
-    output_dir = args.output_dir
     if output_dir is None:
         output_dir = (
             DEFAULT_OUTPUT_DIR
@@ -248,7 +262,7 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     tagged_path, anonymized_path, report_path = output_paths(input_path, output_dir)
     for path in (tagged_path, anonymized_path, report_path):
-        if path.exists() and not args.force:
+        if path.exists() and not force:
             raise FileExistsError(f"Output already exists: {path}")
 
     load_hf_token_from_colab_secret()
@@ -260,7 +274,6 @@ def main() -> int:
             "Install the official OPF package before running this script."
         ) from error
 
-    device = args.device
     if device == "cuda" and not torch.cuda.is_available():
         raise OpfAnonymizationError("CUDA requested, but PyTorch cannot access a GPU.")
     if device == "cpu":
@@ -269,7 +282,7 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    checkpoint, should_cache = select_checkpoint(args.checkpoint)
+    checkpoint, should_cache = select_checkpoint(checkpoint)
     redactor = OPF(
         model=str(checkpoint) if checkpoint else None,
         device=device,
@@ -322,7 +335,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
+        raise SystemExit(app())
     except (
         FileExistsError,
         FileNotFoundError,

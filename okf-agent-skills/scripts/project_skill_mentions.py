@@ -2,16 +2,18 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "cyclopts>=3.0",
 # ]
 # ///
 """Project semantic mentions of known sibling skills as non-edge OKF observations."""
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import re
 from pathlib import Path
+
+import cyclopts
 
 
 def _yaml_string(value: str) -> str:
@@ -88,16 +90,25 @@ def project(root: Path, output: Path) -> list[dict[str, object]]:
     return mentions
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", type=Path)
-    parser.add_argument("output", type=Path)
-    args = parser.parse_args()
-    mentions = project(args.source, args.output)
+app = cyclopts.App(name="project-skill-mentions", help=__doc__)
+
+
+@app.default
+def main(source: Path, output: Path) -> int:
+    """Project sibling-skill mentions.
+
+    Parameters
+    ----------
+    source
+        Agent Skills repository/root.
+    output
+        Existing OKF bundle directory.
+    """
+    mentions = project(source, output)
     pairs = {(str(item['source_skill']), str(item['target_skill'])) for item in mentions}
     print(f"projected {len(mentions)} skill mentions across {len(pairs)} source/target pairs")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(app())

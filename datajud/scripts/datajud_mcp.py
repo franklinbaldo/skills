@@ -3,6 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "fastmcp>=2.0",
+#     "cyclopts>=3.0",
 # ]
 # ///
 """DataJud como servidor MCP — e como CLI, pelo mesmo código.
@@ -60,11 +61,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import cyclopts
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import datajud as dj  # noqa: E402  — o script vizinho traz search(), retry e formatação
-
 from fastmcp import FastMCP  # noqa: E402
+
+import datajud as dj  # noqa: E402  — o script vizinho traz search(), retry e formatação
 
 mcp = FastMCP("datajud")
 
@@ -221,32 +224,40 @@ def datajud_processo(
     return saida
 
 
-def _cli(argv: list[str]) -> int:
-    """CLI mínima sobre as mesmas funções — o padrão do `pink` neste workspace.
+app = cyclopts.App(name="datajud-mcp", help=__doc__)
 
-    Existe para que o "CLI primeiro" do CLAUDE.md continue valendo sem manter
-    duas implementações: a tool é a função, e a CLI só a chama.
+
+@app.command
+def processo(
+    numero: str,
+    *,
+    tribunal: str = "tjro",
+    incluir_movimentos: bool = False,
+) -> int:
+    """Estado do processo e seus marcos — a mesma função exposta como tool MCP.
+
+    Parameters
+    ----------
+    numero
+        numero do processo (com ou sem mascara CNJ).
+    tribunal
+        sigla do indice (padrao tjro).
+    incluir_movimentos
+        inclui a linha completa de movimentacao no payload.
     """
-    if not argv or argv[0] in {"-h", "--help"}:
-        print(__doc__)
-        return 0
-    if argv[0] != "processo":
-        sys.stderr.write("Uso: datajud_mcp.py processo <cnj> [--tribunal X] [--incluir-movimentos]\n")
-        return 2
-    if len(argv) < 2:
-        sys.stderr.write("ERRO: informe o número do processo.\n")
-        return 2
-    tribunal = "tjro"
-    if "--tribunal" in argv:
-        tribunal = argv[argv.index("--tribunal") + 1]
     resultado = datajud_processo(
-        argv[1], tribunal=tribunal, incluir_movimentos="--incluir-movimentos" in argv
+        numero, tribunal=tribunal, incluir_movimentos=incluir_movimentos
     )
     print(json.dumps(resultado, ensure_ascii=False, indent=2))
     return 0 if resultado.get("encontrado") else 1
 
 
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        sys.exit(_cli(sys.argv[1:]))
+@app.default
+def serve() -> int:
+    """Sobe o servidor MCP (comportamento padrao, sem argumentos)."""
     mcp.run()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(app() or 0)

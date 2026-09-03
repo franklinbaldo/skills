@@ -3,16 +3,17 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "duckdb",
+#     "cyclopts>=3.0",
 # ]
 # ///
 """Materialize canonical static audit views in an okf-parser DuckDB artifact."""
 
 from __future__ import annotations
 
-import argparse
 import json
 from pathlib import Path
 
+import cyclopts
 import duckdb
 
 VIEW_NAMES = (
@@ -40,25 +41,35 @@ def run(database: Path, query_file: Path) -> dict[str, list[dict[str, object]]]:
         con.close()
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("database", type=Path)
-    parser.add_argument(
-        "--queries",
-        type=Path,
-        default=Path(__file__).resolve().parents[1] / "queries" / "typed-audit.sql",
-    )
-    parser.add_argument("--output", type=Path)
-    args = parser.parse_args()
+app = cyclopts.App(name="run-typed-audit", help=__doc__)
 
-    report = run(args.database, args.queries)
+
+@app.default
+def main(
+    database: Path,
+    *,
+    queries: Path = Path(__file__).resolve().parents[1] / "queries" / "typed-audit.sql",
+    output: Path | None = None,
+) -> int:
+    """Materialize the audit views.
+
+    Parameters
+    ----------
+    database
+        DuckDB artifact produced by okf-parser.
+    queries
+        SQL file with the canonical audit view definitions.
+    output
+        Write the JSON report here instead of stdout.
+    """
+    report = run(database, queries)
     rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    if args.output:
-        args.output.write_text(rendered, encoding="utf-8")
+    if output:
+        output.write_text(rendered, encoding="utf-8")
     else:
         print(rendered, end="")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(app())

@@ -59,8 +59,19 @@ def requested_command(arguments: Sequence[str]) -> str | None:
     return None
 
 
+def forwarded_arguments() -> list[str]:
+    """Return the tokens to hand to the third-party `colab` CLI.
+
+    This is the one place in the repository that reads `sys.argv` on purpose:
+    the script is a pass-through adapter, so the arguments belong to
+    google-colab-cli's parser, not to a Cyclopts CLI of our own. Every other
+    entry point here parses its arguments with Cyclopts.
+    """
+    return sys.argv[1:]  # noqa: TID251
+
+
 def main() -> int:
-    command = requested_command(sys.argv[1:])
+    command = requested_command(forwarded_arguments())
     if os.name == "nt" and command in BLOCKED_WINDOWS_COMMANDS:
         print(
             f"ERROR: 'colab {command}' needs a Unix TTY. "

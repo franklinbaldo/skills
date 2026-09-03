@@ -3,12 +3,18 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "pymupdf",
+#     "cyclopts>=3.0",
 # ]
 # ///
 import os
 import sys
-import argparse
-import fitz  # PyMuPDF
+from pathlib import Path
+from typing import Annotated
+
+import cyclopts
+import fitz
+from cyclopts import Parameter  # PyMuPDF
+
 
 def make_2up(input_path, output_path):
     if not os.path.exists(input_path):
@@ -61,9 +67,26 @@ def make_2up(input_path, output_path):
     src.close()
     print("Conversion complete!")
 
+app = cyclopts.App(name="2up", help="Combine consecutive PDF pages side-by-side (2-up layout).")
+
+
+@app.default
+def main(
+    *,
+    input_path: Annotated[Path, Parameter(name=["--input"])],
+    output: Path,
+) -> None:
+    """Write the 2-up PDF.
+
+    Parameters
+    ----------
+    input_path
+        Path to input PDF file.
+    output
+        Path to output 2-up PDF file.
+    """
+    make_2up(str(input_path), str(output))
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Combine consecutive PDF pages side-by-side (2-up layout).")
-    parser.add_argument("--input", required=True, help="Path to input PDF file")
-    parser.add_argument("--output", required=True, help="Path to output 2-up PDF file")
-    args = parser.parse_args()
-    make_2up(args.input, args.output)
+    app()

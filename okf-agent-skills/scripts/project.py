@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "cyclopts>=3.0",
 # ]
 # ///
 """Build the static Agent Skills inspection IR for current okf-parser surfaces.
@@ -13,11 +14,11 @@ synthetic routing runs or benchmark observations.
 
 from __future__ import annotations
 
-import argparse
 import re
 import unicodedata
 from pathlib import Path
 
+import cyclopts
 import project_agent_skills
 import project_skill_evals
 import project_skill_mentions
@@ -102,13 +103,21 @@ def project(root: Path, output: Path) -> dict[str, int]:
     return counts
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", type=Path, help="Agent Skills repository/root")
-    parser.add_argument("output", type=Path, help="Disposable OKF output directory")
-    args = parser.parse_args()
+app = cyclopts.App(name="project", help=__doc__)
 
-    counts = project(args.source, args.output)
+
+@app.default
+def main(source: Path, output: Path) -> int:
+    """Project the static IR.
+
+    Parameters
+    ----------
+    source
+        Agent Skills repository/root.
+    output
+        Disposable OKF output directory.
+    """
+    counts = project(source, output)
     print(
         "projected "
         f"{counts['skills']} skills, {counts['relations']} relations "
@@ -117,9 +126,9 @@ def main() -> int:
         f"declared {counts['declared_types']} RFC 0006 concept types"
     )
     print(f"spec_template={SPEC_TEMPLATE}")
-    print(args.output.resolve())
+    print(output.resolve())
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(app())

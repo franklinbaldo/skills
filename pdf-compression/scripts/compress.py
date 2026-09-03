@@ -6,16 +6,21 @@
 #     "opencv-python-headless",
 #     "pillow",
 #     "pymupdf",
+#     "cyclopts>=3.0",
 # ]
 # ///
-import argparse
-import fitz
 import io
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
+from typing import Annotated, Literal
+
+import cyclopts
+import fitz
+from cyclopts import Parameter
 from PIL import Image
 
 JBIG2_BIN = shutil.which("jbig2")
@@ -415,27 +420,60 @@ def compress_pdf(input_path, output_path, mode="auto", max_dim=1200, quality=50,
         doc.close()
         sys.exit(1)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Compress PDF with smart scanned vs. native page optimization.")
-    parser.add_argument("--input", required=True, help="Path to input PDF file")
-    parser.add_argument("--output", required=True, help="Path to output compressed PDF file")
-    parser.add_argument("--mode", choices=["bw", "gray", "color", "auto"], default="auto", help="Compression mode (default: auto)")
-    parser.add_argument("--max-dim", type=int, default=1200, help="Maximum dimension of images (default: 1200)")
-    parser.add_argument("--quality", type=int, default=50, help="JPEG quality for color/gray modes (default: 50)")
-    parser.add_argument("--skip-small", type=int, default=150, help="Skip images smaller than this threshold (default: 150)")
-    parser.add_argument("--denoise", action="store_true", help="Apply NLM denoising to scanned pages")
-    parser.add_argument("--enhance-contrast", action="store_true", help="Apply contrast enhancement to scanned pages")
-    parser.add_argument("--jbig2", action="store_true", help="For bw-mode pages, also try JBIG2 lossless encoding (requires the 'jbig2' binary on PATH) and use it instead of CCITT G4 whenever it verifies bit-exact via a MuPDF roundtrip decode and comes out smaller. See SKILL.md's Licensing/Format Alternatives sections.")
+app = cyclopts.App(name="compress", help="Compress PDF with smart scanned vs. native page optimization.")
 
-    args = parser.parse_args()
+
+@app.default
+def main(
+    *,
+    input_path: Annotated[Path, Parameter(name=["--input"])],
+    output: Path,
+    mode: Literal["bw", "gray", "color", "auto"] = "auto",
+    max_dim: int = 1200,
+    quality: int = 50,
+    skip_small: int = 150,
+    denoise: bool = False,
+    enhance_contrast: bool = False,
+    jbig2: bool = False,
+) -> None:
+    """Compress one PDF.
+
+    Parameters
+    ----------
+    input_path
+        Path to input PDF file.
+    output
+        Path to output compressed PDF file.
+    mode
+        Compression mode.
+    max_dim
+        Maximum dimension of images.
+    quality
+        JPEG quality for color/gray modes.
+    skip_small
+        Skip images smaller than this threshold.
+    denoise
+        Apply NLM denoising to scanned pages.
+    enhance_contrast
+        Apply contrast enhancement to scanned pages.
+    jbig2
+        For bw-mode pages, also try JBIG2 lossless encoding (requires the 'jbig2'
+        binary on PATH) and use it instead of CCITT G4 whenever it verifies
+        bit-exact via a MuPDF roundtrip decode and comes out smaller. See
+        SKILL.md's Licensing/Format Alternatives sections.
+    """
     compress_pdf(
-        input_path=args.input,
-        output_path=args.output,
-        mode=args.mode,
-        max_dim=args.max_dim,
-        quality=args.quality,
-        skip_small=args.skip_small,
-        denoise=args.denoise,
-        enhance_contrast=args.enhance_contrast,
-        use_jbig2=args.jbig2
+        input_path=str(input_path),
+        output_path=str(output),
+        mode=mode,
+        max_dim=max_dim,
+        quality=quality,
+        skip_small=skip_small,
+        denoise=denoise,
+        enhance_contrast=enhance_contrast,
+        use_jbig2=jbig2,
     )
+
+
+if __name__ == "__main__":
+    app()
