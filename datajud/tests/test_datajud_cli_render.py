@@ -58,7 +58,7 @@ def test_render_human_e_compacto_e_nao_despeja_json(capsys):
     assert "7027457-61.2021.8.22.0001" in out
     assert "Juizado Especial" in out
     assert "Marcos recentes (12/14)" in out
-    assert "Marco 1" not in out
+    assert "Marco 2" not in out
     assert "Marco 14" in out
     assert '"documentos"' not in out
     assert "Próximos passos" in out
