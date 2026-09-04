@@ -4,6 +4,7 @@
 # dependencies = [
 #     "fastmcp>=2.0",
 #     "cyclopts>=3.0",
+#     "rich>=13.0",
 # ]
 # ///
 """DataJud como servidor MCP — e como CLI, pelo mesmo código.
@@ -39,6 +40,10 @@ lista ilimitada, e o payload cru atrás de flag explícita. `datajud_processo`
 devolve o estado do processo em poucas linhas e os **marcos**; a lista completa
 de movimentos só com ``incluir_movimentos=True``.
 
+A CLI mantém esse mesmo contrato, mas separa apresentação humana e saída de
+máquina: por padrão Cyclopts + Rich exibem painéis e tabelas compactas; ``--json``
+imprime o payload integral sem decoração.
+
 **Marcos por exclusão, não por enumeração.** Listar todos os códigos que
 importam é lista longa, instável e que envelhece a cada atualização das Tabelas
 Processuais Unificadas do CNJ. O ruído, ao contrário, é pequeno e estável:
@@ -52,17 +57,23 @@ Uso
 Como MCP, aponte o cliente para este arquivo. Como CLI::
 
     uv run datajud_mcp.py processo 7000667-67.2026.8.22.0000
+    uv run datajud_mcp.py processo 7000667-67.2026.8.22.0000 --json
     uv run datajud_mcp.py processo 7000667-67.2026.8.22.0000 --incluir-movimentos
 """
 
 from __future__ import annotations
 
-import json
+import json as jsonlib
 import sys
 from pathlib import Path
 from typing import Any
 
 import cyclopts
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -81,6 +92,8 @@ RUIDO = {
     60,    # Expedição de documento
     581,   # Juntada
 }
+
+MARCOS_VISIVEIS = 12
 
 
 def _marcos(movimentos: list[dict]) -> list[dict]:
@@ -225,6 +238,94 @@ def datajud_processo(
     return saida
 
 
+def _meta_table(doc: dict[str, Any]) -> Table:
+    """Tabela vertical compacta da capa de um grau."""
+    table = Table(box=box.SIMPLE, show_header=False, pad_edge=False)
+    table.add_column("Campo", style="bold cyan", no_wrap=True)
+    table.add_column("Valor")
+    for label, key in (
+        ("Classe", "classe"),
+        ("Assunto", "assuntos"),
+        ("Órgão", "orgao"),
+        ("Ajuizamento", "ajuizamento"),
+        ("Atualização", "ultima_atualizacao"),
+    ):
+        table.add_row(label, str(doc.get(key) or "-"))
+    return table
+
+
+def _movimentos_table(doc: dict[str, Any], incluir_movimentos: bool) -> Table:
+    """Renderiza marcos recentes ou, quando solicitado, a movimentação completa."""
+    if incluir_movimentos:
+        itens = doc.get("movimentos") or []
+        titulo = f"Movimentos ({len(itens)})"
+    else:
+        todos = doc.get("marcos") or []
+        itens = todos[-MARCOS_VISIVEIS:]
+        ocultos = max(0, len(todos) - len(itens))
+        sufixo = f" · {ocultos} marco(s) anterior(es) oculto(s)" if ocultos else ""
+        titulo = f"Marcos recentes ({len(itens)}/{len(todos)}){sufixo}"
+
+    table = Table(title=titulo, box=box.ROUNDED, header_style="bold cyan")
+    table.add_column("Data", no_wrap=True)
+    table.add_column("Código", justify="right", no_wrap=True)
+    table.add_column("Movimento")
+    for item in itens:
+        table.add_row(str(item.get("data") or "-"), str(item.get("codigo") or "-"), str(item.get("nome") or "-"))
+    return table
+
+
+def _next_actions_panel(actions: list[dict[str, Any]]) -> Panel | None:
+    """Transforma as continuações MCP em comandos CLI legíveis."""
+    if not actions:
+        return None
+    body = Text()
+    for idx, action in enumerate(actions, 1):
+        args = action.get("args") or {}
+        cmd_args = []
+        for key, value in args.items():
+            if key == "cnj":
+                cmd_args.insert(0, str(value))
+            elif value is True:
+                cmd_args.append(f"--{key.replace('_', '-')}")
+            else:
+                cmd_args.append(f"--{key.replace('_', '-')} {value}")
+        body.append(f"{idx}. ", style="dim")
+        body.append("datajud-mcp processo " + " ".join(cmd_args), style="bold cyan")
+        reason = action.get("reason")
+        if reason:
+            body.append(f"\n   {reason}", style="dim")
+        if idx < len(actions):
+            body.append("\n")
+    return Panel(body, title="⏭️ Próximos passos", border_style="cyan", box=box.ROUNDED)
+
+
+def _render_human(resultado: dict[str, Any], *, incluir_movimentos: bool) -> None:
+    """Projeção humana da resposta MCP; nunca altera o payload retornado pela tool."""
+    console = Console()
+    encontrado = bool(resultado.get("encontrado"))
+    titulo = f"⚖️ {resultado.get('processo', '-')} · {resultado.get('tribunal', '-')}"
+    estilo = "green" if encontrado else "yellow"
+    console.print(Panel(str(resultado.get("resumo") or ""), title=titulo, border_style=estilo, box=box.ROUNDED))
+
+    if encontrado:
+        for doc in resultado.get("documentos") or []:
+            grau = str(doc.get("grau") or "Grau")
+            console.print(Panel(_meta_table(doc), title=f"📁 {grau}", border_style="blue", box=box.ROUNDED))
+            console.print(_movimentos_table(doc, incluir_movimentos))
+            if not incluir_movimentos and doc.get("movimentos_omitidos"):
+                console.print(
+                    Text(
+                        f"{doc['movimentos_omitidos']} movimento(s) de rotina omitido(s) dos marcos deste grau.",
+                        style="dim",
+                    )
+                )
+
+    next_panel = _next_actions_panel(resultado.get("next_actions") or [])
+    if next_panel is not None:
+        console.print(next_panel)
+
+
 app = cyclopts.App(name="datajud-mcp", help=__doc__)
 
 
@@ -234,28 +335,35 @@ def processo(
     *,
     tribunal: str = "tjro",
     incluir_movimentos: bool = False,
+    json: bool = False,
 ) -> int:
     """Estado do processo e seus marcos — a mesma função exposta como tool MCP.
 
     Parameters
     ----------
     numero
-        numero do processo (com ou sem mascara CNJ).
+        número do processo (com ou sem máscara CNJ).
     tribunal
-        sigla do indice (padrao tjro).
+        sigla do índice (padrão tjro).
     incluir_movimentos
-        inclui a linha completa de movimentacao no payload.
+        inclui a linha completa de movimentação. Na visão humana, mostra a
+        tabela integral; use apenas quando necessário.
+    json
+        imprime o payload MCP integral em JSON, sem decoração Rich.
     """
     resultado = datajud_processo(
         numero, tribunal=tribunal, incluir_movimentos=incluir_movimentos
     )
-    print(json.dumps(resultado, ensure_ascii=False, indent=2))
+    if json:
+        print(jsonlib.dumps(resultado, ensure_ascii=False, indent=2))
+    else:
+        _render_human(resultado, incluir_movimentos=incluir_movimentos)
     return 0 if resultado.get("encontrado") else 1
 
 
 @app.default
 def serve() -> int:
-    """Sobe o servidor MCP (comportamento padrao, sem argumentos)."""
+    """Sobe o servidor MCP (comportamento padrão, sem argumentos)."""
     mcp.run()
     return 0
 
