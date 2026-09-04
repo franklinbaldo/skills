@@ -65,7 +65,7 @@ Never fill absent upstream fields with guessed values.
 Use the single public frontend:
 
 ```bash
-python <skill-dir>/scripts/project.py <skills-root> <derived-bundle>
+uv run <skill-dir>/scripts/project.py <skills-root> <derived-bundle>
 ```
 
 The projection contains:
@@ -105,7 +105,7 @@ Do not create a second parser or type system for facts already represented by `o
 ### 6. Query through the canonical audit layer
 
 ```bash
-python <skill-dir>/scripts/run_typed_audit.py <output.duckdb> --output audit.json
+uv run <skill-dir>/scripts/run_typed_audit.py <output.duckdb> --output audit.json
 ```
 
 The canonical views cover:

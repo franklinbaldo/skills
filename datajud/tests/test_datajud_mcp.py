@@ -17,8 +17,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-import datajud as dj  # noqa: E402
 import datajud_mcp as mod  # noqa: E402
+
+import datajud as dj  # noqa: E402
 
 
 def _hit(grau: str, movimentos: list[dict]) -> dict:

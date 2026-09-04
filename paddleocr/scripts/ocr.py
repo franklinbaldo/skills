@@ -4,13 +4,13 @@
 # dependencies = [
 #     "paddleocr",
 #     "paddlepaddle",
+#     "cyclopts>=3.0",
 # ]
 # ///
 """Run PaddleOCR on one image or PDF and export Markdown plus metrics."""
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import statistics
@@ -18,6 +18,8 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+
+import cyclopts
 
 DEFAULT_INPUT_DIR = Path("/content/input")
 DEFAULT_OUTPUT = Path("/content/output/result.md")
@@ -47,33 +49,11 @@ def find_colab_input() -> Path:
     return candidates[0]
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("input", nargs="?", type=Path)
-    parser.add_argument("output", nargs="?", type=Path)
-    parser.add_argument(
-        "--device",
-        default=os.environ.get("PADDLE_OCR_DEVICE", "auto"),
-        help="auto, cpu, gpu, or gpu:N",
-    )
-    parser.add_argument("--lang", default=os.environ.get("PADDLE_OCR_LANG", "pt"))
-    parser.add_argument(
-        "--ocr-version",
-        default=os.environ.get("PADDLE_OCR_VERSION", "PP-OCRv6"),
-    )
-    parser.add_argument("--min-confidence", type=float, default=0.0)
-    parser.add_argument("--json-dir", type=Path)
-    parser.add_argument("--warm-benchmark", action="store_true")
-    return parser.parse_args()
-
-
-def resolve_paths(args: argparse.Namespace) -> tuple[Path, Path]:
-    input_path = args.input
+def resolve_paths(input_path: Path | None, output_path: Path | None) -> tuple[Path, Path]:
     if input_path is None:
         configured_input = os.environ.get("PADDLE_OCR_INPUT")
         input_path = Path(configured_input) if configured_input else find_colab_input()
 
-    output_path = args.output
     if output_path is None:
         output_path = Path(os.environ.get("PADDLE_OCR_OUTPUT", str(DEFAULT_OUTPUT)))
 
@@ -146,17 +126,50 @@ def run_pass(
     return time.perf_counter() - started, page_times, page_scores, markdown_pages
 
 
-def main() -> None:
-    os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+app = cyclopts.App(name="ocr", help=__doc__)
 
-    args = parse_args()
+
+@app.default
+def main(
+    input: Path | None = None,  # noqa: A002
+    output: Path | None = None,
+    *,
+    device: str = os.environ.get("PADDLE_OCR_DEVICE", "auto"),
+    lang: str = os.environ.get("PADDLE_OCR_LANG", "pt"),
+    ocr_version: str = os.environ.get("PADDLE_OCR_VERSION", "PP-OCRv6"),
+    min_confidence: float = 0.0,
+    json_dir: Path | None = None,
+    warm_benchmark: bool = False,
+) -> None:
+    """Run PaddleOCR and export Markdown plus metrics.
+
+    Parameters
+    ----------
+    input
+        Image or PDF; defaults to PADDLE_OCR_INPUT or the Colab upload.
+    output
+        Markdown output path; defaults to PADDLE_OCR_OUTPUT.
+    device
+        auto, cpu, gpu, or gpu:N.
+    lang
+        PaddleOCR language code.
+    ocr_version
+        PaddleOCR pipeline version.
+    min_confidence
+        Drop recognized lines below this confidence.
+    json_dir
+        Directory for the raw per-page JSON results.
+    warm_benchmark
+        Run a second warm pass and record its timings.
+    """
+    os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 
     import paddle
 
     from paddleocr import PaddleOCR
 
-    input_path, output_path = resolve_paths(args)
-    device = resolve_device(paddle, args.device)
+    input_path, output_path = resolve_paths(input, output)
+    device = resolve_device(paddle, device)
     if device == "cpu":
         print(
             "WARNING: CPU OCR is much slower than GPU for multi-page documents.",
@@ -169,8 +182,8 @@ def main() -> None:
     paddle.set_device(device)
     initialization_started = time.perf_counter()
     ocr = PaddleOCR(
-        lang=args.lang,
-        ocr_version=args.ocr_version,
+        lang=lang,
+        ocr_version=ocr_version,
         use_doc_orientation_classify=False,
         use_doc_unwarping=False,
         use_textline_orientation=False,
@@ -183,8 +196,8 @@ def main() -> None:
     total, page_times, page_scores, markdown_pages = run_pass(
         ocr,
         input_path,
-        min_confidence=args.min_confidence,
-        json_dir=args.json_dir,
+        min_confidence=min_confidence,
+        json_dir=json_dir,
     )
     if not page_times:
         raise RuntimeError("PaddleOCR returned no pages.")
@@ -205,11 +218,11 @@ def main() -> None:
         "mean_seconds_per_page": statistics.fmean(page_times),
         "mean_page_confidence": statistics.fmean(page_scores),
     }
-    if args.warm_benchmark:
+    if warm_benchmark:
         warm_total, warm_times, _, _ = run_pass(
             ocr,
             input_path,
-            min_confidence=args.min_confidence,
+            min_confidence=min_confidence,
             json_dir=None,
         )
         metrics["warm_inference_seconds"] = warm_total
@@ -227,4 +240,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    app()

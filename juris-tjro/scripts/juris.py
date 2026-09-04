@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "cyclopts>=3.0",
 # ]
 # ///
 """
@@ -13,7 +14,7 @@ Usa o endpoint REAL de busca (Elasticsearch por tras de DRF):
 NAO usa GET /search/documentos/ : naquele endpoint os parametros de busca sao
 IGNORADOS pelo servidor (retorna o corpus inteiro). Ver SKILL.md.
 
-Sem dependencias externas (apenas stdlib).
+Dependencias: cyclopts (CLI). O acesso HTTP usa apenas a stdlib.
 
 Modos:
     buscar   <termo> [filtros]   busca documentos; saida compacta
@@ -24,13 +25,17 @@ Modos:
 Rode `python juris.py -h` ou `python juris.py <modo> -h` para detalhes.
 """
 
-import argparse
 import html as htmllib
 import json
 import re
 import sys
-import urllib.request
 import urllib.parse
+import urllib.request
+from dataclasses import dataclass
+from typing import Annotated
+
+import cyclopts
+from cyclopts import Parameter
 
 BASE = "https://juris-back.tjro.jus.br"
 PORTAL = "https://juris.tjro.jus.br"
@@ -166,7 +171,7 @@ def montar_fields(args):
     return fields
 
 
-def cmd_buscar(args):
+def cmd_buscar(args: "Buscar"):
     fields = montar_fields(args)
     if not fields:
         print("Informe ao menos um criterio (termo ou filtro).", file=sys.stderr)
@@ -253,12 +258,12 @@ def cmd_buscar(args):
 # ----------------------------------------------------------------------------
 # Modo: processo
 # ----------------------------------------------------------------------------
-def cmd_processo(args):
-    nr = so_digitos(args.numero)
+def cmd_processo(numero: str, as_json: bool):
+    nr = so_digitos(numero)
     d = buscar_raw({"nr_processo": nr}, size=100, sort=[{"dtjulgamento": "desc"}])
     hits = d.get("hits", {}).get("hits", [])
     total = d.get("hits", {}).get("total", {}).get("value", 0)
-    if args.json:
+    if as_json:
         out = [{
             "tipo": h["_source"].get("tipo"),
             "data_julgamento": h["_source"].get("dtjulgamento_str"),
@@ -285,16 +290,16 @@ def cmd_processo(args):
 # ----------------------------------------------------------------------------
 # Modo: texto (integra limpa de UM documento)
 # ----------------------------------------------------------------------------
-def cmd_texto(args):
-    d = buscar_raw({"id_processo_documento": int(args.id)}, size=1)
+def cmd_texto(id_documento: str, maximo: int):
+    d = buscar_raw({"id_processo_documento": int(id_documento)}, size=1)
     hits = d.get("hits", {}).get("hits", [])
     if not hits:
-        print(f"Documento id={args.id} nao encontrado.", file=sys.stderr)
+        print(f"Documento id={id_documento} nao encontrado.", file=sys.stderr)
         return 1
     src = hits[0]["_source"]
     txt = clean_html(src.get("ds_modelo_documento", ""))
-    if args.max and args.max > 0:
-        txt = txt[:args.max]
+    if maximo > 0:
+        txt = txt[:maximo]
     print(f"# {src.get('tipo')} — Processo {cnj(src.get('nr_processo',''))}")
     print(f"# {src.get('ds_classe_judicial')} | {src.get('dtjulgamento_str')} | "
           f"{orgao(src)} | relator: {relator(src)}")
@@ -307,14 +312,14 @@ def cmd_texto(args):
 # ----------------------------------------------------------------------------
 # Modo: facetas (agregacoes)
 # ----------------------------------------------------------------------------
-def cmd_facetas(args):
+def cmd_facetas(termo: str, limite: int, as_json: bool):
     params = {"paginaAtual": 1, "quantidadePorPagina": 1}
-    if args.termo:
+    if termo:
         # o endpoint de agregacoes aceita os mesmos params; texto livre via 'texto'
-        params["texto"] = args.termo
+        params["texto"] = termo
     d = _get("/search/agregacoes", params)
     aggs = d.get("aggregations", {})
-    if args.json:
+    if as_json:
         print(json.dumps(aggs, ensure_ascii=False, indent=2))
         return 0
     rotulos = {
@@ -329,7 +334,7 @@ def cmd_facetas(args):
         if not buckets:
             continue
         print(f"\n## {titulo}")
-        for b in buckets[:args.limite]:
+        for b in buckets[:limite]:
             print(f"  {b.get('doc_count'):>9}  {b.get('key')}")
     return 0
 
@@ -337,61 +342,118 @@ def cmd_facetas(args):
 # ----------------------------------------------------------------------------
 # CLI
 # ----------------------------------------------------------------------------
-def build_parser():
-    p = argparse.ArgumentParser(
-        description="Consulta a jurisprudencia do TJRO (sistema JURIS).")
-    sub = p.add_subparsers(dest="modo", required=True)
+@dataclass
+class Buscar:
+    """Criterios do modo `buscar`."""
 
-    b = sub.add_parser("buscar", help="busca documentos por texto e/ou filtros")
-    b.add_argument("termo", nargs="?", default="",
-                   help="texto livre (busca no inteiro teor). DICA: a busca do "
-                        "servidor e OR (mais palavras = MAIS resultados); para "
-                        "precisao use o termo mais distintivo aqui e --contendo "
-                        "para as demais palavras obrigatorias.")
-    b.add_argument("--tipo", nargs="+", choices=TIPOS_VALIDOS, metavar="TIPO",
-                   help="um ou mais tipos: " + ", ".join(TIPOS_VALIDOS))
-    b.add_argument("--classe", help="match na classe judicial (ex: 'APELAÇÃO CÍVEL')")
-    b.add_argument("--orgao", help="match no orgao julgador")
-    b.add_argument("--relator", help="match no nome do relator do acordao")
-    b.add_argument("--contendo", nargs="+", metavar="PALAVRA",
-                   help="filtro AND client-side: so resultados cujo inteiro teor "
-                        "contenha TODAS estas palavras")
-    b.add_argument("--de", help="data inicial (DD/MM/AAAA) — filtro client-side")
-    b.add_argument("--ate", help="data final (DD/MM/AAAA) — filtro client-side")
-    b.add_argument("--recentes", action="store_true",
-                   help="ordena por data de julgamento decrescente (padrao: relevancia)")
-    b.add_argument("--tamanho", type=int, default=20, help="numero de resultados (padrao 20)")
-    b.add_argument("--repetidos", action="store_true",
-                   help="nao deduplicar por numero de processo")
-    b.add_argument("--trecho-perto", metavar="TERMO",
-                   help="extrai o trecho ao redor deste termo (padrao: o termo de busca)")
-    b.add_argument("--json", action="store_true", help="saida em JSON")
-    b.set_defaults(func=cmd_buscar)
-
-    pr = sub.add_parser("processo", help="lista os documentos de um processo (CNJ)")
-    pr.add_argument("numero", help="numero do processo (com ou sem mascara CNJ)")
-    pr.add_argument("--json", action="store_true")
-    pr.set_defaults(func=cmd_processo)
-
-    t = sub.add_parser("texto", help="texto limpo COMPLETO de um documento")
-    t.add_argument("id", help="id_processo_documento (campo 'id_documento' dos resultados)")
-    t.add_argument("--max", type=int, default=0,
-                   help="trunca em N caracteres (0 = sem limite)")
-    t.set_defaults(func=cmd_texto)
-
-    f = sub.add_parser("facetas", help="agregacoes (classes, orgaos, relatores, tipos)")
-    f.add_argument("termo", nargs="?", default="")
-    f.add_argument("--limite", type=int, default=15, help="itens por faceta (padrao 15)")
-    f.add_argument("--json", action="store_true")
-    f.set_defaults(func=cmd_facetas)
-
-    return p
+    termo: str = ""
+    tipo: Annotated[list[str] | None, Parameter(consume_multiple=True)] = None
+    """um ou mais tipos de documento."""
+    classe: str | None = None
+    """match na classe judicial (ex: 'APELACAO CIVEL')."""
+    orgao: str | None = None
+    """match no orgao julgador."""
+    relator: str | None = None
+    """match no nome do relator do acordao."""
+    contendo: Annotated[list[str] | None, Parameter(consume_multiple=True)] = None
+    """filtro AND client-side: so resultados cujo inteiro teor contenha TODAS estas palavras."""
+    de: str | None = None
+    """data inicial (DD/MM/AAAA) — filtro client-side."""
+    ate: str | None = None
+    """data final (DD/MM/AAAA) — filtro client-side."""
+    recentes: bool = False
+    """ordena por data de julgamento decrescente (padrao: relevancia)."""
+    tamanho: int = 20
+    """numero de resultados (padrao 20)."""
+    repetidos: bool = False
+    """nao deduplicar por numero de processo."""
+    trecho_perto: str | None = None
+    """extrai o trecho ao redor deste termo (padrao: o termo de busca)."""
+    json: bool = False
+    """saida em JSON."""
 
 
-def main(argv=None):
-    args = build_parser().parse_args(argv)
+app = cyclopts.App(
+    name="juris",
+    help="Consulta a jurisprudencia do TJRO (sistema JURIS).",
+)
+
+
+@app.command(name="buscar")
+def buscar_cmd(
+    termo: str = "",
+    *,
+    criterios: Annotated[Buscar, Parameter(name="*")] = None,
+) -> int:
+    """Busca documentos por texto e/ou filtros.
+
+    Parameters
+    ----------
+    termo
+        texto livre (busca no inteiro teor). DICA: a busca do servidor e OR (mais
+        palavras = MAIS resultados); para precisao use o termo mais distintivo
+        aqui e --contendo para as demais palavras obrigatorias.
+    """
+    criterios = criterios or Buscar()
+    criterios.termo = termo
+    if criterios.tipo:
+        invalidos = [x for x in criterios.tipo if x not in TIPOS_VALIDOS]
+        if invalidos:
+            print(
+                f"Tipo invalido: {', '.join(invalidos)}. Validos: {', '.join(TIPOS_VALIDOS)}",
+                file=sys.stderr,
+            )
+            return 2
+    return cmd_buscar(criterios)
+
+
+@app.command(name="processo")
+def processo_cmd(numero: str, *, json: bool = False) -> int:
+    """Lista os documentos de um processo (CNJ).
+
+    Parameters
+    ----------
+    numero
+        numero do processo (com ou sem mascara CNJ).
+    json
+        saida em JSON.
+    """
+    return cmd_processo(numero, json)
+
+
+@app.command(name="texto")
+def texto_cmd(id: str, *, max: int = 0) -> int:  # noqa: A002
+    """Texto limpo COMPLETO de um documento.
+
+    Parameters
+    ----------
+    id
+        id_processo_documento (campo 'id_documento' dos resultados).
+    max
+        trunca em N caracteres (0 = sem limite).
+    """
+    return cmd_texto(id, max)
+
+
+@app.command(name="facetas")
+def facetas_cmd(termo: str = "", *, limite: int = 15, json: bool = False) -> int:
+    """Agregacoes (classes, orgaos, relatores, tipos).
+
+    Parameters
+    ----------
+    termo
+        texto livre opcional.
+    limite
+        itens por faceta (padrao 15).
+    json
+        saida em JSON.
+    """
+    return cmd_facetas(termo, limite, json)
+
+
+def main(tokens=None) -> int:
     try:
-        return args.func(args)
+        return app(tokens) or 0
     except urllib.error.HTTPError as e:
         body = ""
         try:

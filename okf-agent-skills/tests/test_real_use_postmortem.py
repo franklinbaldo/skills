@@ -1,3 +1,10 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "cyclopts>=3.0",
+# ]
+# ///
 from __future__ import annotations
 
 import unittest

@@ -5,6 +5,7 @@
 #     "mdformat>=1.0.0",
 #     "mdformat-frontmatter>=2.1.2",
 #     "mdformat-gfm>=1.0.0",
+#     "cyclopts>=3.0",
 # ]
 # ///
 """Check (or apply) mdformat formatting on the repo's .md files.
@@ -20,12 +21,14 @@ reads that automatically; the Python API used here does not, so options
 are duplicated explicitly — keep the two in sync if either changes).
 """
 
-import argparse
 import os
 import subprocess
 import sys
+from typing import Annotated
 
+import cyclopts
 import mdformat
+from cyclopts import Parameter
 
 OPTIONS = {"number": True, "wrap": "keep", "end_of_line": "lf"}
 EXTENSIONS = {"frontmatter", "gfm", "tables"}
@@ -76,20 +79,35 @@ def collect_all_files():
     return files
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Check/apply mdformat on repository .md files.")
-    parser.add_argument("--all", action="store_true", help="Check every tracked .md file, not just changed ones.")
-    parser.add_argument("--base", default="origin/main", help="Base ref to diff against for changed files.")
-    parser.add_argument("--files", nargs="*", help="Specific files to check.")
-    parser.add_argument("--fix", action="store_true", help="Apply formatting in place instead of just checking.")
-    args = parser.parse_args()
+app = cyclopts.App(name="check-markdown-format", help=__doc__)
 
-    if args.files:
-        files_to_check = args.files
-    elif args.all:
+
+@app.default
+def main(
+    *,
+    all_files: Annotated[bool, Parameter(name=["--all"])] = False,
+    base: str = "origin/main",
+    files: Annotated[list[str] | None, Parameter(consume_multiple=True)] = None,
+    fix: bool = False,
+):
+    """Check or apply mdformat on repository .md files.
+
+    Parameters
+    ----------
+    all_files
+        Check every tracked .md file, not just changed ones.
+    base
+        Base ref to diff against for changed files.
+    files
+        Specific files to check.
+    fix
+        Apply formatting in place instead of just checking.
+    """
+    if files:
+        files_to_check = list(files)
+    elif all_files:
         files_to_check = collect_all_files()
     else:
-        base = args.base
         if os.getenv("GITHUB_ACTIONS") == "true":
             gh_base_ref = os.getenv("GITHUB_BASE_REF")
             base = f"origin/{gh_base_ref}" if gh_base_ref else "HEAD~1"
@@ -113,11 +131,11 @@ def main():
         after = mdformat.text(before, options=OPTIONS, extensions=EXTENSIONS)
         if before != after:
             unformatted.append(filepath)
-            if args.fix:
+            if fix:
                 with open(filepath, "w", encoding="utf-8", newline="\n") as fh:
                     fh.write(after)
 
-    if unformatted and not args.fix:
+    if unformatted and not fix:
         print("\n❌ FILES NOT FORMATTED (run `uv run scripts/check_markdown_format.py --fix --files <path>` or `--all --fix`):\n")
         for f in unformatted:
             print(f"   - {f}")
@@ -131,4 +149,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(app())

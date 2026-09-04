@@ -2,18 +2,20 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "cyclopts>=3.0",
 # ]
 # ///
 """Create a private Kaggle GPU script job without overwriting user files."""
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
 import shutil
 import sys
 from pathlib import Path
+
+import cyclopts
 
 OWNER_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 SLUG_PATTERN = re.compile(r"[a-z0-9][a-z0-9-]*")
@@ -65,57 +67,76 @@ def build_metadata(
     }
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("script", type=Path)
-    parser.add_argument("--owner", required=True)
-    parser.add_argument("--slug", required=True)
-    parser.add_argument("--title")
-    parser.add_argument("--output-dir", required=True, type=Path)
-    parser.add_argument("--accelerator", default="NvidiaTeslaT4")
-    parser.add_argument("--internet", action="store_true")
-    return parser.parse_args()
+app = cyclopts.App(name="create-kaggle-job", help=__doc__)
 
 
-def main() -> int:
-    args = parse_args()
-    if not args.script.is_file() or args.script.suffix.lower() != ".py":
+@app.default
+def main(
+    script: Path,
+    *,
+    owner: str,
+    slug: str,
+    output_dir: Path,
+    title: str | None = None,
+    accelerator: str = "NvidiaTeslaT4",
+    internet: bool = False,
+) -> int:
+    """Create the job directory.
+
+    Parameters
+    ----------
+    script
+        The single Python script to run on Kaggle.
+    owner
+        Kaggle username that owns the kernel.
+    slug
+        Kernel slug.
+    output_dir
+        Directory to create; must not exist yet.
+    title
+        Kernel title (defaults to the slug, title-cased).
+    accelerator
+        Kaggle accelerator name.
+    internet
+        Enable internet access for the kernel.
+    """
+    if not script.is_file() or script.suffix.lower() != ".py":
         raise KaggleJobError("The input must be one Python script.")
-    owner = validate_owner(args.owner)
-    slug = validate_slug(args.slug, "slug")
-    if args.output_dir.exists():
+    owner = validate_owner(owner)
+    slug = validate_slug(slug, "slug")
+    if output_dir.exists():
         raise FileExistsError(
-            f"Refusing to overwrite existing job directory: {args.output_dir}"
+            f"Refusing to overwrite existing job directory: {output_dir}"
         )
 
-    args.output_dir.mkdir(parents=True)
-    code_path = args.output_dir / "job.py"
-    metadata_path = args.output_dir / "kernel-metadata.json"
-    shutil.copy2(args.script, code_path)
+    output_dir.mkdir(parents=True)
+    code_path = output_dir / "job.py"
+    metadata_path = output_dir / "kernel-metadata.json"
+    shutil.copy2(script, code_path)
     metadata = build_metadata(
         owner=owner,
         slug=slug,
-        title=args.title or slug.replace("-", " ").title(),
+        title=title or slug.replace("-", " ").title(),
         code_file=code_path.name,
-        accelerator=args.accelerator,
-        internet=args.internet,
+        accelerator=accelerator,
+        internet=internet,
     )
     metadata_path.write_text(
         json.dumps(metadata, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
-    print(f"Kaggle job: {args.output_dir}")
+    print(f"Kaggle job: {output_dir}")
     print(f"Kernel: {owner}/{slug}")
     print(
         "Push with: uvx --from kaggle kaggle kernels push "
-        f'-p "{args.output_dir}" --accelerator {args.accelerator}'
+        f'-p "{output_dir}" --accelerator {accelerator}'
     )
     return 0
 
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
+        raise SystemExit(app())
     except (FileExistsError, KaggleJobError, OSError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         sys.exit(1)

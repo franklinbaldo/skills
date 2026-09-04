@@ -4,20 +4,27 @@
 # dependencies = [
 #     "pillow",
 #     "pymupdf",
+#     "cyclopts>=3.0",
+#     "numpy",
+#     "opencv-python-headless",
 # ]
 # ///
-import os
-import sys
-import argparse
-import re
-import shutil
-import unicodedata
 import gc
-import time
-import fitz  # PyMuPDF
-from PIL import Image
 import io
 import math
+import os
+import re
+import shutil
+import sys
+import time
+import unicodedata
+from pathlib import Path
+from typing import Annotated, Literal
+
+import cyclopts
+import fitz  # PyMuPDF
+from cyclopts import Parameter
+from PIL import Image
 
 try:
     from compress import compress_pdf
@@ -589,26 +596,54 @@ def split_and_compress_toc(input_pdf, output_dir, mode="auto", max_dim=1200, qua
     print(f"Merged File Size: {merged_size / 1024 / 1024:.2f} MB (Reduction: {(1 - merged_size / orig_total_size)*100:.1f}%)")
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Split PDF by bookmarks/TOC and compress each part.")
-    parser.add_argument("--input", required=True, help="Path to input PDF file")
-    parser.add_argument("--output-dir", required=True, help="Directory to save the split & compressed PDFs")
-    parser.add_argument("--mode", choices=["bw", "gray", "color", "auto"], default="auto", help="Compression mode (default: auto)")
-    parser.add_argument("--max-dim", type=int, default=1200, help="Maximum dimension of images (default: 1200)")
-    parser.add_argument("--quality", type=int, default=50, help="JPEG quality (default: 50)")
-    parser.add_argument("--threshold-kb", type=int, default=150, help="Threshold in KB per page to trigger rasterization fallback (default: 150)")
+app = cyclopts.App(name="process-pdf", help="Split PDF by bookmarks/TOC and compress each part.")
 
-    parser.add_argument("--nup", type=int, default=1, help="N-up layout (e.g. 2, 4, 8 pages per page). Default: 1. When nup>1, a plain _compressed version is also always produced.")
-    parser.add_argument("--no-plain", action="store_true", default=False, help="When nup>1, skip generating the plain _compressed (nup=1) version.")
 
-    args = parser.parse_args()
+@app.default
+def main(
+    *,
+    input_path: Annotated[Path, Parameter(name=["--input"])],
+    output_dir: Path,
+    mode: Literal["bw", "gray", "color", "auto"] = "auto",
+    max_dim: int = 1200,
+    quality: int = 50,
+    threshold_kb: int = 150,
+    nup: int = 1,
+    no_plain: bool = False,
+) -> None:
+    """Split and compress.
+
+    Parameters
+    ----------
+    input_path
+        Path to input PDF file.
+    output_dir
+        Directory to save the split & compressed PDFs.
+    mode
+        Compression mode.
+    max_dim
+        Maximum dimension of images.
+    quality
+        JPEG quality.
+    threshold_kb
+        Threshold in KB per page to trigger rasterization fallback.
+    nup
+        N-up layout (e.g. 2, 4, 8 pages per page). When nup>1, a plain
+        _compressed version is also always produced.
+    no_plain
+        When nup>1, skip generating the plain _compressed (nup=1) version.
+    """
     split_and_compress_toc(
-        input_pdf=args.input,
-        output_dir=args.output_dir,
-        mode=args.mode,
-        max_dim=args.max_dim,
-        quality=args.quality,
-        threshold_kb=args.threshold_kb,
-        nup=args.nup,
-        also_plain=not args.no_plain,
+        input_pdf=str(input_path),
+        output_dir=str(output_dir),
+        mode=mode,
+        max_dim=max_dim,
+        quality=quality,
+        threshold_kb=threshold_kb,
+        nup=nup,
+        also_plain=not no_plain,
     )
+
+
+if __name__ == "__main__":
+    app()

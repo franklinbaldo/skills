@@ -1,3 +1,14 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "cyclopts>=3.0",
+#     "pillow",
+#     "pymupdf",
+#     "numpy",
+#     "opencv-python-headless",
+# ]
+# ///
 """Regression tests for the --jbig2 backend in compress.py.
 
 Run with:

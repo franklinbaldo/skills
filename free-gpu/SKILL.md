@@ -83,7 +83,7 @@ authentication, the known Windows incompatibility, and the limited shim.
 Create a private script Kernel directory:
 
 ```powershell
-uv run --no-project python <skill-dir>\scripts\create_kaggle_job.py `
+uv run <skill-dir>\scripts\create_kaggle_job.py `
   job.py --owner USERNAME --slug gpu-job --output-dir .kaggle-job
 ```
 

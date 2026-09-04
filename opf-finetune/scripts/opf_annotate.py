@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "cyclopts>=3.0",
 # ]
 # ///
 """opf_annotate.py — annotation helpers for fine-tuning OpenAI Privacy Filter (OPF).
@@ -20,12 +21,13 @@ Subcommands
              a `match` substring (offsets computed for you) and/or explicit start/end.
   preview    Render spans inline in the terminal so you can eyeball boundaries.
 
-Stdlib only. Python 3.8+.
+Dependencias: cyclopts (CLI); o resto e stdlib.
 """
-import argparse
 import json
 import sys
 from typing import Dict, List, Optional, Tuple
+
+import cyclopts
 
 SPAN_FIELDS = ("label", "spans")  # OPF accepts either; `label` is what demo data uses.
 
@@ -235,32 +237,50 @@ def preview(path: str, n: int) -> int:
     return 0
 
 
-def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
-    sub = p.add_subparsers(dest="cmd", required=True)
+app = cyclopts.App(name="opf-annotate", help=__doc__)
 
-    pv = sub.add_parser("validate", help="check offsets/overlaps/label-space")
-    pv.add_argument("jsonl")
-    pv.add_argument("--label-space", help="label_space.json to check category coverage")
 
-    pf = sub.add_parser("from-spans", help="build OPF JSONL (resolves `match` -> offsets)")
-    pf.add_argument("jsonl")
-    pf.add_argument("--output", help="output path (default: stdout)")
+@app.command(name="validate")
+def validate_cmd(jsonl: str, *, label_space: Optional[str] = None) -> int:
+    """Check offsets/overlaps/label-space.
 
-    pp = sub.add_parser("preview", help="render spans inline in the terminal")
-    pp.add_argument("jsonl")
-    pp.add_argument("--n", type=int, default=10, help="how many records to show")
+    Parameters
+    ----------
+    jsonl
+        annotation file to check.
+    label_space
+        label_space.json to check category coverage.
+    """
+    return validate(jsonl, label_space)
 
-    args = p.parse_args()
-    if args.cmd == "validate":
-        return validate(args.jsonl, args.label_space)
-    if args.cmd == "from-spans":
-        return from_spans(args.jsonl, args.output)
-    if args.cmd == "preview":
-        return preview(args.jsonl, args.n)
-    return 2
+
+@app.command(name="from-spans")
+def from_spans_cmd(jsonl: str, *, output: Optional[str] = None) -> int:
+    """Build OPF JSONL (resolves `match` -> offsets).
+
+    Parameters
+    ----------
+    jsonl
+        looser input file.
+    output
+        output path (default: stdout).
+    """
+    return from_spans(jsonl, output)
+
+
+@app.command(name="preview")
+def preview_cmd(jsonl: str, *, n: int = 10) -> int:
+    """Render spans inline in the terminal.
+
+    Parameters
+    ----------
+    jsonl
+        annotation file to preview.
+    n
+        how many records to show.
+    """
+    return preview(jsonl, n)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(app() or 0)

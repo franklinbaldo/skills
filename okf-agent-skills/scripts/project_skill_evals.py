@@ -2,17 +2,19 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "cyclopts>=3.0",
 # ]
 # ///
 """Project official Agent Skills routing eval queries into an existing OKF bundle."""
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import re
 from pathlib import Path, PurePosixPath
+
+import cyclopts
 
 EVAL_QUERIES = PurePosixPath("evals/eval_queries.json")
 
@@ -107,12 +109,21 @@ def project(root: Path, output: Path) -> list[dict[str, object]]:
     return cases
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", type=Path)
-    parser.add_argument("output", type=Path)
-    args = parser.parse_args()
-    cases = project(args.source, args.output)
+app = cyclopts.App(name="project-skill-evals", help=__doc__)
+
+
+@app.default
+def main(source: Path, output: Path) -> int:
+    """Project routing eval queries.
+
+    Parameters
+    ----------
+    source
+        Agent Skills repository/root.
+    output
+        Existing OKF bundle directory.
+    """
+    cases = project(source, output)
     positives = sum(bool(case["should_trigger"]) for case in cases)
     print(
         f"projected {len(cases)} trigger evals "
@@ -122,4 +133,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(app())

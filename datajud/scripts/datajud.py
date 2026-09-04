@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "cyclopts>=3.0",
 # ]
 # ///
 """
@@ -18,7 +19,7 @@ do CNJ). Para teor de acordao/voto/sentenca do TJRO use a skill juris-tjro.
 Autenticacao: chave PUBLICA unica do CNJ (mesma para todos; pode ser trocada
 pelo CNJ a qualquer momento — ver SKILL.md se comecar a dar 401).
 
-Sem dependencias externas (apenas stdlib).
+Dependencias: cyclopts (CLI). O acesso HTTP usa apenas a stdlib.
 
 Modos:
     processo <CNJ>              capa + movimentacoes de um processo (todos os graus)
@@ -30,13 +31,17 @@ Modos:
 Rode `python datajud.py -h` ou `python datajud.py <modo> -h` para detalhes.
 """
 
-import argparse
 import json
 import re
 import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.request
+from dataclasses import dataclass
+from typing import Annotated, Literal
+
+import cyclopts
+from cyclopts import Parameter
 
 BASE = "https://api-publica.datajud.cnj.jus.br"
 # Chave PUBLICA do CNJ — a mesma para todo mundo, documentada na wiki do DataJud.
@@ -259,21 +264,21 @@ def montar_query(args):
 # ----------------------------------------------------------------------------
 # Modo: processo
 # ----------------------------------------------------------------------------
-def cmd_processo(args):
-    nr = so_digitos(args.numero)
+def cmd_processo(numero: str, tribunal: str, movimentos: bool, as_json: bool):
+    nr = so_digitos(numero)
     body = {
         "size": 50,
         "query": {"match": {"numeroProcesso": nr}},
         "sort": [{"grau.keyword": "asc"}],
     }
-    d = search(body, tribunal=args.tribunal)
+    d = search(body, tribunal=tribunal)
     hits = d.get("hits", {}).get("hits", [])
     if not hits:
-        print(f"Nenhum processo {cnj(nr)} encontrado em {args.tribunal.upper()}.",
+        print(f"Nenhum processo {cnj(nr)} encontrado em {tribunal.upper()}.",
               file=sys.stderr)
         return 1
 
-    if args.json:
+    if as_json:
         out = []
         for h in hits:
             src = h["_source"]
@@ -284,13 +289,13 @@ def cmd_processo(args):
                 "orgaoJulgador": src.get("orgaoJulgador"),
                 "dataAjuizamento": src.get("dataAjuizamento"),
                 "ultimaAtualizacao": src.get("dataHoraUltimaAtualizacao"),
-                "movimentos": src.get("movimentos") if args.movimentos else "(omitido; use --movimentos)",
+                "movimentos": src.get("movimentos") if movimentos else "(omitido; use --movimentos)",
             })
-        print(json.dumps({"processo": cnj(nr), "tribunal": args.tribunal.upper(),
+        print(json.dumps({"processo": cnj(nr), "tribunal": tribunal.upper(),
                           "documentos": out}, ensure_ascii=False, indent=2))
         return 0
 
-    print(f"Processo {cnj(nr)} — {args.tribunal.upper()} — {len(hits)} registro(s) de grau")
+    print(f"Processo {cnj(nr)} — {tribunal.upper()} — {len(hits)} registro(s) de grau")
     print("=" * 92)
     for h in hits:
         src = h["_source"]
@@ -303,7 +308,7 @@ def cmd_processo(args):
         print(f"    ajuizado: {fmt_data_ajuiz(src.get('dataAjuizamento'))} | "
               f"atualizado: {fmt_data_iso(src.get('dataHoraUltimaAtualizacao'))}")
         movs = src.get("movimentos") or []
-        if args.movimentos and movs:
+        if movimentos and movs:
             movs_ord = sorted(movs, key=lambda m: m.get("dataHora", ""))
             print(f"    --- {len(movs_ord)} movimento(s) ---")
             for m in movs_ord:
@@ -324,22 +329,22 @@ def cmd_processo(args):
 # ----------------------------------------------------------------------------
 # Modo: buscar
 # ----------------------------------------------------------------------------
-def cmd_buscar(args):
-    query = montar_query(args)
+def cmd_buscar(filtros: "Filtros", recentes: bool, tamanho: int, as_json: bool):
+    query = montar_query(filtros)
     body = {
-        "size": args.tamanho,
+        "size": tamanho,
         "track_total_hits": True,
         "query": query,
         "_source": CAPA_FIELDS,
     }
-    if args.recentes:
+    if recentes:
         body["sort"] = [{"dataAjuizamento": "desc"}]
 
-    d = search(body, tribunal=args.tribunal)
+    d = search(body, tribunal=filtros.tribunal)
     total = d.get("hits", {}).get("total", {}).get("value", 0)
     hits = d.get("hits", {}).get("hits", [])
 
-    if args.json:
+    if as_json:
         out = []
         for h in hits:
             src = h["_source"]
@@ -351,12 +356,12 @@ def cmd_buscar(args):
                 "orgaoJulgador": (src.get("orgaoJulgador") or {}).get("nome"),
                 "dataAjuizamento": src.get("dataAjuizamento"),
             })
-        print(json.dumps({"tribunal": args.tribunal.upper(), "total": total,
+        print(json.dumps({"tribunal": filtros.tribunal.upper(), "total": total,
                           "retornados": len(out), "resultados": out},
                          ensure_ascii=False, indent=2))
         return 0
 
-    print(f"{total} processo(s) no acervo de {args.tribunal.upper()} para o filtro "
+    print(f"{total} processo(s) no acervo de {filtros.tribunal.upper()} para o filtro "
           f"| exibindo {len(hits)}")
     print("=" * 92)
     for i, h in enumerate(hits, 1):
@@ -374,15 +379,15 @@ def cmd_buscar(args):
 # ----------------------------------------------------------------------------
 # Modo: contar
 # ----------------------------------------------------------------------------
-def cmd_contar(args):
-    body = {"size": 0, "track_total_hits": True, "query": montar_query(args)}
-    d = search(body, tribunal=args.tribunal)
+def cmd_contar(filtros: "Filtros", as_json: bool):
+    body = {"size": 0, "track_total_hits": True, "query": montar_query(filtros)}
+    d = search(body, tribunal=filtros.tribunal)
     total = d.get("hits", {}).get("total", {}).get("value", 0)
-    if args.json:
-        print(json.dumps({"tribunal": args.tribunal.upper(), "total": total},
+    if as_json:
+        print(json.dumps({"tribunal": filtros.tribunal.upper(), "total": total},
                          ensure_ascii=False))
     else:
-        print(f"{total} processo(s) em {args.tribunal.upper()} para o filtro.")
+        print(f"{total} processo(s) em {filtros.tribunal.upper()} para o filtro.")
     return 0
 
 
@@ -398,25 +403,25 @@ FACET_FIELD = {
 }
 
 
-def cmd_facetas(args):
-    campo = FACET_FIELD[args.por]
+def cmd_facetas(filtros: "Filtros", por: str, limite: int, as_json: bool):
+    campo = FACET_FIELD[por]
     body = {
         "size": 0,
         "track_total_hits": True,
-        "query": montar_query(args),
-        "aggs": {"f": {"terms": {"field": campo, "size": args.limite}}},
+        "query": montar_query(filtros),
+        "aggs": {"f": {"terms": {"field": campo, "size": limite}}},
     }
-    d = search(body, tribunal=args.tribunal)
+    d = search(body, tribunal=filtros.tribunal)
     total = d.get("hits", {}).get("total", {}).get("value", 0)
     buckets = d.get("aggregations", {}).get("f", {}).get("buckets", [])
-    if args.json:
-        print(json.dumps({"tribunal": args.tribunal.upper(), "total": total,
-                          "por": args.por,
+    if as_json:
+        print(json.dumps({"tribunal": filtros.tribunal.upper(), "total": total,
+                          "por": por,
                           "buckets": [{"chave": b["key"], "qtd": b["doc_count"]}
                                       for b in buckets]},
                          ensure_ascii=False, indent=2))
         return 0
-    print(f"Panorama por {args.por} — {args.tribunal.upper()} "
+    print(f"Panorama por {por} — {filtros.tribunal.upper()} "
           f"(total no filtro: {total})")
     print("=" * 92)
     for b in buckets:
@@ -427,28 +432,28 @@ def cmd_facetas(args):
 # ----------------------------------------------------------------------------
 # Modo: codigos (descobre codigo de classe/assunto pelo nome, via agregacao)
 # ----------------------------------------------------------------------------
-def cmd_codigos(args):
-    if args.por == "classe":
-        campo_cod, campo_nome, sub = "classe.codigo", "classe.nome.keyword", "classe"
+def cmd_codigos(termo: str, por: str, tribunal: str, limite: int, as_json: bool):
+    if por == "classe":
+        campo_cod, campo_nome = "classe.codigo", "classe.nome.keyword"
         match_field = "classe.nome"
     else:
-        campo_cod, campo_nome, sub = "assuntos.codigo", "assuntos.nome.keyword", "assuntos"
+        campo_cod, campo_nome = "assuntos.codigo", "assuntos.nome.keyword"
         match_field = "assuntos.nome"
     body = {
         "size": 0,
-        "query": {"match": {match_field: args.termo}},
+        "query": {"match": {match_field: termo}},
         "aggs": {
             "nomes": {
-                "terms": {"field": campo_nome, "size": args.limite},
+                "terms": {"field": campo_nome, "size": limite},
                 "aggs": {"cod": {"terms": {"field": campo_cod, "size": 1}}},
             }
         },
     }
-    d = search(body, tribunal=args.tribunal)
+    d = search(body, tribunal=tribunal)
     buckets = d.get("aggregations", {}).get("nomes", {}).get("buckets", [])
     # a agregacao lista TODOS os nomes dos processos que casaram (em assunto, um
     # processo tem varios); filtramos para os nomes que de fato contem o termo.
-    termos = [t for t in re.split(r"\s+", args.termo.lower()) if t]
+    termos = [t for t in re.split(r"\s+", termo.lower()) if t]
     linhas = []
     for b in buckets:
         nome_l = b["key"].lower()
@@ -458,13 +463,13 @@ def cmd_codigos(args):
         cod = cods[0]["key"] if cods else "?"
         linhas.append((cod, b["key"], b["doc_count"]))
     linhas.sort(key=lambda x: -x[2])
-    if args.json:
-        print(json.dumps({"por": args.por, "termo": args.termo,
+    if as_json:
+        print(json.dumps({"por": por, "termo": termo,
                           "itens": [{"codigo": c, "nome": n, "qtd": q}
                                     for c, n, q in linhas]},
                          ensure_ascii=False, indent=2))
         return 0
-    print(f"Codigos de {args.por} contendo \"{args.termo}\" em {args.tribunal.upper()}")
+    print(f"Codigos de {por} contendo \"{termo}\" em {tribunal.upper()}")
     print("=" * 92)
     for c, n, q in linhas:
         print(f"  codigo {str(c):>6}  {n}   (~{q} processos)")
@@ -476,70 +481,147 @@ def cmd_codigos(args):
 # ----------------------------------------------------------------------------
 # CLI
 # ----------------------------------------------------------------------------
-def add_filtros(p):
-    p.add_argument("--tribunal", default=DEFAULT_TRIBUNAL,
-                   help="sigla do indice (padrao tjro). Ex.: stj, trf1, tjsp, stf.")
-    p.add_argument("--classe", help="codigo da classe processual (use 'codigos' para descobrir)")
-    p.add_argument("--assunto", help="texto do assunto (match em assuntos.nome)")
-    p.add_argument("--assunto-codigo", dest="assunto_codigo",
-                   help="codigo exato do assunto")
-    p.add_argument("--orgao", help="texto do orgao julgador (match)")
-    p.add_argument("--grau", choices=list(GRAU_LABEL.keys()),
-                   help="G1, G2, JE, TR, SUP")
-    p.add_argument("--de", help="data de ajuizamento inicial (DD/MM/AAAA)")
-    p.add_argument("--ate", help="data de ajuizamento final (DD/MM/AAAA)")
+@dataclass
+class Filtros:
+    """Filtros comuns aos modos de busca/contagem/agregacao."""
+
+    tribunal: str = DEFAULT_TRIBUNAL
+    """sigla do indice (padrao tjro). Ex.: stj, trf1, tjsp, stf."""
+    classe: str | None = None
+    """codigo da classe processual (use o modo `codigos` para descobrir)."""
+    assunto: str | None = None
+    """texto do assunto (match em assuntos.nome)."""
+    assunto_codigo: str | None = None
+    """codigo exato do assunto."""
+    orgao: str | None = None
+    """texto do orgao julgador (match)."""
+    grau: Literal["G1", "G2", "JE", "TR", "SUP"] | None = None
+    """grau do processo."""
+    de: str | None = None
+    """data de ajuizamento inicial (DD/MM/AAAA)."""
+    ate: str | None = None
+    """data de ajuizamento final (DD/MM/AAAA)."""
 
 
-def build_parser():
-    p = argparse.ArgumentParser(
-        description="Consulta metadados processuais na API Publica do DataJud (CNJ).")
-    sub = p.add_subparsers(dest="modo", required=True)
+AsJson = Annotated[bool, Parameter(name=["--json"])]
+FiltrosArg = Annotated[Filtros, Parameter(name="*")]
 
-    pr = sub.add_parser("processo", help="capa + movimentacoes de um processo (todos os graus)")
-    pr.add_argument("numero", help="numero do processo (com ou sem mascara CNJ)")
-    pr.add_argument("--tribunal", default=DEFAULT_TRIBUNAL,
-                    help="sigla do indice (padrao tjro)")
-    pr.add_argument("--movimentos", action="store_true",
-                    help="lista a linha completa de movimentacao")
-    pr.add_argument("--json", action="store_true")
-    pr.set_defaults(func=cmd_processo)
-
-    b = sub.add_parser("buscar", help="lista processos que casam com os filtros")
-    add_filtros(b)
-    b.add_argument("--recentes", action="store_true",
-                   help="ordena por data de ajuizamento decrescente")
-    b.add_argument("--tamanho", type=int, default=20, help="numero de resultados (padrao 20)")
-    b.add_argument("--json", action="store_true")
-    b.set_defaults(func=cmd_buscar)
-
-    c = sub.add_parser("contar", help="apenas o total real de processos no filtro")
-    add_filtros(c)
-    c.add_argument("--json", action="store_true")
-    c.set_defaults(func=cmd_contar)
-
-    f = sub.add_parser("facetas", help="agregacao: quantos processos por classe/assunto/orgao/grau")
-    add_filtros(f)
-    f.add_argument("--por", required=True, choices=list(FACET_FIELD.keys()),
-                   help="dimensao da agregacao")
-    f.add_argument("--limite", type=int, default=15, help="itens (padrao 15)")
-    f.add_argument("--json", action="store_true")
-    f.set_defaults(func=cmd_facetas)
-
-    cd = sub.add_parser("codigos", help="descobre codigos de classe/assunto pelo nome")
-    cd.add_argument("termo", help="parte do nome (ex.: 'execucao fiscal', 'aposentadoria')")
-    cd.add_argument("--por", choices=["classe", "assunto"], default="classe")
-    cd.add_argument("--tribunal", default=DEFAULT_TRIBUNAL)
-    cd.add_argument("--limite", type=int, default=15)
-    cd.add_argument("--json", action="store_true")
-    cd.set_defaults(func=cmd_codigos)
-
-    return p
+app = cyclopts.App(
+    name="datajud",
+    help="Consulta metadados processuais na API Publica do DataJud (CNJ).",
+)
 
 
-def main(argv=None):
-    args = build_parser().parse_args(argv)
+@app.command
+def processo(
+    numero: str,
+    *,
+    tribunal: str = DEFAULT_TRIBUNAL,
+    movimentos: bool = False,
+    json: AsJson = False,
+) -> int:
+    """Capa + movimentacoes de um processo (todos os graus).
+
+    Parameters
+    ----------
+    numero
+        numero do processo (com ou sem mascara CNJ).
+    tribunal
+        sigla do indice (padrao tjro).
+    movimentos
+        lista a linha completa de movimentacao.
+    json
+        emite JSON em vez do relatorio legivel.
+    """
+    return cmd_processo(numero, tribunal, movimentos, json)
+
+
+@app.command
+def buscar(
+    *,
+    filtros: FiltrosArg = None,
+    recentes: bool = False,
+    tamanho: int = 20,
+    json: AsJson = False,
+) -> int:
+    """Lista processos que casam com os filtros.
+
+    Parameters
+    ----------
+    recentes
+        ordena por data de ajuizamento decrescente.
+    tamanho
+        numero de resultados (padrao 20).
+    json
+        emite JSON em vez do relatorio legivel.
+    """
+    return cmd_buscar(filtros or Filtros(), recentes, tamanho, json)
+
+
+@app.command
+def contar(*, filtros: FiltrosArg = None, json: AsJson = False) -> int:
+    """Apenas o total real de processos no filtro.
+
+    Parameters
+    ----------
+    json
+        emite JSON em vez do relatorio legivel.
+    """
+    return cmd_contar(filtros or Filtros(), json)
+
+
+@app.command
+def facetas(
+    *,
+    filtros: FiltrosArg = None,
+    por: Literal["classe", "assunto", "orgao", "grau", "sistema"],
+    limite: int = 15,
+    json: AsJson = False,
+) -> int:
+    """Agregacao: quantos processos por classe/assunto/orgao/grau.
+
+    Parameters
+    ----------
+    por
+        dimensao da agregacao.
+    limite
+        itens (padrao 15).
+    json
+        emite JSON em vez do relatorio legivel.
+    """
+    return cmd_facetas(filtros or Filtros(), por, limite, json)
+
+
+@app.command
+def codigos(
+    termo: str,
+    *,
+    por: Literal["classe", "assunto"] = "classe",
+    tribunal: str = DEFAULT_TRIBUNAL,
+    limite: int = 15,
+    json: AsJson = False,
+) -> int:
+    """Descobre codigos de classe/assunto pelo nome.
+
+    Parameters
+    ----------
+    termo
+        parte do nome (ex.: 'execucao fiscal', 'aposentadoria').
+    por
+        dimensao a pesquisar.
+    tribunal
+        sigla do indice (padrao tjro).
+    limite
+        itens (padrao 15).
+    json
+        emite JSON em vez do relatorio legivel.
+    """
+    return cmd_codigos(termo, por, tribunal, limite, json)
+
+
+def main(tokens=None) -> int:
     try:
-        return args.func(args)
+        return app(tokens) or 0
     except RuntimeError as e:
         print(f"Erro: {e}", file=sys.stderr)
         return 1

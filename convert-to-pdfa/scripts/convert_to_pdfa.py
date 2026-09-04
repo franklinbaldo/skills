@@ -3,6 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "pymupdf",
+#     "cyclopts>=3.0",
 # ]
 # ///
 """Convert a PDF to PDF/A-1b, PDF/A-2b, or PDF/A-3b.
@@ -14,7 +15,6 @@ veraPDF is used when its official CLI is available.
 
 from __future__ import annotations
 
-import argparse
 import difflib
 import re
 import shutil
@@ -23,9 +23,11 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
+import cyclopts
 import pymupdf
+from cyclopts import Parameter
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -592,83 +594,77 @@ def convert(
             candidate.unlink(missing_ok=True)
 
 
-def _parser() -> argparse.ArgumentParser:
-    """Build the command-line parser."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", help="source PDF")
-    parser.add_argument("--output", help="destination; defaults to <name>-PDFA.pdf")
-    parser.add_argument("--part", type=int, choices=SUPPORTED_PARTS, default=2)
-    parser.add_argument(
-        "--backend",
-        choices=("auto", "native", "wsl"),
-        default="auto",
-        help="Ghostscript backend; auto prefers native and falls back to WSL on Windows",
-    )
-    parser.add_argument(
-        "--compatibility-policy",
-        type=int,
-        choices=(1, 2),
-        default=2,
-        help="2 aborts on incompatible content; 1 drops incompatible operations with warnings",
-    )
-    parser.add_argument(
-        "--rasterize",
-        action="store_true",
-        help="flatten pages before conversion; destroys searchable text, links, and signatures",
-    )
-    parser.add_argument(
-        "--dpi", type=int, default=300, help="raster fallback resolution"
-    )
-    parser.add_argument(
-        "--require-verapdf",
-        action="store_true",
-        help="fail unless the official veraPDF CLI confirms compliance",
-    )
-    parser.add_argument(
-        "--allow-signed",
-        action="store_true",
-        help="convert despite signature fields; the new file will not retain signature validity",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="replace an existing output after validation",
-    )
-    return parser
+app = cyclopts.App(name="convert-to-pdfa", help=__doc__)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """CLI entry point."""
-    args = _parser().parse_args(argv)
+@app.default
+def main(
+    input_path: Annotated[Path, Parameter(name=["INPUT", "--input"])],
+    *,
+    output: Path | None = None,
+    part: Literal[1, 2, 3] = 2,
+    backend: Literal["auto", "native", "wsl"] = "auto",
+    compatibility_policy: Literal[1, 2] = 2,
+    rasterize: bool = False,
+    dpi: int = 300,
+    require_verapdf: bool = False,
+    allow_signed: bool = False,
+    force: bool = False,
+) -> int:
+    """Convert one PDF to PDF/A.
+
+    Parameters
+    ----------
+    input_path
+        source PDF.
+    output
+        destination; defaults to <name>-PDFA.pdf.
+    part
+        PDF/A part to target.
+    backend
+        Ghostscript backend; auto prefers native and falls back to WSL on Windows.
+    compatibility_policy
+        2 aborts on incompatible content; 1 drops incompatible operations with warnings.
+    rasterize
+        flatten pages before conversion; destroys searchable text, links, and signatures.
+    dpi
+        raster fallback resolution.
+    require_verapdf
+        fail unless the official veraPDF CLI confirms compliance.
+    allow_signed
+        convert despite signature fields; the new file will not retain signature validity.
+    force
+        replace an existing output after validation.
+    """
     try:
-        if args.dpi < 72 or args.dpi > 600:
+        if dpi < 72 or dpi > 600:
             raise PdfaError("--dpi must be between 72 and 600.")
-        input_path, output_path = _resolve_paths(
-            args.input, args.output, force=args.force
+        resolved_input, output_path = _resolve_paths(
+            str(input_path), str(output) if output else None, force=force
         )
-        backend, ghostscript = _select_backend(args.backend)
+        selected_backend, ghostscript = _select_backend(backend)
         verification = convert(
-            input_path,
+            resolved_input,
             output_path,
-            part=args.part,
-            policy=args.compatibility_policy,
-            backend=backend,
+            part=part,
+            policy=compatibility_policy,
+            backend=selected_backend,
             ghostscript=ghostscript,
-            rasterize=args.rasterize,
-            dpi=args.dpi,
-            require_verapdf=args.require_verapdf,
-            allow_signed=args.allow_signed,
+            rasterize=rasterize,
+            dpi=dpi,
+            require_verapdf=require_verapdf,
+            allow_signed=allow_signed,
         )
     except (PdfaError, pymupdf.FileDataError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
     print(f"Created: {output_path}")
-    print(f"Format: PDF/A-{args.part}b ({verification.pdf_format})")
+    print(f"Format: PDF/A-{part}b ({verification.pdf_format})")
     print(f"Pages: {verification.pages}")
-    if args.rasterize:
+    if rasterize:
         print(
-            f"Text: rasterized at {args.dpi} DPI (search layer intentionally removed)"
+            f"Text: rasterized at {dpi} DPI (search layer intentionally removed)"
         )
     elif verification.text_similarity is None:
         print("Text: source had no extractable text")
@@ -679,4 +675,4 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(app() or 0)

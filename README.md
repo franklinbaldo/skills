@@ -75,6 +75,22 @@ The system-level protocol lives in [`loop-engineering`](loop-engineering/SKILL.m
 | [verne-orchestration](verne-orchestration/SKILL.md)         | Orchestrate Jules coding sessions via the Verne CLI (uvx verne).                                                                                                                                                                                           |
 | [vibevoice-asr](vibevoice-asr/SKILL.md)                     | Transcribe audio through Colab CLI with BitNet on CPU or the full VibeVoice ASR 7B model on GPU.                                                                                                                                                           |
 
+## Python conventions
+
+Every executable Python file in this repository is self-contained: it declares
+its dependencies inline with [PEP 723](https://peps.python.org/pep-0723/) and
+runs with `uv run <script>`, with no ambient virtualenv from the consuming
+repository.
+
+Command-line interfaces use [Cyclopts](https://cyclopts.readthedocs.io/):
+typed parameters, help text derived from the docstring, and stable flag names.
+Ruff runs in CI and in `pre-commit`, and bans `sys.argv` through
+`flake8-tidy-imports`; the single documented exception is
+`free-gpu/scripts/colab_windows.py`, an adapter that forwards its arguments to
+the third-party `colab` CLI. `tests/test_cli_contracts.py` covers the CLI
+surface itself — help, required arguments, defaults, type errors, exit codes —
+plus these repository-wide rules.
+
 ## Repo-level scripts
 
 `scripts/` contains Lean 4 tooling used by the [`lean-compile.yml`](.github/workflows/lean-compile.yml) workflow: `lean_docgen_md.py` generates Markdown docs from Lean sources, and `axiom_graph.py` builds an axiom dependency graph. These support the `legal-argument-lean` skill.
