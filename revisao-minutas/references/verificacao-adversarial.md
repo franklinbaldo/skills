@@ -15,7 +15,7 @@ Exemplos:
 ## Fontes e ferramentas
 
 - **Prazo/tempestividade**: a fonte autoritativa é a aba Expedientes do PJe ou equivalente processual; não inferir prazo do PDF exportado dos autos.
-- **NotebookLM**: bom para navegar o material subido e localizar trechos, IDs e páginas; não substitui fonte externa ausente do corpus.
+- **Gemini**: ferramenta preferencial para navegar PDFs dos autos, localizar trechos, IDs e páginas e responder perguntas adversariais em blocos; não substitui fonte externa ausente do corpus.
 - **juris-tjro**: verificar jurisprudência do TJRO citada na minuta.
 - **STJ/STF**: verificar em fontes oficiais atuais.
 - **datajud**: usar para metadados do processo quando classe, órgão, fase ou linha de movimentação não estiverem claros no contexto.

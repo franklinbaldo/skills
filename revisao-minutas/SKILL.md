@@ -234,11 +234,11 @@ O remédio normalmente é uma ponte curta de contexto, não uma nova seção lon
 Quando uma afirmação material depender dos autos, processo administrativo,
 precedente ou fonte externa, formule a pergunta que poderia **desmentir** a
 minuta. Para peças processuais, inclua a pergunta que poderia desmentir a própria
-premissa de que ainda existe ato a praticar. Use
-[`NotebookLM`](../notebooklm-processos/SKILL.md),
-[`DataJud`](../datajud/SKILL.md), [`juris-tjro`](../juris-tjro/SKILL.md) ou fonte
-oficial conforme a natureza da informação; não force uma ferramenta a responder
-o que ela não contém.
+premissa de que ainda existe ato a praticar. Para navegar autos e processos
+extensos em PDF, prefira o Gemini e faça perguntas adversariais sobre o corpus
+enviado. Use [`DataJud`](../datajud/SKILL.md),
+[`juris-tjro`](../juris-tjro/SKILL.md) ou fonte oficial conforme a natureza da
+informação; não force o modelo a responder o que não está no corpus.
 
 Leia [`references/verificacao-adversarial.md`](references/verificacao-adversarial.md)
 quando essa etapa for necessária.

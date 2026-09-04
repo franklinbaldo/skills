@@ -9,6 +9,6 @@
   {"query":"melhora o estilo deste parecer administrativo e deixa mais conciso","should_trigger":false},
   {"query":"qual é o prazo para recurso inominado nos Juizados Especiais?","should_trigger":false},
   {"query":"formaliza este argumento jurídico em Lean para ver de quais premissas ele depende","should_trigger":false},
-  {"query":"tenho os autos incompletos; formula perguntas para eu rodar no NotebookLM antes de escrever a peça","should_trigger":false},
+  {"query":"tenho os autos incompletos; formula perguntas para eu rodar no Gemini antes de escrever a peça","should_trigger":false},
   {"query":"revise este contrato particular e sugira cláusulas melhores","should_trigger":false}
 ]
