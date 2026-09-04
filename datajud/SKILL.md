@@ -54,17 +54,29 @@ registrado, não o que o ato fundamentou.
    fonte de teor.
 5. Apresente apenas os movimentos/metadados que mudam a conclusão.
 
-## CLI
+## Como executar
 
-## Servidor MCP — e a CLI que vem junto
+Toda interação com a API do DataJud passa pelos scripts empacotados em `scripts/`. As dependências são declaradas inline (PEP 723) e resolvidas automaticamente por `uv run` — não é preciso usar `--with`.
 
-`scripts/datajud_mcp.py` expõe o DataJud como **tool MCP** e, pelo mesmo código,
-como CLI. Prefira-o para a pergunta mais comum — *onde este processo está?* —
-porque ele devolve resumo e **marcos**, não a lista inteira de movimentos:
+> **Atenção ao diretório de trabalho (`cwd`):**
+> Os comandos abaixo assumem que você está na raiz desta skill (`datajud/` ou `skills/datajud/`). Se você estiver em outro diretório (por exemplo, dentro de um repositório como `pink` ou `judicial`), passe o caminho do script:
+>
+> ```bash
+> # A partir de qualquer diretório:
+> uv run "<caminho_da_skill>/scripts/datajud_mcp.py" processo <CNJ>
+> # Ou entrando no diretório da skill:
+> cd <caminho_da_skill>
+> uv run scripts/datajud_mcp.py processo <CNJ>
+> ```
+
+### 1. `scripts/datajud_mcp.py` — Triagem rápida e marcos processuais (Recomendado)
+
+Expõe o DataJud como **tool MCP** e como **CLI humana formatada em tabelas Rich**. Prefira-o para a pergunta mais comum — *onde este processo está?* — porque ele devolve resumo e **marcos**, não a lista inteira de movimentos:
 
 ```bash
-uv run datajud_mcp.py processo 7000667-67.2026.8.22.0000
-uv run datajud_mcp.py processo <cnj> --incluir-movimentos   # o payload cru
+uv run scripts/datajud_mcp.py processo 7000667-67.2026.8.22.0000
+uv run scripts/datajud_mcp.py processo <cnj> --incluir-movimentos   # payload cru com todos os movimentos
+uv run scripts/datajud_mcp.py processo <cnj> --json                 # saída em JSON estruturado
 ```
 
 Medido em dois processos reais: 59 movimentos viraram 24 marcos; 138 (dois
@@ -73,8 +85,9 @@ disponibilização no DJE, expedição de documento, juntada. **Filtra-se o ruí
 não se enumeram os marcos**: a lista de códigos que importam é longa e envelhece
 a cada revisão das Tabelas Processuais Unificadas; a de ruído é curta e estável.
 
-O `uv run` resolve as dependências pelo cabeçalho PEP 723 do próprio arquivo —
-não é preciso montar comando com `--with`.
+### 2. `scripts/datajud.py` — Pesquisa aprofundada, contagens e facetas
+
+Cliente focado em buscas avançadas, agregações e descoberta de códigos TPU.
 
 ## Movimento e documento envelhecem em ritmos diferentes
 
