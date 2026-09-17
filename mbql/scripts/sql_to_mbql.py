@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -44,6 +45,9 @@ class Converter:
         self.tables: dict[str, TableRef] = {}
         self.source: TableRef | None = None
         self.aggregation_aliases: dict[str, int] = {}
+        self.aggregation_alias_outputs: dict[str, str] = {}
+        self.aggregation_expression_outputs: dict[str, str] = {}
+        self._aggregation_name_counts: Counter[str] = Counter()
 
     def convert(self, sql: str) -> dict[str, Any]:
         try:
@@ -52,21 +56,22 @@ class Converter:
             raise ConversionError(f"DuckDB SQL inválido: {exc}") from exc
 
         if not isinstance(node, exp.Select):
-            raise ConversionError("A v1 converte apenas uma instrução SELECT simples.")
+            raise ConversionError("O conversor aceita apenas uma instrução SELECT por vez.")
         if node.args.get("with_"):
             raise ConversionError("CTEs ainda não são suportadas; materialize ou simplifique a consulta.")
         if any(node.find_all(exp.Window)):
             raise ConversionError("Window functions ainda não são suportadas.")
-        if node.args.get("having"):
-            raise ConversionError("HAVING ainda não é suportado com tradução segura na v1.")
         if node.args.get("qualify"):
             raise ConversionError("QUALIFY ainda não é suportado.")
         if node.args.get("distinct"):
-            raise ConversionError("SELECT DISTINCT ainda não é suportado.")
+            raise ConversionError(
+                "SELECT DISTINCT permanece ambíguo no contrato portátil; "
+                "há um xfail executável cobrindo a decisão pendente."
+            )
 
         from_ = node.args.get("from_")
         if from_ is None or not isinstance(from_.this, exp.Table):
-            raise ConversionError("FROM deve apontar diretamente para uma tabela.")
+            raise ConversionError("FROM deve apontar diretamente para uma tabela; subquery ainda não é suportada.")
 
         self.source = self._register_table(from_.this)
         stage: dict[str, Any] = {
@@ -102,13 +107,15 @@ class Converter:
             if self._is_aggregate(expression):
                 has_aggregate = True
                 idx = len(aggregations)
-                aggregations.append(self._aggregate(expression))
+                aggregation = self._aggregate(expression)
+                aggregations.append(aggregation)
+                output_name = self._register_aggregation_output(expression)
                 if alias:
                     self.aggregation_aliases[alias.lower()] = idx
+                    self.aggregation_alias_outputs[alias.lower()] = output_name
                 continue
 
             if group_exprs:
-                # GROUP BY defines the projected dimensions in MBQL.
                 if not self._matches_any(expression, group_exprs):
                     raise ConversionError(
                         f"Projeção não agregada fora do GROUP BY: {expression.sql(dialect='duckdb')}"
@@ -138,9 +145,21 @@ class Converter:
 
         offset = node.args.get("offset")
         if offset is not None:
-            raise ConversionError("OFFSET ainda não é suportado pelo conversor v1.")
+            raise ConversionError(
+                "OFFSET permanece sem contrato portátil definido; há um xfail executável para page/items."
+            )
 
-        return {"lib/type": "mbql/query", "stages": [stage]}
+        stages = [stage]
+        having = node.args.get("having")
+        if having is not None:
+            stages.append(
+                {
+                    "lib/type": "mbql.stage/mbql",
+                    "filters": [self._post_aggregation_expr(having.this)],
+                }
+            )
+
+        return {"lib/type": "mbql/query", "stages": stages}
 
     def _register_table(self, table: exp.Table, *, joined: bool = False) -> TableRef:
         if table.catalog:
@@ -178,7 +197,7 @@ class Converter:
         conditions = [self._expr(part) for part in self._flatten_and(on)]
         allowed = {"=", "!=", "<", "<=", ">", ">="}
         if any(not isinstance(c, list) or not c or c[0] not in allowed for c in conditions):
-            raise ConversionError("JOIN ON suporta apenas comparações ligadas por AND na v1.")
+            raise ConversionError("JOIN ON suporta apenas comparações ligadas por AND.")
 
         return {
             "alias": table.join_alias,
@@ -248,14 +267,13 @@ class Converter:
                 return -value
             return ["-", {}, 0, value]
         if isinstance(node, exp.Not):
-            # SQL "IS NOT NULL" arrives as NOT(IS(...)).
             if isinstance(node.this, exp.Is) and isinstance(node.this.expression, exp.Null):
                 return ["not-null", {}, self._expr(node.this.this)]
             return ["not", {}, self._expr(node.this)]
         if isinstance(node, exp.Is):
             if isinstance(node.expression, exp.Null):
                 return ["is-null", {}, self._expr(node.this)]
-            raise ConversionError("IS só é suportado para NULL na v1.")
+            raise ConversionError("IS só é suportado para NULL.")
         if isinstance(node, exp.Between):
             return [
                 "between",
@@ -268,21 +286,10 @@ class Converter:
             if node.args.get("query") is not None:
                 raise ConversionError("IN (subquery) ainda não é suportado.")
             return ["in", {}, self._expr(node.this), *[self._expr(e) for e in node.expressions]]
+        if isinstance(node, exp.ILike):
+            return self._like(node, case_sensitive=False)
         if isinstance(node, exp.Like):
-            pattern = self._expr(node.expression)
-            if not isinstance(pattern, str):
-                raise ConversionError("LIKE exige padrão literal na v1.")
-            # MBQL contains/starts-with/ends-with are safer than pretending full LIKE support.
-            if "%" not in pattern and "_" not in pattern:
-                return ["=", {}, self._expr(node.this), pattern]
-            if "_" in pattern or pattern.count("%") > 2 or ("%" in pattern[1:-1]):
-                raise ConversionError("LIKE complexo (%, _) ainda não é suportado.")
-            if pattern.startswith("%") and pattern.endswith("%"):
-                return ["contains", {}, self._expr(node.this), pattern[1:-1]]
-            if pattern.endswith("%"):
-                return ["starts-with", {}, self._expr(node.this), pattern[:-1]]
-            if pattern.startswith("%"):
-                return ["ends-with", {}, self._expr(node.this), pattern[1:]]
+            return self._like(node, case_sensitive=True)
         if isinstance(node, exp.Alias):
             return self._expr(node.this)
 
@@ -309,6 +316,23 @@ class Converter:
             f"Expressão DuckDB ainda não suportada: {node.sql(dialect='duckdb')} ({type(node).__name__})"
         )
 
+    def _like(self, node: exp.Expression, *, case_sensitive: bool) -> list[Any]:
+        pattern = self._expr(node.expression)
+        if not isinstance(pattern, str):
+            raise ConversionError("LIKE/ILIKE exige padrão literal.")
+        options: dict[str, Any] = {"case-sensitive": case_sensitive}
+        if "%" not in pattern and "_" not in pattern:
+            return ["=", options, self._expr(node.this), pattern]
+        if "_" in pattern or pattern.count("%") > 2 or "%" in pattern[1:-1]:
+            raise ConversionError("LIKE/ILIKE complexo (wildcards internos ou _) ainda não é suportado.")
+        if pattern.startswith("%") and pattern.endswith("%"):
+            return ["contains", options, self._expr(node.this), pattern[1:-1]]
+        if pattern.endswith("%"):
+            return ["starts-with", options, self._expr(node.this), pattern[:-1]]
+        if pattern.startswith("%"):
+            return ["ends-with", options, self._expr(node.this), pattern[1:]]
+        raise ConversionError("LIKE/ILIKE não pôde ser normalizado com segurança.")
+
     def _aggregate(self, node: exp.Expression) -> list[Any]:
         expression, _ = self._unwrap_alias(node)
         mapping: list[tuple[type[exp.Expression], str]] = [
@@ -319,9 +343,15 @@ class Converter:
             (exp.Median, "median"),
         ]
         if isinstance(expression, exp.Count):
-            if expression.args.get("distinct"):
-                raise ConversionError("COUNT(DISTINCT ...) ainda não é suportado na v1.")
             arg = expression.this
+            if isinstance(arg, exp.Distinct):
+                if len(arg.expressions) != 1:
+                    raise ConversionError("COUNT(DISTINCT ...) com múltiplos campos ainda não é suportado.")
+                return ["distinct", {}, self._expr(arg.expressions[0])]
+            if expression.args.get("distinct"):
+                if arg is None:
+                    raise ConversionError("COUNT(DISTINCT ...) sem campo não é suportado.")
+                return ["distinct", {}, self._expr(arg)]
             if arg is None or isinstance(arg, exp.Star):
                 return ["count", {}]
             return ["count", {}, self._expr(arg)]
@@ -333,6 +363,111 @@ class Converter:
     @staticmethod
     def _is_aggregate(node: exp.Expression) -> bool:
         return isinstance(node, (exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max, exp.Median))
+
+    @staticmethod
+    def _aggregate_machine_base(node: exp.Expression) -> str:
+        if isinstance(node, exp.Count):
+            arg = node.this
+            if isinstance(arg, exp.Distinct) or node.args.get("distinct"):
+                return "distinct"
+            return "count"
+        if isinstance(node, exp.Sum):
+            return "sum"
+        if isinstance(node, exp.Avg):
+            return "avg"
+        if isinstance(node, exp.Min):
+            return "min"
+        if isinstance(node, exp.Max):
+            return "max"
+        if isinstance(node, exp.Median):
+            return "median"
+        raise ConversionError(f"Agregação sem machine name conhecido: {node.sql(dialect='duckdb')}")
+
+    def _register_aggregation_output(self, node: exp.Expression) -> str:
+        base = self._aggregate_machine_base(node)
+        self._aggregation_name_counts[base] += 1
+        occurrence = self._aggregation_name_counts[base]
+        output = base if occurrence == 1 else f"{base}_{occurrence}"
+        self.aggregation_expression_outputs[self._expression_key(node)] = output
+        return output
+
+    @staticmethod
+    def _expression_key(node: exp.Expression) -> str:
+        return node.sql(dialect="duckdb", normalize=True).lower()
+
+    def _post_aggregation_expr(self, node: exp.Expression) -> Any:
+        if isinstance(node, exp.Paren):
+            return self._post_aggregation_expr(node.this)
+        if self._is_aggregate(node):
+            name = self.aggregation_expression_outputs.get(self._expression_key(node))
+            if name is None:
+                raise ConversionError(
+                    "HAVING referencia uma agregação que não está projetada; "
+                    "a inserção implícita dessa agregação ainda não tem contrato."
+                )
+            return ["field", {}, name]
+        if isinstance(node, exp.Column):
+            if not node.table:
+                alias_name = self.aggregation_alias_outputs.get(node.name.lower())
+                if alias_name is not None:
+                    return ["field", {}, alias_name]
+            return ["field", {}, node.name]
+        if isinstance(node, exp.Literal):
+            return self._expr(node)
+        if isinstance(node, exp.Null):
+            return None
+        if isinstance(node, exp.Boolean):
+            return bool(node.this)
+        if isinstance(node, exp.Not):
+            return ["not", {}, self._post_aggregation_expr(node.this)]
+        if isinstance(node, exp.Is) and isinstance(node.expression, exp.Null):
+            return ["is-null", {}, self._post_aggregation_expr(node.this)]
+        if isinstance(node, exp.Between):
+            return [
+                "between",
+                {},
+                self._post_aggregation_expr(node.this),
+                self._post_aggregation_expr(node.args["low"]),
+                self._post_aggregation_expr(node.args["high"]),
+            ]
+        if isinstance(node, exp.In):
+            if node.args.get("query") is not None:
+                raise ConversionError("HAVING IN (subquery) ainda não é suportado.")
+            return [
+                "in",
+                {},
+                self._post_aggregation_expr(node.this),
+                *[self._post_aggregation_expr(e) for e in node.expressions],
+            ]
+
+        comparison_ops: list[tuple[type[exp.Expression], str]] = [
+            (exp.And, "and"),
+            (exp.Or, "or"),
+            (exp.EQ, "="),
+            (exp.NEQ, "!="),
+            (exp.GT, ">"),
+            (exp.GTE, ">="),
+            (exp.LT, "<"),
+            (exp.LTE, "<="),
+        ]
+        for cls, op in comparison_ops:
+            if isinstance(node, cls):
+                return [
+                    op,
+                    {},
+                    self._post_aggregation_expr(node.this),
+                    self._post_aggregation_expr(node.expression),
+                ]
+
+        if isinstance(node, (exp.Add, exp.Sub, exp.Mul, exp.Div, exp.Mod)):
+            raise ConversionError(
+                "HAVING com aritmética entre agregações permanece ambíguo; "
+                "há um xfail executável cobrindo esse caso."
+            )
+
+        raise ConversionError(
+            f"HAVING ainda não suportado para: {node.sql(dialect='duckdb')} ({type(node).__name__})"
+        )
 
     def _order(self, ordered: exp.Expression) -> list[Any]:
         node = ordered.this if isinstance(ordered, exp.Ordered) else ordered
@@ -365,11 +500,11 @@ class Converter:
     @staticmethod
     def _integer_literal(node: exp.Expression | None, label: str) -> int:
         if not isinstance(node, exp.Literal) or node.is_string:
-            raise ConversionError(f"{label} deve ser inteiro literal na v1.")
+            raise ConversionError(f"{label} deve ser inteiro literal.")
         try:
             value = int(node.this)
         except ValueError as exc:
-            raise ConversionError(f"{label} deve ser inteiro literal na v1.") from exc
+            raise ConversionError(f"{label} deve ser inteiro literal.") from exc
         if value < 0:
             raise ConversionError(f"{label} não pode ser negativo.")
         return value
