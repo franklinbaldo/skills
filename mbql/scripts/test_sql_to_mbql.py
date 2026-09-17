@@ -93,6 +93,29 @@ class SqlToMbqlTests(unittest.TestCase):
         self.assertIn("gross", stage["expressions"])
         self.assertEqual(stage["fields"], [["expression", {}, "gross"]])
 
+    def test_common_scalar_functions_map_to_mbql_expressions(self) -> None:
+        query = convert_sql(
+            "SELECT lower(status) AS normalized, upper(status) AS loud, "
+            "coalesce(status, 'unknown') AS safe, abs(total) AS magnitude FROM orders",
+            database="Analytics",
+        )
+        expressions = query["stages"][0]["expressions"]
+        field = ["field", {}, ["Analytics", "main", "orders", "status"]]
+        total = ["field", {}, ["Analytics", "main", "orders", "total"]]
+        self.assertEqual(expressions["normalized"], ["lower", {}, field])
+        self.assertEqual(expressions["loud"], ["upper", {}, field])
+        self.assertEqual(expressions["safe"], ["coalesce", {}, field, "unknown"])
+        self.assertEqual(expressions["magnitude"], ["abs", {}, total])
+
+    def test_scalar_functions_work_inside_filters(self) -> None:
+        query = convert_sql(
+            "SELECT id FROM orders WHERE lower(status) = 'paid' AND abs(total) > 10",
+            database="Analytics",
+        )
+        rendered = repr(query["stages"][0]["filters"][0])
+        self.assertIn("'lower'", rendered)
+        self.assertIn("'abs'", rendered)
+
     def test_in_between_like_and_null_predicates(self) -> None:
         query = convert_sql(
             "SELECT id FROM orders "
