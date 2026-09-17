@@ -145,28 +145,31 @@ class SqlToMbqlTests(unittest.TestCase):
 
     @unittest.expectedFailure
     def test_select_distinct_needs_explicit_semantics(self) -> None:
-        # Ambiguous in portable MBQL: SQL row-level DISTINCT is not always equivalent
-        # to a breakout-only query once expressions/order/limit are involved.
         query = convert_sql("SELECT DISTINCT status FROM orders", database="Analytics")
         self.assertEqual(
             query["stages"][0]["breakout"],
             [["field", {}, ["Analytics", "main", "orders", "status"]]],
         )
 
-    @unittest.expectedFailure
-    def test_offset_needs_page_contract(self) -> None:
-        # OFFSET has no portable meaning without deciding how it maps to MBQL page
-        # and page size. Keep this executable ambiguity visible until the contract is chosen.
+    def test_aligned_offset_maps_exactly_to_page(self) -> None:
         query = convert_sql(
             "SELECT id FROM orders ORDER BY id LIMIT 10 OFFSET 20",
             database="Analytics",
         )
-        self.assertEqual(query["stages"][0]["page"], {"items": 10, "page": 3})
+        stage = query["stages"][0]
+        self.assertEqual(stage["page"], {"items": 10, "page": 3})
+        self.assertNotIn("limit", stage)
+
+    @unittest.expectedFailure
+    def test_unaligned_offset_remains_ambiguous(self) -> None:
+        query = convert_sql(
+            "SELECT id FROM orders ORDER BY id LIMIT 10 OFFSET 5",
+            database="Analytics",
+        )
+        self.assertEqual(query["stages"][0]["page"], {"items": 10, "page": 1.5})
 
     @unittest.expectedFailure
     def test_having_expression_without_stable_output_name_is_ambiguous(self) -> None:
-        # The previous-stage machine name is stable for bare aggregations, but not for
-        # arbitrary arithmetic over aggregations without introducing a named expression.
         query = convert_sql(
             "SELECT status, sum(total) FROM orders "
             "GROUP BY status HAVING sum(total) / count(*) > 10",
