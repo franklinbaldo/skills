@@ -6,7 +6,7 @@
 #   "sqlglot>=27,<29",
 # ]
 # ///
-"""Validate and optionally differentially execute DuckDB SQL as portable MBQL on Metabase."""
+"""Validate and differentially execute DuckDB SQL as portable MBQL on Metabase."""
 
 from __future__ import annotations
 
@@ -14,10 +14,12 @@ import argparse
 import json
 import os
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 import httpx
+from sqlglot import parse_one
 
 from sql_to_mbql import ConversionError, convert_sql
 
@@ -58,8 +60,12 @@ def _post(client: httpx.Client, path: str, payload: dict[str, Any]) -> dict[str,
 
 
 def normalize_rows(rows: list[list[Any]] | list[tuple[Any, ...]]) -> list[list[Any]]:
-    """Normalize row containers while preserving values and row order."""
+    """Normalize row containers while preserving cell values."""
     return [list(row) for row in rows]
+
+
+def _row_key(row: list[Any]) -> str:
+    return json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def construct(client: httpx.Client, mbql: dict[str, Any]) -> str:
@@ -78,16 +84,33 @@ def execute_sql(client: httpx.Client, *, database_id: int, sql: str) -> dict[str
     return _post(client, "/api/agent/v1/execute-sql", {"database_id": database_id, "sql": sql})
 
 
-def compare_results(native: dict[str, Any], mbql: dict[str, Any]) -> None:
+def compare_results(native: dict[str, Any], mbql: dict[str, Any], *, ordered: bool) -> None:
+    """Compare relational results, respecting that row order is undefined without ORDER BY."""
     native_data = native.get("data") or {}
     mbql_data = mbql.get("data") or {}
     native_rows = normalize_rows(native_data.get("rows") or [])
     mbql_rows = normalize_rows(mbql_data.get("rows") or [])
-    if native_rows != mbql_rows:
+
+    if ordered:
+        equivalent = native_rows == mbql_rows
+    else:
+        equivalent = Counter(map(_row_key, native_rows)) == Counter(map(_row_key, mbql_rows))
+
+    if not equivalent:
         raise LiveConformanceError(
             "semantic mismatch DuckDB SQL != MBQL\n"
-            + json.dumps({"native_rows": native_rows, "mbql_rows": mbql_rows}, ensure_ascii=False, indent=2)
+            + json.dumps(
+                {"ordered": ordered, "native_rows": native_rows, "mbql_rows": mbql_rows},
+                ensure_ascii=False,
+                indent=2,
+                default=str,
+            )
         )
+
+
+def _sql_has_order_by(sql: str) -> bool:
+    node = parse_one(sql, read="duckdb")
+    return bool(node.args.get("order"))
 
 
 def run_live(
@@ -115,8 +138,10 @@ def run_live(
             if database_id is None:
                 raise LiveConformanceError("--compare-native exige --database-id.")
             native_result = execute_sql(client, database_id=database_id, sql=sql)
-            compare_results(native_result, mbql_result)
+            ordered = _sql_has_order_by(sql)
+            compare_results(native_result, mbql_result, ordered=ordered)
             result["semantic_equivalence"] = True
+            result["order_sensitive"] = ordered
         return result
 
 
@@ -130,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--database-id", type=int, help="numeric database id for --compare-native")
     parser.add_argument("--schema", default="main")
     parser.add_argument("--execute", action="store_true", help="execute resolved MBQL after validation")
-    parser.add_argument("--compare-native", action="store_true", help="execute both raw SQL and MBQL and require identical rows")
+    parser.add_argument("--compare-native", action="store_true", help="execute SQL and MBQL and require equivalent rows")
     args = parser.parse_args(argv)
 
     try:
