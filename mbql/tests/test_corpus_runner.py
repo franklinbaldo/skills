@@ -36,8 +36,8 @@ def test_corpus_reports_supported_ambiguous_and_unsupported(tmp_path: Path) -> N
     payload = corpus_runner.run_corpus(corpus, database="Analytics")
 
     assert payload["statements"] == 5
-    assert payload["counts"]["supported"] == 2
-    assert payload["counts"]["ambiguous"] == 2
+    assert payload["counts"]["supported"] == 3
+    assert payload["counts"]["ambiguous"] == 1
     assert payload["counts"]["unsupported"] == 1
     assert payload["contract_gaps"] == 0
 
@@ -88,10 +88,10 @@ def test_sqllogictest_extracts_query_blocks_and_ignores_setup(tmp_path: Path) ->
     payload = corpus_runner.run_corpus(corpus, database="Analytics")
 
     assert payload["statements"] == 2
-    assert payload["counts"] == {"supported": 1, "ambiguous": 1}
+    assert payload["counts"] == {"supported": 2}
     assert all("CREATE TABLE" not in row["sql"] for row in payload["results"])
     assert payload["feature_counts"]["offset_aligned"] == 1
-    assert payload["feature_counts"]["select_distinct"] == 1
+    assert payload["feature_counts"]["select_distinct_simple"] == 1
 
 
 def test_sqllogictest_pivot_query_is_visible_as_unsupported(tmp_path: Path) -> None:
