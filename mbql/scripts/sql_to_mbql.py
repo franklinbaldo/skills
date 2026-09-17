@@ -18,8 +18,6 @@ from typing import Any
 from sqlglot import exp, parse_one
 from sqlglot.errors import ParseError
 
-JSON = dict[str, Any] | list[Any] | str | int | float | bool | None
-
 
 class ConversionError(ValueError):
     """Raised when SQL cannot be translated without guessing semantics."""
@@ -63,11 +61,6 @@ class Converter:
             raise ConversionError("Window functions ainda não são suportadas.")
         if node.args.get("qualify"):
             raise ConversionError("QUALIFY ainda não é suportado.")
-        if node.args.get("distinct"):
-            raise ConversionError(
-                "SELECT DISTINCT permanece ambíguo no contrato portátil; "
-                "há um xfail executável cobrindo a decisão pendente."
-            )
 
         from_ = node.args.get("from_")
         if from_ is None or not isinstance(from_.this, exp.Table):
@@ -81,7 +74,7 @@ class Converter:
 
         joins = node.args.get("joins") or []
         if joins:
-            stage["joins"] = [self._join(j) for j in joins]
+            stage["joins"] = [self._join(join) for join in joins]
 
         where = node.args.get("where")
         if where is not None:
@@ -90,8 +83,45 @@ class Converter:
         group = node.args.get("group")
         group_exprs = list(group.expressions) if group is not None else []
         if group_exprs:
-            stage["breakout"] = [self._expr(e) for e in group_exprs]
+            stage["breakout"] = [self._expr(item) for item in group_exprs]
 
+        distinct = bool(node.args.get("distinct"))
+        simple_distinct = (
+            distinct
+            and len(node.expressions) == 1
+            and isinstance(node.expressions[0], exp.Column)
+            and not group_exprs
+            and node.args.get("having") is None
+        )
+        if distinct and not simple_distinct:
+            raise ConversionError(
+                "SELECT DISTINCT só tem contrato seguro para uma coluna direta; "
+                "expressões/aliases/formas compostas permanecem ambíguas."
+            )
+
+        if simple_distinct:
+            stage["breakout"] = [self._expr(node.expressions[0])]
+        else:
+            self._project(node, stage, group_exprs)
+
+        order = node.args.get("order")
+        if order is not None:
+            stage["order-by"] = [self._order(item) for item in order.expressions]
+
+        self._apply_limit_offset(node, stage)
+
+        stages = [stage]
+        having = node.args.get("having")
+        if having is not None:
+            stages.append(
+                {
+                    "lib/type": "mbql.stage/mbql",
+                    "filters": [self._post_aggregation_expr(having.this)],
+                }
+            )
+        return {"lib/type": "mbql/query", "stages": stages}
+
+    def _project(self, node: exp.Select, stage: dict[str, Any], group_exprs: list[exp.Expression]) -> None:
         aggregations: list[Any] = []
         fields: list[Any] = []
         expressions: dict[str, Any] = {}
@@ -107,8 +137,7 @@ class Converter:
             if self._is_aggregate(expression):
                 has_aggregate = True
                 idx = len(aggregations)
-                aggregation = self._aggregate(expression)
-                aggregations.append(aggregation)
+                aggregations.append(self._aggregate(expression))
                 output_name = self._register_aggregation_output(expression)
                 if alias:
                     self.aggregation_aliases[alias.lower()] = idx
@@ -135,40 +164,25 @@ class Converter:
         if expressions:
             stage["expressions"] = expressions
 
-        order = node.args.get("order")
-        if order is not None:
-            stage["order-by"] = [self._order(item) for item in order.expressions]
-
+    def _apply_limit_offset(self, node: exp.Select, stage: dict[str, Any]) -> None:
         limit = node.args.get("limit")
         offset = node.args.get("offset")
         if offset is None:
             if limit is not None:
                 stage["limit"] = self._integer_literal(limit.expression, "LIMIT")
-        else:
-            if limit is None:
-                raise ConversionError("OFFSET sem LIMIT não tem mapeamento MBQL exato para page/items.")
-            items = self._integer_literal(limit.expression, "LIMIT")
-            offset_value = self._integer_literal(offset.expression, "OFFSET")
-            if items == 0:
-                raise ConversionError("LIMIT 0 com OFFSET não pode ser representado como page/items.")
-            if offset_value % items:
-                raise ConversionError(
-                    "OFFSET não alinhado ao LIMIT não é representável exatamente por MBQL page/items; "
-                    f"OFFSET={offset_value}, LIMIT={items}."
-                )
-            stage["page"] = {"page": offset_value // items + 1, "items": items}
-
-        stages = [stage]
-        having = node.args.get("having")
-        if having is not None:
-            stages.append(
-                {
-                    "lib/type": "mbql.stage/mbql",
-                    "filters": [self._post_aggregation_expr(having.this)],
-                }
+            return
+        if limit is None:
+            raise ConversionError("OFFSET sem LIMIT não tem mapeamento MBQL exato para page/items.")
+        items = self._integer_literal(limit.expression, "LIMIT")
+        offset_value = self._integer_literal(offset.expression, "OFFSET")
+        if items == 0:
+            raise ConversionError("LIMIT 0 com OFFSET não pode ser representado como page/items.")
+        if offset_value % items:
+            raise ConversionError(
+                "OFFSET não alinhado ao LIMIT não é representável exatamente por MBQL page/items; "
+                f"OFFSET={offset_value}, LIMIT={items}."
             )
-
-        return {"lib/type": "mbql/query", "stages": stages}
+        stage["page"] = {"page": offset_value // items + 1, "items": items}
 
     def _register_table(self, table: exp.Table, *, joined: bool = False) -> TableRef:
         if table.catalog:
@@ -202,21 +216,14 @@ class Converter:
         on = join.args.get("on")
         if on is None:
             raise ConversionError("JOIN sem ON ainda não é suportado.")
-
         conditions = [self._expr(part) for part in self._flatten_and(on)]
         allowed = {"=", "!=", "<", "<=", ">", ">="}
-        if any(not isinstance(c, list) or not c or c[0] not in allowed for c in conditions):
+        if any(not isinstance(clause, list) or not clause or clause[0] not in allowed for clause in conditions):
             raise ConversionError("JOIN ON suporta apenas comparações ligadas por AND.")
-
         return {
             "alias": table.join_alias,
             "strategy": self._join_strategy(join),
-            "stages": [
-                {
-                    "lib/type": "mbql.stage/mbql",
-                    "source-table": table.portable,
-                }
-            ],
+            "stages": [{"lib/type": "mbql.stage/mbql", "source-table": table.portable}],
             "conditions": conditions,
         }
 
@@ -235,16 +242,14 @@ class Converter:
         raise ConversionError(f"Tipo de JOIN ainda não suportado: {side or kind}")
 
     def _field(self, column: exp.Column) -> list[Any]:
-        table_name = column.table
-        if table_name:
-            ref = self.tables.get(table_name.lower())
+        if column.table:
+            ref = self.tables.get(column.table.lower())
             if ref is None:
                 raise ConversionError(f"Tabela/alias desconhecido no campo {column.sql()!r}.")
         else:
             if self.source is None:
                 raise AssertionError("source not initialized")
             ref = self.source
-
         options: dict[str, Any] = {}
         if ref.join_alias:
             options["join-alias"] = ref.join_alias
@@ -258,14 +263,13 @@ class Converter:
         if isinstance(node, exp.Literal):
             if node.is_string:
                 return node.this
-            text = node.this
             try:
-                return int(text)
+                return int(node.this)
             except ValueError:
                 try:
-                    return float(text)
+                    return float(node.this)
                 except ValueError as exc:
-                    raise ConversionError(f"Literal numérico inválido: {text}") from exc
+                    raise ConversionError(f"Literal numérico inválido: {node.this}") from exc
         if isinstance(node, exp.Null):
             return None
         if isinstance(node, exp.Boolean):
@@ -284,17 +288,11 @@ class Converter:
                 return ["is-null", {}, self._expr(node.this)]
             raise ConversionError("IS só é suportado para NULL.")
         if isinstance(node, exp.Between):
-            return [
-                "between",
-                {},
-                self._expr(node.this),
-                self._expr(node.args["low"]),
-                self._expr(node.args["high"]),
-            ]
+            return ["between", {}, self._expr(node.this), self._expr(node.args["low"]), self._expr(node.args["high"])]
         if isinstance(node, exp.In):
             if node.args.get("query") is not None:
                 raise ConversionError("IN (subquery) ainda não é suportado.")
-            return ["in", {}, self._expr(node.this), *[self._expr(e) for e in node.expressions]]
+            return ["in", {}, self._expr(node.this), *[self._expr(item) for item in node.expressions]]
         if isinstance(node, exp.ILike):
             return self._like(node, case_sensitive=False)
         if isinstance(node, exp.Like):
@@ -302,25 +300,14 @@ class Converter:
         if isinstance(node, exp.Alias):
             return self._expr(node.this)
 
-        binary_ops: list[tuple[type[exp.Expression], str]] = [
-            (exp.And, "and"),
-            (exp.Or, "or"),
-            (exp.EQ, "="),
-            (exp.NEQ, "!="),
-            (exp.GT, ">"),
-            (exp.GTE, ">="),
-            (exp.LT, "<"),
-            (exp.LTE, "<="),
-            (exp.Add, "+"),
-            (exp.Sub, "-"),
-            (exp.Mul, "*"),
-            (exp.Div, "/"),
-            (exp.Mod, "mod"),
-        ]
-        for cls, op in binary_ops:
+        binary_ops: tuple[tuple[type[exp.Expression], str], ...] = (
+            (exp.And, "and"), (exp.Or, "or"), (exp.EQ, "="), (exp.NEQ, "!="),
+            (exp.GT, ">"), (exp.GTE, ">="), (exp.LT, "<"), (exp.LTE, "<="),
+            (exp.Add, "+"), (exp.Sub, "-"), (exp.Mul, "*"), (exp.Div, "/"), (exp.Mod, "mod"),
+        )
+        for cls, operator in binary_ops:
             if isinstance(node, cls):
-                return [op, {}, self._expr(node.this), self._expr(node.expression)]
-
+                return [operator, {}, self._expr(node.this), self._expr(node.expression)]
         raise ConversionError(
             f"Expressão DuckDB ainda não suportada: {node.sql(dialect='duckdb')} ({type(node).__name__})"
         )
@@ -344,13 +331,6 @@ class Converter:
 
     def _aggregate(self, node: exp.Expression) -> list[Any]:
         expression, _ = self._unwrap_alias(node)
-        mapping: list[tuple[type[exp.Expression], str]] = [
-            (exp.Sum, "sum"),
-            (exp.Avg, "avg"),
-            (exp.Min, "min"),
-            (exp.Max, "max"),
-            (exp.Median, "median"),
-        ]
         if isinstance(expression, exp.Count):
             arg = expression.this
             if isinstance(arg, exp.Distinct):
@@ -364,9 +344,13 @@ class Converter:
             if arg is None or isinstance(arg, exp.Star):
                 return ["count", {}]
             return ["count", {}, self._expr(arg)]
-        for cls, op in mapping:
+        mapping: tuple[tuple[type[exp.Expression], str], ...] = (
+            (exp.Sum, "sum"), (exp.Avg, "avg"), (exp.Min, "min"),
+            (exp.Max, "max"), (exp.Median, "median"),
+        )
+        for cls, operator in mapping:
             if isinstance(expression, cls):
-                return [op, {}, self._expr(expression.this)]
+                return [operator, {}, self._expr(expression.this)]
         raise ConversionError(f"Agregação não suportada: {expression.sql(dialect='duckdb')}")
 
     @staticmethod
@@ -376,20 +360,12 @@ class Converter:
     @staticmethod
     def _aggregate_machine_base(node: exp.Expression) -> str:
         if isinstance(node, exp.Count):
-            arg = node.this
-            if isinstance(arg, exp.Distinct) or node.args.get("distinct"):
+            if isinstance(node.this, exp.Distinct) or node.args.get("distinct"):
                 return "distinct"
             return "count"
-        if isinstance(node, exp.Sum):
-            return "sum"
-        if isinstance(node, exp.Avg):
-            return "avg"
-        if isinstance(node, exp.Min):
-            return "min"
-        if isinstance(node, exp.Max):
-            return "max"
-        if isinstance(node, exp.Median):
-            return "median"
+        for cls, name in ((exp.Sum, "sum"), (exp.Avg, "avg"), (exp.Min, "min"), (exp.Max, "max"), (exp.Median, "median")):
+            if isinstance(node, cls):
+                return name
         raise ConversionError(f"Agregação sem machine name conhecido: {node.sql(dialect='duckdb')}")
 
     def _register_aggregation_output(self, node: exp.Expression) -> str:
@@ -417,63 +393,38 @@ class Converter:
             return ["field", {}, name]
         if isinstance(node, exp.Column):
             if not node.table:
-                alias_name = self.aggregation_alias_outputs.get(node.name.lower())
-                if alias_name is not None:
-                    return ["field", {}, alias_name]
+                alias = self.aggregation_alias_outputs.get(node.name.lower())
+                if alias is not None:
+                    return ["field", {}, alias]
             return ["field", {}, node.name]
-        if isinstance(node, exp.Literal):
+        if isinstance(node, (exp.Literal, exp.Null, exp.Boolean)):
             return self._expr(node)
-        if isinstance(node, exp.Null):
-            return None
-        if isinstance(node, exp.Boolean):
-            return bool(node.this)
         if isinstance(node, exp.Not):
             return ["not", {}, self._post_aggregation_expr(node.this)]
         if isinstance(node, exp.Is) and isinstance(node.expression, exp.Null):
             return ["is-null", {}, self._post_aggregation_expr(node.this)]
         if isinstance(node, exp.Between):
             return [
-                "between",
-                {},
-                self._post_aggregation_expr(node.this),
-                self._post_aggregation_expr(node.args["low"]),
-                self._post_aggregation_expr(node.args["high"]),
+                "between", {}, self._post_aggregation_expr(node.this),
+                self._post_aggregation_expr(node.args["low"]), self._post_aggregation_expr(node.args["high"]),
             ]
         if isinstance(node, exp.In):
             if node.args.get("query") is not None:
                 raise ConversionError("HAVING IN (subquery) ainda não é suportado.")
-            return [
-                "in",
-                {},
-                self._post_aggregation_expr(node.this),
-                *[self._post_aggregation_expr(e) for e in node.expressions],
-            ]
+            return ["in", {}, self._post_aggregation_expr(node.this), *[self._post_aggregation_expr(item) for item in node.expressions]]
 
-        comparison_ops: list[tuple[type[exp.Expression], str]] = [
-            (exp.And, "and"),
-            (exp.Or, "or"),
-            (exp.EQ, "="),
-            (exp.NEQ, "!="),
-            (exp.GT, ">"),
-            (exp.GTE, ">="),
-            (exp.LT, "<"),
-            (exp.LTE, "<="),
-        ]
-        for cls, op in comparison_ops:
+        comparisons: tuple[tuple[type[exp.Expression], str], ...] = (
+            (exp.And, "and"), (exp.Or, "or"), (exp.EQ, "="), (exp.NEQ, "!="),
+            (exp.GT, ">"), (exp.GTE, ">="), (exp.LT, "<"), (exp.LTE, "<="),
+        )
+        for cls, operator in comparisons:
             if isinstance(node, cls):
-                return [
-                    op,
-                    {},
-                    self._post_aggregation_expr(node.this),
-                    self._post_aggregation_expr(node.expression),
-                ]
-
+                return [operator, {}, self._post_aggregation_expr(node.this), self._post_aggregation_expr(node.expression)]
         if isinstance(node, (exp.Add, exp.Sub, exp.Mul, exp.Div, exp.Mod)):
             raise ConversionError(
                 "HAVING com aritmética entre agregações permanece ambíguo; "
                 "há um xfail executável cobrindo esse caso."
             )
-
         raise ConversionError(
             f"HAVING ainda não suportado para: {node.sql(dialect='duckdb')} ({type(node).__name__})"
         )
@@ -486,8 +437,7 @@ class Converter:
             if idx is not None:
                 return [direction, {}, ["aggregation", {}, idx]]
         if self._is_aggregate(node):
-            clause = self._aggregate(node)
-            return [direction, {}, clause]
+            return [direction, {}, self._aggregate(node)]
         return [direction, {}, self._expr(node)]
 
     @staticmethod
@@ -551,10 +501,11 @@ def main(argv: list[str] | None = None) -> int:
     except (ConversionError, OSError) as exc:
         parser.error(str(exc))
 
-    if args.compact:
-        print(json.dumps(query, ensure_ascii=False, separators=(",", ":")))
-    else:
-        print(json.dumps(query, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(query, ensure_ascii=False, separators=(",", ":"))
+        if args.compact
+        else json.dumps(query, ensure_ascii=False, indent=2)
+    )
     return 0
 
 
