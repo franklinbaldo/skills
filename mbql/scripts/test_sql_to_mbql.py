@@ -143,13 +143,27 @@ class SqlToMbqlTests(unittest.TestCase):
             [["distinct", {}, ["field", {}, ["Analytics", "main", "orders", "customer_id"]]]],
         )
 
-    @unittest.expectedFailure
-    def test_select_distinct_needs_explicit_semantics(self) -> None:
-        query = convert_sql("SELECT DISTINCT status FROM orders", database="Analytics")
+    def test_select_distinct_single_column_maps_to_breakout(self) -> None:
+        query = convert_sql(
+            "SELECT DISTINCT status FROM orders WHERE total > 0 ORDER BY status DESC LIMIT 10",
+            database="Analytics",
+        )
+        stage = query["stages"][0]
         self.assertEqual(
-            query["stages"][0]["breakout"],
+            stage["breakout"],
             [["field", {}, ["Analytics", "main", "orders", "status"]]],
         )
+        self.assertNotIn("fields", stage)
+        self.assertEqual(stage["order-by"][0][0], "desc")
+        self.assertEqual(stage["limit"], 10)
+
+    @unittest.expectedFailure
+    def test_select_distinct_expression_remains_ambiguous(self) -> None:
+        query = convert_sql(
+            "SELECT DISTINCT lower(status) FROM orders",
+            database="Analytics",
+        )
+        self.assertIn("breakout", query["stages"][0])
 
     def test_aligned_offset_maps_exactly_to_page(self) -> None:
         query = convert_sql(
