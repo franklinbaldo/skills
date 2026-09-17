@@ -60,18 +60,44 @@ def test_execute_endpoints_use_documented_agent_api_paths() -> None:
     assert paths == ["/api/agent/v1/execute", "/api/agent/v1/execute-sql"]
 
 
-def test_semantic_comparison_accepts_identical_rows() -> None:
+def test_semantic_comparison_accepts_identical_ordered_rows() -> None:
     compare_results(
         {"data": {"rows": [["paid", 2], ["open", 1]]}},
         {"data": {"rows": [["paid", 2], ["open", 1]]}},
+        ordered=True,
     )
 
 
-def test_semantic_comparison_rejects_mismatch() -> None:
+def test_unordered_comparison_accepts_reordering_but_preserves_multiplicity() -> None:
+    compare_results(
+        {"data": {"rows": [["paid", 2], ["open", 1], ["paid", 2]]}},
+        {"data": {"rows": [["paid", 2], ["paid", 2], ["open", 1]]}},
+        ordered=False,
+    )
+
+    with pytest.raises(LiveConformanceError, match="semantic mismatch"):
+        compare_results(
+            {"data": {"rows": [["paid", 2], ["paid", 2], ["open", 1]]}},
+            {"data": {"rows": [["paid", 2], ["open", 1]]}},
+            ordered=False,
+        )
+
+
+def test_ordered_comparison_rejects_reordering() -> None:
+    with pytest.raises(LiveConformanceError, match="semantic mismatch"):
+        compare_results(
+            {"data": {"rows": [["paid", 2], ["open", 1]]}},
+            {"data": {"rows": [["open", 1], ["paid", 2]]}},
+            ordered=True,
+        )
+
+
+def test_semantic_comparison_rejects_value_mismatch() -> None:
     with pytest.raises(LiveConformanceError, match="semantic mismatch"):
         compare_results(
             {"data": {"rows": [["paid", 2]]}},
             {"data": {"rows": [["paid", 3]]}},
+            ordered=True,
         )
 
 
