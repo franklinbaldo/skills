@@ -33,6 +33,12 @@ COLUMNS = ("id", "total", "quantity", "status")
 NUMERIC = ("id", "total", "quantity")
 COMPARISONS = (">", ">=", "<", "<=", "=", "!=")
 AGGREGATES = ("COUNT(*)", "SUM(total)", "AVG(total)", "MIN(total)", "MAX(total)")
+SCALAR_PROJECTIONS = (
+    "lower(status) AS lower_status",
+    "upper(status) AS upper_status",
+    "coalesce(status, 'unknown') AS safe_status",
+    "abs(total) AS absolute_total",
+)
 
 
 def _walk_clauses(value: Any):
@@ -58,6 +64,7 @@ def assert_mbql_shape(query: dict[str, Any]) -> None:
             "field", "expression", "aggregation", "count", "distinct", "sum", "avg", "min", "max", "median",
             "and", "or", "not", "=", "!=", ">", ">=", "<", "<=", "+", "-", "*", "/", "mod",
             "between", "in", "is-null", "not-null", "contains", "starts-with", "ends-with", "asc", "desc",
+            "lower", "upper", "coalesce", "abs",
         }:
             assert len(clause) >= 2
             assert isinstance(clause[1], dict), clause
@@ -75,15 +82,22 @@ def supported_queries(draw) -> str:
     if grouped:
         agg = draw(st.sampled_from(AGGREGATES))
         parts.append(f"SELECT status, {agg} AS metric FROM orders")
+    elif draw(st.booleans()):
+        projection = draw(st.sampled_from(SCALAR_PROJECTIONS))
+        parts.append(f"SELECT id, {projection} FROM orders")
     else:
         cols = draw(st.lists(st.sampled_from(COLUMNS), min_size=1, max_size=3, unique=True))
         parts.append("SELECT " + ", ".join(cols) + " FROM orders")
 
     if where:
-        col = draw(st.sampled_from(NUMERIC))
-        op = draw(st.sampled_from(COMPARISONS))
-        value = draw(st.integers(min_value=-5, max_value=500))
-        parts.append(f"WHERE {col} {op} {value}")
+        if not grouped and draw(st.booleans()):
+            text_op = draw(st.sampled_from(("lower", "upper")))
+            parts.append(f"WHERE {text_op}(status) = 'paid'")
+        else:
+            col = draw(st.sampled_from(NUMERIC))
+            op = draw(st.sampled_from(COMPARISONS))
+            value = draw(st.integers(min_value=-5, max_value=500))
+            parts.append(f"WHERE {col} {op} {value}")
 
     if grouped:
         parts.append("GROUP BY status")
@@ -99,14 +113,14 @@ def supported_queries(draw) -> str:
 
 
 @given(supported_queries())
-@settings(max_examples=300, deadline=None)
+@settings(max_examples=400, deadline=None)
 def test_generated_supported_queries_never_produce_malformed_mbql(sql: str) -> None:
     query = convert_sql(sql, database="Analytics")
     assert_mbql_shape(query)
 
 
 @given(supported_queries())
-@settings(max_examples=200, deadline=None)
+@settings(max_examples=250, deadline=None)
 def test_formatting_is_metamorphic(sql: str) -> None:
     compact = " ".join(sql.split())
     noisy = "\n  " + compact.replace(" FROM ", "\nFROM\n").replace(" WHERE ", "\nWHERE\n") + ";\n"
@@ -137,6 +151,7 @@ def test_feature_report_has_three_explicit_outcomes_and_zero_silent_mismatch_bud
     ("sql", "feature", "status"),
     [
         ("SELECT id FROM orders WHERE total > 10", "where", Status.SUPPORTED),
+        ("SELECT lower(status) AS s FROM orders", "scalar_functions_common", Status.SUPPORTED),
         ("SELECT DISTINCT status FROM orders", "select_distinct_simple", Status.SUPPORTED),
         ("SELECT DISTINCT lower(status) FROM orders", "select_distinct_complex", Status.AMBIGUOUS),
         ("SELECT id FROM orders LIMIT 10 OFFSET 20", "offset_aligned", Status.SUPPORTED),
