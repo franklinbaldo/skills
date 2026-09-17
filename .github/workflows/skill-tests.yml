@@ -30,4 +30,6 @@ jobs:
           uv run --quiet pdf-to-markdown/scripts/test_convert_pdf.py
           uv run --quiet mbql/scripts/test_sql_to_mbql.py
       - name: Run MBQL conformance harness
-        run: uv run --quiet mbql/tests/test_conformance.py
+        run: |
+          uv run --quiet mbql/tests/test_conformance.py
+          uv run --quiet mbql/tests/test_live_conformance.py
