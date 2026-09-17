@@ -1,0 +1,64 @@
+name: MBQL DuckDB corpus audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 7 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout skills
+        uses: actions/checkout@v4
+
+      - name: Checkout DuckDB SQL tests
+        uses: actions/checkout@v4
+        with:
+          repository: duckdb/duckdb
+          path: upstream/duckdb
+          fetch-depth: 1
+          sparse-checkout: |
+            test/sql
+          sparse-checkout-cone-mode: true
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Classify DuckDB SQLLogicTest corpus
+        shell: bash
+        run: |
+          set +e
+          uv run --quiet mbql/scripts/corpus_runner.py \
+            upstream/duckdb/test/sql \
+            --database Corpus \
+            > mbql-duckdb-corpus.json
+          code=$?
+          echo "corpus_runner_exit=$code" >> "$GITHUB_STEP_SUMMARY"
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("mbql-duckdb-corpus.json").read_text())
+          print("## DuckDB → MBQL corpus audit")
+          print(f"Statements: {payload['statements']}")
+          print(f"Contract gaps: {payload['contract_gaps']}")
+          print(f"Parse errors: {payload['parse_errors']}")
+          print("\n### Status counts")
+          for key, value in sorted(payload["counts"].items()):
+              print(f"- {key}: {value}")
+          print("\n### Top features")
+          for key, value in sorted(payload["feature_counts"].items(), key=lambda kv: (-kv[1], kv[0]))[:25]:
+              print(f"- {key}: {value}")
+          PY
+          # Discovery job: contract gaps are reported and artifacted, not a gate yet.
+          exit 0
+
+      - name: Upload corpus report
+        uses: actions/upload-artifact@v4
+        with:
+          name: mbql-duckdb-corpus
+          path: mbql-duckdb-corpus.json
+          if-no-files-found: error
