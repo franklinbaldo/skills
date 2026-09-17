@@ -40,7 +40,8 @@ FEATURE_MATRIX: tuple[FeatureResult, ...] = (
     FeatureResult("offset_aligned", Status.SUPPORTED, "LIMIT N OFFSET k*N maps exactly to MBQL page/items"),
     FeatureResult("offset_unaligned", Status.AMBIGUOUS, "arbitrary OFFSET cannot be represented exactly by page/items"),
     FeatureResult("offset_without_limit", Status.UNSUPPORTED, "MBQL page requires a finite items/page size"),
-    FeatureResult("select_distinct", Status.AMBIGUOUS, "row DISTINCT is not always equivalent to breakout"),
+    FeatureResult("select_distinct_simple", Status.SUPPORTED, "single direct column maps to breakout distinct-values semantics"),
+    FeatureResult("select_distinct_complex", Status.AMBIGUOUS, "DISTINCT expressions/aliases/composite forms need explicit contracts"),
     FeatureResult("count_distinct", Status.SUPPORTED, "single-field COUNT DISTINCT maps to distinct aggregation"),
     FeatureResult("joins", Status.SUPPORTED, "inner/left/right/full joins with conjunctive comparisons"),
     FeatureResult("subquery", Status.UNSUPPORTED, "no direct-table source semantics implemented"),
@@ -105,7 +106,13 @@ def classify(sql: str) -> list[FeatureResult]:
                     add("offset_unaligned")
 
         if node.args.get("distinct"):
-            add("select_distinct")
+            simple = (
+                len(node.expressions) == 1
+                and isinstance(node.expressions[0], exp.Column)
+                and not node.args.get("group")
+                and not node.args.get("having")
+            )
+            add("select_distinct_simple" if simple else "select_distinct_complex")
         if node.args.get("joins"):
             add("joins")
         if node.args.get("qualify"):
