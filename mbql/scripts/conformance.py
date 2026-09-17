@@ -37,7 +37,9 @@ FEATURE_MATRIX: tuple[FeatureResult, ...] = (
     FeatureResult("having_expression", Status.AMBIGUOUS, "aggregate-expression output naming across stages is unresolved"),
     FeatureResult("order_by", Status.SUPPORTED, "field and aggregation ordering"),
     FeatureResult("limit", Status.SUPPORTED, "direct stage limit"),
-    FeatureResult("offset", Status.AMBIGUOUS, "portable page/items contract not fixed"),
+    FeatureResult("offset_aligned", Status.SUPPORTED, "LIMIT N OFFSET k*N maps exactly to MBQL page/items"),
+    FeatureResult("offset_unaligned", Status.AMBIGUOUS, "arbitrary OFFSET cannot be represented exactly by page/items"),
+    FeatureResult("offset_without_limit", Status.UNSUPPORTED, "MBQL page requires a finite items/page size"),
     FeatureResult("select_distinct", Status.AMBIGUOUS, "row DISTINCT is not always equivalent to breakout"),
     FeatureResult("count_distinct", Status.SUPPORTED, "single-field COUNT DISTINCT maps to distinct aggregation"),
     FeatureResult("joins", Status.SUPPORTED, "inner/left/right/full joins with conjunctive comparisons"),
@@ -50,6 +52,15 @@ FEATURE_MATRIX: tuple[FeatureResult, ...] = (
     FeatureResult("pivot", Status.UNSUPPORTED, "DuckDB PIVOT has no converter contract"),
     FeatureResult("asof_join", Status.UNSUPPORTED, "ASOF join has no MBQL mapping"),
 )
+
+
+def _literal_int(node: exp.Expression | None) -> int | None:
+    if not isinstance(node, exp.Literal) or node.is_string:
+        return None
+    try:
+        return int(node.this)
+    except (TypeError, ValueError):
+        return None
 
 
 def classify(sql: str) -> list[FeatureResult]:
@@ -77,10 +88,22 @@ def classify(sql: str) -> list[FeatureResult]:
             add("having_expression" if aggregate_nodes and has_arithmetic else "having_simple")
         if node.args.get("order"):
             add("order_by")
-        if node.args.get("limit"):
+
+        limit = node.args.get("limit")
+        offset = node.args.get("offset")
+        if limit:
             add("limit")
-        if node.args.get("offset"):
-            add("offset")
+        if offset:
+            if not limit:
+                add("offset_without_limit")
+            else:
+                items = _literal_int(limit.expression)
+                offset_value = _literal_int(offset.expression)
+                if items and offset_value is not None and offset_value % items == 0:
+                    add("offset_aligned")
+                else:
+                    add("offset_unaligned")
+
         if node.args.get("distinct"):
             add("select_distinct")
         if node.args.get("joins"):
@@ -97,8 +120,6 @@ def classify(sql: str) -> list[FeatureResult]:
     if isinstance(node, (exp.Union, exp.Intersect, exp.Except)):
         add("set_operations")
 
-    # sqlglot class names vary for some DuckDB-specific constructs; keep those
-    # detectable by normalized SQL text rather than guessing AST internals.
     normalized = node.sql(dialect="duckdb").upper()
     if "UNNEST(" in normalized:
         add("unnest")
