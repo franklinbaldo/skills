@@ -9,6 +9,7 @@
 # ]
 # ///
 """Bounded-exhaustive and property tests for DuckDB SQL -> MBQL."""
+# ruff: noqa: E402, I001
 
 from __future__ import annotations
 
@@ -25,9 +26,8 @@ HERE = Path(__file__).resolve().parent
 SCRIPTS = HERE.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from conformance import Status, classify, report  # noqa: E402
-from sql_to_mbql import ConversionError, convert_sql  # noqa: E402
-
+from conformance import Status, classify, report
+from sql_to_mbql import ConversionError, convert_sql
 
 COLUMNS = ("id", "total", "quantity", "status")
 NUMERIC = ("id", "total", "quantity")
