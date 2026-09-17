@@ -84,6 +84,13 @@ class SqlToMbqlTests(unittest.TestCase):
             [["=", {}, ["field", {"join-alias": "c"}, ["Analytics", "main", "customers", "active"]], True]],
         )
 
+    def test_unqualified_column_with_join_is_rejected_as_ambiguous(self) -> None:
+        with self.assertRaisesRegex(ConversionError, "qualific|ambígu"):
+            convert_sql(
+                "SELECT name FROM orders o JOIN customers c ON o.customer_id = c.id",
+                database="Analytics",
+            )
+
     def test_alias_expression_becomes_named_mbql_expression(self) -> None:
         query = convert_sql(
             "SELECT price * quantity AS gross FROM line_items",
