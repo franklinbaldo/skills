@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["sqlglot>=27,<29"]
 # ///
-"""Regression tests for the DuckDB SQL -> portable MBQL converter."""
+"""Regression/specification tests for the DuckDB SQL -> portable MBQL converter."""
 
 from __future__ import annotations
 
@@ -93,10 +93,99 @@ class SqlToMbqlTests(unittest.TestCase):
         self.assertIn("gross", stage["expressions"])
         self.assertEqual(stage["fields"], [["expression", {}, "gross"]])
 
-    def test_having_fails_instead_of_changing_semantics(self) -> None:
-        with self.assertRaisesRegex(ConversionError, "HAVING"):
+    def test_in_between_like_and_null_predicates(self) -> None:
+        query = convert_sql(
+            "SELECT id FROM orders "
+            "WHERE status IN ('paid', 'shipped') "
+            "AND total BETWEEN 10 AND 100 "
+            "AND customer_name ILIKE 'ana%' "
+            "AND cancelled_at IS NULL",
+            database="Analytics",
+        )
+        filter_ = query["stages"][0]["filters"][0]
+        rendered = repr(filter_)
+        self.assertIn("'in'", rendered)
+        self.assertIn("'between'", rendered)
+        self.assertIn("'starts-with'", rendered)
+        self.assertIn("'case-sensitive': False", rendered)
+        self.assertIn("'is-null'", rendered)
+
+    def test_having_on_aggregation_becomes_second_stage_filter(self) -> None:
+        query = convert_sql(
+            "SELECT status, count(*) AS n FROM orders "
+            "GROUP BY status HAVING count(*) > 3",
+            database="Analytics",
+        )
+        self.assertEqual(len(query["stages"]), 2)
+        self.assertEqual(
+            query["stages"][1]["filters"],
+            [[">", {}, ["field", {}, "count"], 3]],
+        )
+
+    def test_having_alias_resolves_to_previous_stage_machine_name(self) -> None:
+        query = convert_sql(
+            "SELECT status, sum(total) AS revenue FROM orders "
+            "GROUP BY status HAVING revenue >= 1000",
+            database="Analytics",
+        )
+        self.assertEqual(
+            query["stages"][1]["filters"],
+            [[">=", {}, ["field", {}, "sum"], 1000]],
+        )
+
+    def test_count_distinct_maps_to_distinct_aggregation(self) -> None:
+        query = convert_sql(
+            "SELECT count(DISTINCT customer_id) AS customers FROM orders",
+            database="Analytics",
+        )
+        self.assertEqual(
+            query["stages"][0]["aggregation"],
+            [["distinct", {}, ["field", {}, ["Analytics", "main", "orders", "customer_id"]]]],
+        )
+
+    @unittest.expectedFailure
+    def test_select_distinct_needs_explicit_semantics(self) -> None:
+        # Ambiguous in portable MBQL: SQL row-level DISTINCT is not always equivalent
+        # to a breakout-only query once expressions/order/limit are involved.
+        query = convert_sql("SELECT DISTINCT status FROM orders", database="Analytics")
+        self.assertEqual(
+            query["stages"][0]["breakout"],
+            [["field", {}, ["Analytics", "main", "orders", "status"]]],
+        )
+
+    @unittest.expectedFailure
+    def test_offset_needs_page_contract(self) -> None:
+        # OFFSET has no portable meaning without deciding how it maps to MBQL page
+        # and page size. Keep this executable ambiguity visible until the contract is chosen.
+        query = convert_sql(
+            "SELECT id FROM orders ORDER BY id LIMIT 10 OFFSET 20",
+            database="Analytics",
+        )
+        self.assertEqual(query["stages"][0]["page"], {"items": 10, "page": 3})
+
+    @unittest.expectedFailure
+    def test_having_expression_without_stable_output_name_is_ambiguous(self) -> None:
+        # The previous-stage machine name is stable for bare aggregations, but not for
+        # arbitrary arithmetic over aggregations without introducing a named expression.
+        query = convert_sql(
+            "SELECT status, sum(total) FROM orders "
+            "GROUP BY status HAVING sum(total) / count(*) > 10",
+            database="Analytics",
+        )
+        self.assertEqual(len(query["stages"]), 2)
+
+    @unittest.expectedFailure
+    def test_window_function_requires_multistage_semantics(self) -> None:
+        query = convert_sql(
+            "SELECT id, row_number() OVER (PARTITION BY status ORDER BY created_at) AS rn FROM orders",
+            database="Analytics",
+        )
+        self.assertIn("expressions", query["stages"][0])
+
+    def test_subquery_still_fails_explicitly(self) -> None:
+        with self.assertRaisesRegex(ConversionError, "subquery|Subquery|FROM"):
             convert_sql(
-                "SELECT status, count(*) FROM orders GROUP BY status HAVING count(*) > 3",
+                "SELECT id FROM (SELECT id FROM orders) q",
                 database="Analytics",
             )
 
