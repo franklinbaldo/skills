@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["sqlglot>=27,<29"]
 # ///
-"""Run a SQL corpus through the DuckDB->MBQL contract and expose drift."""
+"""Run SQL and DuckDB SQLLogicTest corpora through the MBQL contract."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
-from sqlglot import parse
+from sqlglot import parse, parse_one
 from sqlglot.errors import ParseError
 
 from conformance import Status, classify
@@ -46,82 +46,169 @@ def _effective_status(sql: str) -> tuple[Status, tuple[str, ...]]:
     return status, tuple(item.feature for item in features)
 
 
-def iter_sql_files(path: Path) -> Iterable[Path]:
+def iter_corpus_files(path: Path) -> Iterable[Path]:
+    """Yield plain SQL plus DuckDB SQLLogicTest files recursively."""
     if path.is_file():
         yield path
         return
-    for candidate in sorted(path.rglob("*.sql")):
-        if candidate.is_file():
-            yield candidate
+    for pattern in ("*.sql", "*.test", "*.test_slow"):
+        for candidate in sorted(path.rglob(pattern)):
+            if candidate.is_file():
+                yield candidate
 
 
-def run_file(path: Path, *, database: str, schema: str | None = "main") -> list[CorpusResult]:
+def extract_sqllogictest_queries(text: str) -> list[str]:
+    """Extract successful `query ...` SQL bodies from a SQLLogicTest file.
+
+    DuckDB's `.test` files mix setup `statement` blocks, query SQL, and expected
+    result rows. Only query bodies are relevant to a SELECT/relational converter;
+    setup statements are deliberately ignored.
+    """
+    lines = text.splitlines()
+    queries: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if not line.startswith("query "):
+            i += 1
+            continue
+
+        i += 1
+        sql_lines: list[str] = []
+        while i < len(lines):
+            current = lines[i]
+            stripped = current.strip()
+            if stripped == "----":
+                break
+            if stripped.startswith("query ") or stripped.startswith("statement "):
+                # Defensive handling for a malformed/no-result-separator block.
+                break
+            sql_lines.append(current)
+            i += 1
+
+        sql = "\n".join(sql_lines).strip()
+        if sql:
+            queries.append(sql)
+
+        # Skip expected output until the blank line before the next directive.
+        if i < len(lines) and lines[i].strip() == "----":
+            i += 1
+            while i < len(lines):
+                if not lines[i].strip():
+                    i += 1
+                    break
+                i += 1
+
+    return queries
+
+
+def _expressions_from_file(path: Path) -> tuple[list[str], str | None]:
     text = path.read_text(encoding="utf-8")
+    if path.suffix in {".test", ".test_slow"} or path.name.endswith(".test_slow"):
+        statements = extract_sqllogictest_queries(text)
+        normalized: list[str] = []
+        for sql in statements:
+            try:
+                normalized.append(parse_one(sql, read="duckdb").sql(dialect="duckdb"))
+            except ParseError:
+                # Preserve the original query so it appears as a parse_error row.
+                normalized.append(sql)
+        return normalized, None
+
     try:
         expressions = parse(text, read="duckdb")
     except ParseError as exc:
+        return [], str(exc)
+    return [expression.sql(dialect="duckdb") for expression in expressions], None
+
+
+def _run_sql(sql: str, *, source: str, index: int, database: str, schema: str | None) -> CorpusResult:
+    try:
+        # Parse once here so SQLLogicTest extraction failures are visible rather
+        # than becoming misleading `unclassified` results.
+        parse_one(sql, read="duckdb")
+    except ParseError as exc:
+        return CorpusResult(
+            source=source,
+            index=index,
+            sql=sql,
+            status="parse_error",
+            features=(),
+            converted=False,
+            error=str(exc),
+        )
+
+    status, features = _effective_status(sql)
+    converted = False
+    error: str | None = None
+    if status is Status.SUPPORTED:
+        try:
+            convert_sql(sql, database=database, schema=schema)
+            converted = True
+        except ConversionError as exc:
+            # This is a contract bug, not an ordinary unsupported query: the
+            # feature matrix said every feature was supported.
+            status_text = "contract_gap"
+            error = str(exc)
+        else:
+            status_text = status.value
+    else:
+        status_text = status.value
+
+    return CorpusResult(
+        source=source,
+        index=index,
+        sql=sql,
+        status=status_text,
+        features=features,
+        converted=converted,
+        error=error,
+    )
+
+
+def run_file(path: Path, *, database: str, schema: str | None = "main") -> list[CorpusResult]:
+    statements, file_error = _expressions_from_file(path)
+    if file_error is not None:
         return [
             CorpusResult(
                 source=str(path),
                 index=0,
-                sql=text,
+                sql=path.read_text(encoding="utf-8"),
                 status="parse_error",
                 features=(),
                 converted=False,
-                error=str(exc),
+                error=file_error,
             )
         ]
 
-    rows: list[CorpusResult] = []
-    for index, expression in enumerate(expressions, start=1):
-        sql = expression.sql(dialect="duckdb")
-        status, features = _effective_status(sql)
-        converted = False
-        error: str | None = None
-        if status is Status.SUPPORTED:
-            try:
-                convert_sql(sql, database=database, schema=schema)
-                converted = True
-            except ConversionError as exc:
-                # This is a contract bug, not an ordinary unsupported query: the
-                # feature matrix said every feature was supported.
-                status_text = "contract_gap"
-                error = str(exc)
-            else:
-                status_text = status.value
-        else:
-            status_text = status.value
-        rows.append(
-            CorpusResult(
-                source=str(path),
-                index=index,
-                sql=sql,
-                status=status_text,
-                features=features,
-                converted=converted,
-                error=error,
-            )
-        )
-    return rows
+    return [
+        _run_sql(sql, source=str(path), index=index, database=database, schema=schema)
+        for index, sql in enumerate(statements, start=1)
+    ]
 
 
 def run_corpus(path: Path, *, database: str, schema: str | None = "main") -> dict[str, object]:
-    results = [row for file in iter_sql_files(path) for row in run_file(file, database=database, schema=schema)]
+    results = [row for file in iter_corpus_files(path) for row in run_file(file, database=database, schema=schema)]
     counts: dict[str, int] = {}
+    feature_counts: dict[str, int] = {}
     for row in results:
         counts[row.status] = counts.get(row.status, 0) + 1
+        for feature in row.features:
+            feature_counts[feature] = feature_counts.get(feature, 0) + 1
     return {
         "source": str(path),
         "statements": len(results),
         "counts": counts,
+        "feature_counts": dict(sorted(feature_counts.items())),
         "contract_gaps": sum(row.status == "contract_gap" for row in results),
+        "parse_errors": sum(row.status == "parse_error" for row in results),
         "results": [asdict(row) for row in results],
     }
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("path", type=Path, help=".sql file or directory tree")
+    parser.add_argument("path", type=Path, help=".sql/.test file or directory tree")
     parser.add_argument("--database", required=True, help="portable Metabase database name")
     parser.add_argument("--schema", default="main")
     parser.add_argument("--compact", action="store_true")
