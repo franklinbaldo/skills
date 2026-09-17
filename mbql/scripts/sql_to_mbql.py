@@ -140,14 +140,23 @@ class Converter:
             stage["order-by"] = [self._order(item) for item in order.expressions]
 
         limit = node.args.get("limit")
-        if limit is not None:
-            stage["limit"] = self._integer_literal(limit.expression, "LIMIT")
-
         offset = node.args.get("offset")
-        if offset is not None:
-            raise ConversionError(
-                "OFFSET permanece sem contrato portátil definido; há um xfail executável para page/items."
-            )
+        if offset is None:
+            if limit is not None:
+                stage["limit"] = self._integer_literal(limit.expression, "LIMIT")
+        else:
+            if limit is None:
+                raise ConversionError("OFFSET sem LIMIT não tem mapeamento MBQL exato para page/items.")
+            items = self._integer_literal(limit.expression, "LIMIT")
+            offset_value = self._integer_literal(offset.expression, "OFFSET")
+            if items == 0:
+                raise ConversionError("LIMIT 0 com OFFSET não pode ser representado como page/items.")
+            if offset_value % items:
+                raise ConversionError(
+                    "OFFSET não alinhado ao LIMIT não é representável exatamente por MBQL page/items; "
+                    f"OFFSET={offset_value}, LIMIT={items}."
+                )
+            stage["page"] = {"page": offset_value // items + 1, "items": items}
 
         stages = [stage]
         having = node.args.get("having")
