@@ -28,3 +28,4 @@ jobs:
           uv run --quiet convert-to-pdfa/scripts/test_convert_to_pdfa.py
           uv run --quiet convert-to-pdfa/scripts/test_subprocess_decoding.py
           uv run --quiet pdf-to-markdown/scripts/test_convert_pdf.py
+          uv run --quiet mbql/scripts/test_sql_to_mbql.py
