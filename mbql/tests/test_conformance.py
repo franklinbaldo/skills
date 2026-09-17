@@ -65,7 +65,7 @@ def assert_mbql_shape(query: dict[str, Any]) -> None:
 
 @st.composite
 def supported_queries(draw) -> str:
-    """Generate a finite-grammar family known to have a defined v2 contract."""
+    """Generate a finite-grammar family known to have a defined contract."""
     grouped = draw(st.booleans())
     where = draw(st.booleans())
     ordered = draw(st.booleans())
@@ -108,7 +108,6 @@ def test_generated_supported_queries_never_produce_malformed_mbql(sql: str) -> N
 @given(supported_queries())
 @settings(max_examples=200, deadline=None)
 def test_formatting_is_metamorphic(sql: str) -> None:
-    """Whitespace/terminator changes must not alter the generated MBQL."""
     compact = " ".join(sql.split())
     noisy = "\n  " + compact.replace(" FROM ", "\nFROM\n").replace(" WHERE ", "\nWHERE\n") + ";\n"
     assert convert_sql(compact, database="Analytics") == convert_sql(noisy, database="Analytics")
@@ -138,7 +137,8 @@ def test_feature_report_has_three_explicit_outcomes_and_zero_silent_mismatch_bud
     ("sql", "feature", "status"),
     [
         ("SELECT id FROM orders WHERE total > 10", "where", Status.SUPPORTED),
-        ("SELECT DISTINCT status FROM orders", "select_distinct", Status.AMBIGUOUS),
+        ("SELECT DISTINCT status FROM orders", "select_distinct_simple", Status.SUPPORTED),
+        ("SELECT DISTINCT lower(status) FROM orders", "select_distinct_complex", Status.AMBIGUOUS),
         ("SELECT id FROM orders LIMIT 10 OFFSET 20", "offset_aligned", Status.SUPPORTED),
         ("SELECT id FROM orders LIMIT 10 OFFSET 5", "offset_unaligned", Status.AMBIGUOUS),
         ("SELECT id FROM orders OFFSET 5", "offset_without_limit", Status.UNSUPPORTED),
@@ -152,9 +152,16 @@ def test_classifier_exposes_contract(sql: str, feature: str, status: Status) -> 
     assert any(row.feature == feature and row.status == status for row in rows)
 
 
-@pytest.mark.xfail(strict=True, reason="row-level DISTINCT needs an explicit portable MBQL semantic contract")
-def test_ambiguous_select_distinct_stays_executable() -> None:
-    convert_sql("SELECT DISTINCT status FROM orders", database="Analytics")
+def test_simple_select_distinct_is_supported() -> None:
+    query = convert_sql("SELECT DISTINCT status FROM orders", database="Analytics")
+    assert query["stages"][0]["breakout"] == [
+        ["field", {}, ["Analytics", "main", "orders", "status"]]
+    ]
+
+
+@pytest.mark.xfail(strict=True, reason="DISTINCT over expressions needs an explicit portable MBQL semantic contract")
+def test_ambiguous_select_distinct_expression_stays_executable() -> None:
+    convert_sql("SELECT DISTINCT lower(status) FROM orders", database="Analytics")
 
 
 @pytest.mark.xfail(strict=True, reason="unaligned OFFSET cannot be represented exactly by MBQL page/items")
