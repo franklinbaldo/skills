@@ -297,6 +297,15 @@ class Converter:
             return self._like(node, case_sensitive=False)
         if isinstance(node, exp.Like):
             return self._like(node, case_sensitive=True)
+        if isinstance(node, exp.Lower):
+            return ["lower", {}, self._expr(node.this)]
+        if isinstance(node, exp.Upper):
+            return ["upper", {}, self._expr(node.this)]
+        if isinstance(node, exp.Coalesce):
+            args = [node.this, *node.expressions]
+            return ["coalesce", {}, *[self._expr(item) for item in args if item is not None]]
+        if isinstance(node, exp.Abs):
+            return ["abs", {}, self._expr(node.this)]
         if isinstance(node, exp.Alias):
             return self._expr(node.this)
 
