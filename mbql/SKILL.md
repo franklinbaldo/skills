@@ -82,61 +82,93 @@ cat consulta.sql | uv run scripts/sql_to_mbql.py --database "Analytics"
 
 ## Conformance harness
 
-A skill inclui uma suíte própria para responder uma pergunta mais forte que
-"o exemplo converte?": **qual parte do dialeto DuckDB SQL tem contrato MBQL
-conhecido, ambíguo ou ausente?**
-
 Rode:
 
 ```bash
 uv run tests/test_conformance.py
+uv run tests/test_live_conformance.py
 uv run scripts/conformance.py
 ```
 
-O harness combina quatro técnicas:
+O harness combina geração property-based com Hypothesis, metamorphic testing,
+fixture DuckDB adversarial e matriz executável de features. Cada feature termina
+em uma das três classes:
 
-1. **Geração property-based com Hypothesis.** Um gerador de gramática finita cria
-   famílias de ASTs SQL válidas. O CI executa centenas de combinações por run e
-   o Hypothesis minimiza automaticamente qualquer contraexemplo.
-2. **Metamorphic testing.** Variações que não mudam a semântica do SQL, como
-   whitespace e terminador, devem gerar MBQL idêntico.
-3. **Fixture DuckDB adversarial.** `tests/fixtures/adversarial.sql` contém NULLs,
-   duplicatas, números negativos, zero, Unicode, diferenças de caixa, joins sem
-   correspondência e timestamps de borda para evitar equivalências acidentais.
-4. **Matriz executável de features.** `scripts/conformance.py` classifica cada
-   feature como `supported`, `ambiguous` ou `unsupported` e declara orçamento
-   de `semantic_mismatch_allowed = 0`.
+```text
+SUPPORTED   -> tradução definida e testada
+AMBIGUOUS   -> xfail estrito com razão explícita
+UNSUPPORTED -> ConversionError explícito
+```
 
-Isto é **exaustividade limitada por gramática/profundidade**, não a afirmação
-impossível de enumerar todas as strings SQL. O espaço pode ser expandido de
-forma monotônica adicionando operadores, tipos e profundidade ao gerador.
+O orçamento declarado para mismatch semântico silencioso é zero.
+
+## Oracle real: DuckDB SQL ↔ Metabase MBQL
+
+`scripts/live_conformance.py` fecha o ciclo contra uma instância real do
+Metabase usando o Agent API. O fluxo é:
+
+```text
+DuckDB SQL
+  -> sql_to_mbql.py
+  -> MBQL 5 portátil
+  -> POST /api/agent/v2/construct-query
+  -> query resolvida pelo próprio Metabase
+  -> POST /api/agent/v1/execute
+```
+
+Para validar construção e executar MBQL:
+
+```bash
+export METABASE_URL="https://metabase.example.com"
+export METABASE_API_KEY="..."
+
+uv run scripts/live_conformance.py \
+  --database "Analytics" \
+  --execute \
+  'SELECT status, count(*) FROM orders GROUP BY status'
+```
+
+Para teste diferencial completo, quando o database conectado ao Metabase aceita
+o mesmo SQL DuckDB, informe também o ID numérico do database:
+
+```bash
+uv run scripts/live_conformance.py \
+  --database "Analytics" \
+  --database-id 7 \
+  --compare-native \
+  'SELECT status, count(*) FROM orders GROUP BY status'
+```
+
+Nesse modo a skill executa o SQL via `/api/agent/v1/execute-sql`, executa o MBQL
+via `/api/agent/v1/execute` e exige igualdade das linhas. HTTP 202 não é tratado
+como sucesso por si só: `status: failed` no corpo continua sendo falha.
+
+Nunca grave API key no repositório. Use variável de ambiente ou secret do CI.
+
+## Exaustividade limitada e expansão
+
+A suíte é exaustiva **dentro de uma gramática e profundidade parametrizadas**,
+não sobre todas as strings SQL possíveis. O espaço cresce monotonicamente:
+adicione operadores, tipos, combinações e profundidade; o Hypothesis minimiza
+qualquer contraexemplo encontrado.
+
+A próxima camada de escala é minerar consultas da suíte upstream do DuckDB e
+alimentá-las ao mesmo classificador. Cada query importada deve terminar em
+`SUPPORTED`, `AMBIGUOUS` ou `UNSUPPORTED`, nunca em conversão silenciosamente
+aproximada.
 
 ## TDD e xfails
 
-Nova semântica nasce primeiro como teste.
-
-Quando ainda não existe um contrato único e seguro, o caso permanece como
-`pytest.mark.xfail(strict=True)`. `strict=True` é importante: se uma mudança fizer
-o caso passar, o CI acusa XPASS e obriga a revisar a classificação em vez de
-silenciosamente manter uma ambiguidade já resolvida.
+Nova semântica nasce primeiro como teste. Ambiguidades permanecem como
+`pytest.mark.xfail(strict=True)`: se uma evolução fizer o caso passar, XPASS
+quebra o CI e obriga a promover/reclassificar aquela feature.
 
 Xfails atuais incluem:
 
 - `SELECT DISTINCT` em nível de linha;
-- `OFFSET`/paginação;
+- `OFFSET`/paginação enquanto o formato portátil não estiver fixado no contrato;
 - window functions;
-- o oracle diferencial DuckDB ↔ Metabase, até existir um executor MBQL real no
-  CI.
-
-O último xfail é deliberado. O lado DuckDB já roda sobre a fixture adversarial;
-o lado Metabase **não é fingido**. Quando houver um executor MBQL conectado,
-essa fronteira deve virar teste diferencial real:
-
-```text
-DuckDB SQL -> resultado A
-DuckDB SQL -> converter -> MBQL -> Metabase -> resultado B
-normalize(A) == normalize(B)
-```
+- execução diferencial sem uma instância Metabase configurada no ambiente de CI.
 
 ## O que deve falhar em vez de improvisar
 
@@ -159,7 +191,6 @@ O conversor é **AST → AST**, não regex. `sqlglot` interpreta a entrada com
 `read="duckdb"`; só depois o script produz cláusulas MBQL.
 
 Uma conversão que muda o sentido silenciosamente é pior que um erro explícito.
-O orçamento da suíte para mismatch semântico conhecido é zero.
 
 ## MBQL de destino
 
@@ -177,40 +208,15 @@ A saída segue o formato portátil MBQL 5:
 }
 ```
 
-Cada cláusula usa:
-
-```json
-["operador", {}, "argumentos..."]
-```
-
-Cada campo da primeira stage usa FK portátil:
-
-```json
-["field", {}, ["Analytics", "main", "orders", "total"]]
-```
-
-Em JOIN explícito, campos da tabela juntada recebem `join-alias`.
+Cada cláusula usa `["operador", {}, ...args]`; campos da primeira stage usam FK
+portátil. Em JOIN explícito, campos da tabela juntada recebem `join-alias`.
 
 ## HAVING e nomes entre stages
 
 MBQL usa o nome físico produzido pela stage anterior. Para agregações simples,
 esses nomes são `count`, `sum`, `avg`, `min`, `max`, `median` e `distinct`, com
-sufixos `_2`, `_3` quando uma mesma função aparece várias vezes.
-
-O alias SQL ajuda a resolver a referência, mas não muda o machine name
-materializado pelo MBQL.
-
-## Próxima expansão da suíte
-
-A direção natural é minerar consultas da própria suíte upstream do DuckDB e
-adicioná-las ao corpus reproduzível. Cada consulta descoberta deve terminar em
-uma das três classes, nunca em silêncio:
-
-```text
-SUPPORTED   -> converte e satisfaz as propriedades/oracle disponível
-AMBIGUOUS   -> xfail estrito com razão explícita
-UNSUPPORTED -> ConversionError explícito
-```
+sufixos `_2`, `_3` quando uma mesma função aparece várias vezes. O alias SQL
+ajuda a resolver a referência, mas não muda o machine name materializado.
 
 ## Definition of Done
 
@@ -223,7 +229,9 @@ A conversão está pronta quando:
 - construções fora do suporte falham com mensagem útil;
 - nova semântica nasce primeiro como teste;
 - ambiguidades permanecem como xfails explicativos;
-- o conformance report não admite mismatch semântico silencioso.
+- o conformance report não admite mismatch semântico silencioso;
+- quando houver Metabase configurado, o oracle live consegue construir/executar
+  e, no modo diferencial, comparar SQL e MBQL no servidor real.
 
 ## Real-use postmortem
 
