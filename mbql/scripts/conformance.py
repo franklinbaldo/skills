@@ -32,6 +32,7 @@ class FeatureResult:
 FEATURE_MATRIX: tuple[FeatureResult, ...] = (
     FeatureResult("select", Status.SUPPORTED, "single SELECT over a direct table"),
     FeatureResult("where", Status.SUPPORTED, "boolean filters and common comparisons"),
+    FeatureResult("scalar_functions_common", Status.SUPPORTED, "LOWER/UPPER/COALESCE/ABS map to MBQL expressions"),
     FeatureResult("group_by", Status.SUPPORTED, "breakout in first MBQL stage"),
     FeatureResult("having_simple", Status.SUPPORTED, "second-stage filter over projected aggregate"),
     FeatureResult("having_expression", Status.AMBIGUOUS, "aggregate-expression output naming across stages is unresolved"),
@@ -118,6 +119,8 @@ def classify(sql: str) -> list[FeatureResult]:
         if node.args.get("qualify"):
             add("qualify")
 
+    if any(isinstance(item, (exp.Lower, exp.Upper, exp.Coalesce, exp.Abs)) for item in node.walk()):
+        add("scalar_functions_common")
     if any(node.find_all(exp.Window)):
         add("window")
     if any(node.find_all(exp.Subquery)):
