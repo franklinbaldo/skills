@@ -176,8 +176,6 @@ def test_duckdb_vs_mbql_differential_oracle_boundary_is_explicit() -> None:
     finally:
         con.close()
     mbql = convert_sql(sql, database="Analytics")
-    # The harness refuses to fake this side: when a Metabase executor is wired in,
-    # replace None with execute_mbql(mbql, fixture_database) and remove the xfail.
     metabase_rows = None
     assert metabase_rows == duckdb_rows, mbql
 
