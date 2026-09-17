@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#   "duckdb>=1.4",
 #   "hypothesis>=6.140",
 #   "pytest>=8.4",
 #   "sqlglot>=27,<29",
@@ -16,6 +17,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import duckdb
 import pytest
 from hypothesis import given, settings, strategies as st
 
@@ -50,7 +52,6 @@ def assert_mbql_shape(query: dict[str, Any]) -> None:
     for stage in query["stages"]:
         assert stage["lib/type"] == "mbql.stage/mbql"
     for clause in _walk_clauses(query):
-        # Portable FKs are data arrays, not clauses; clauses have an options map.
         if clause[0] in {"Analytics", "main", "orders", "customers"}:
             continue
         if clause[0] in {
@@ -63,7 +64,7 @@ def assert_mbql_shape(query: dict[str, Any]) -> None:
 
 
 @st.composite
-def supported_queries(draw: st.DrawFn) -> str:
+def supported_queries(draw) -> str:
     """Generate a finite-grammar family known to have a defined v2 contract."""
     grouped = draw(st.booleans())
     where = draw(st.booleans())
@@ -113,6 +114,19 @@ def test_formatting_is_metamorphic(sql: str) -> None:
     assert convert_sql(compact, database="Analytics") == convert_sql(noisy, database="Analytics")
 
 
+def test_adversarial_duckdb_fixture_is_executable() -> None:
+    fixture = (HERE / "fixtures" / "adversarial.sql").read_text(encoding="utf-8")
+    con = duckdb.connect(":memory:")
+    try:
+        con.execute(fixture)
+        assert con.execute("SELECT count(*) FROM orders").fetchone() == (7,)
+        assert con.execute("SELECT count(*) FROM customers").fetchone() == (4,)
+        assert con.execute("SELECT count(*) FROM orders WHERE total IS NULL").fetchone() == (1,)
+        assert con.execute("SELECT count(*) FROM orders o LEFT JOIN customers c ON o.customer_id = c.id WHERE c.id IS NULL").fetchone() == (2,)
+    finally:
+        con.close()
+
+
 def test_feature_report_has_three_explicit_outcomes_and_zero_silent_mismatch_budget() -> None:
     payload = report()
     assert set(payload["counts"]) == {status.value for status in Status}
@@ -149,6 +163,23 @@ def test_ambiguous_offset_stays_executable() -> None:
 @pytest.mark.xfail(strict=True, reason="window semantics need an explicit multi-stage contract")
 def test_ambiguous_window_stays_executable() -> None:
     convert_sql("SELECT id, row_number() OVER (ORDER BY id) AS n FROM orders", database="Analytics")
+
+
+@pytest.mark.xfail(strict=True, reason="semantic differential needs a live Metabase MBQL execution oracle")
+def test_duckdb_vs_mbql_differential_oracle_boundary_is_explicit() -> None:
+    sql = "SELECT status, COUNT(*) AS n FROM orders GROUP BY status ORDER BY n DESC"
+    fixture = (HERE / "fixtures" / "adversarial.sql").read_text(encoding="utf-8")
+    con = duckdb.connect(":memory:")
+    try:
+        con.execute(fixture)
+        duckdb_rows = con.execute(sql).fetchall()
+    finally:
+        con.close()
+    mbql = convert_sql(sql, database="Analytics")
+    # The harness refuses to fake this side: when a Metabase executor is wired in,
+    # replace None with execute_mbql(mbql, fixture_database) and remove the xfail.
+    metabase_rows = None
+    assert metabase_rows == duckdb_rows, mbql
 
 
 def test_unsupported_cte_must_fail_loudly() -> None:
