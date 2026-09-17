@@ -139,7 +139,9 @@ def test_feature_report_has_three_explicit_outcomes_and_zero_silent_mismatch_bud
     [
         ("SELECT id FROM orders WHERE total > 10", "where", Status.SUPPORTED),
         ("SELECT DISTINCT status FROM orders", "select_distinct", Status.AMBIGUOUS),
-        ("SELECT id FROM orders LIMIT 10 OFFSET 5", "offset", Status.AMBIGUOUS),
+        ("SELECT id FROM orders LIMIT 10 OFFSET 20", "offset_aligned", Status.SUPPORTED),
+        ("SELECT id FROM orders LIMIT 10 OFFSET 5", "offset_unaligned", Status.AMBIGUOUS),
+        ("SELECT id FROM orders OFFSET 5", "offset_without_limit", Status.UNSUPPORTED),
         ("WITH x AS (SELECT id FROM orders) SELECT * FROM x", "cte", Status.UNSUPPORTED),
         ("SELECT row_number() OVER (ORDER BY id) FROM orders", "window", Status.AMBIGUOUS),
         ("SELECT * FROM orders UNION SELECT * FROM customers", "set_operations", Status.UNSUPPORTED),
@@ -155,7 +157,7 @@ def test_ambiguous_select_distinct_stays_executable() -> None:
     convert_sql("SELECT DISTINCT status FROM orders", database="Analytics")
 
 
-@pytest.mark.xfail(strict=True, reason="OFFSET needs a decided OFFSET/LIMIT -> MBQL page/items mapping")
+@pytest.mark.xfail(strict=True, reason="unaligned OFFSET cannot be represented exactly by MBQL page/items")
 def test_ambiguous_offset_stays_executable() -> None:
     convert_sql("SELECT id FROM orders LIMIT 10 OFFSET 5", database="Analytics")
 
@@ -165,7 +167,7 @@ def test_ambiguous_window_stays_executable() -> None:
     convert_sql("SELECT id, row_number() OVER (ORDER BY id) AS n FROM orders", database="Analytics")
 
 
-@pytest.mark.xfail(strict=True, reason="semantic differential needs a live Metabase MBQL execution oracle")
+@pytest.mark.xfail(strict=True, reason="semantic differential requires a configured live Metabase instance in CI")
 def test_duckdb_vs_mbql_differential_oracle_boundary_is_explicit() -> None:
     sql = "SELECT status, COUNT(*) AS n FROM orders GROUP BY status ORDER BY n DESC"
     fixture = (HERE / "fixtures" / "adversarial.sql").read_text(encoding="utf-8")
