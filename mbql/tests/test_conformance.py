@@ -48,6 +48,7 @@ SCALAR_PROJECTIONS = (
     "length(status) AS status_length",
     "CASE WHEN total > 100 THEN 'high' ELSE 'low' END AS bucket",
     "CASE status WHEN 'paid' THEN 1 ELSE 0 END AS paid_code",
+    "if(total > 100, 'high', 'low') AS if_bucket",
     "extract(year FROM created_at) AS created_year",
     "extract(month FROM created_at) AS created_month",
 )
@@ -169,6 +170,8 @@ def test_feature_report_has_three_explicit_outcomes_and_zero_silent_mismatch_bud
         ("SELECT cast(total AS INTEGER) AS n FROM orders", "cast_basic", Status.SUPPORTED),
         ("SELECT substring(status, 2, 3) AS s FROM orders", "string_functions_common", Status.SUPPORTED),
         ("SELECT CASE WHEN total > 0 THEN 1 ELSE 0 END AS positive FROM orders", "case_expression", Status.SUPPORTED),
+        ("SELECT if(total > 0, 1, 0) AS positive FROM orders", "if_expression", Status.SUPPORTED),
+        ("SELECT status || id FROM orders", "dpipe_overloaded", Status.AMBIGUOUS),
         ("SELECT extract(year FROM created_at) AS y FROM orders", "temporal_extract_basic", Status.SUPPORTED),
         ("SELECT extract(week FROM created_at) AS w FROM orders", "temporal_extract_calendar", Status.UNSUPPORTED),
         ("SELECT cast(total AS DECIMAL(18,2)) AS n FROM orders", "cast_unsupported", Status.UNSUPPORTED),
