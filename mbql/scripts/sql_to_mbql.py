@@ -351,6 +351,23 @@ class Converter:
             if default is not None:
                 clause.append(self._expr(default))
             return clause
+        if isinstance(node, exp.Extract):
+            unit = node.this.sql(dialect="duckdb").strip("'\"").lower()
+            operators = {
+                "year": "get-year",
+                "month": "get-month",
+                "day": "get-day",
+                "hour": "get-hour",
+                "minute": "get-minute",
+                "second": "get-second",
+                "quarter": "get-quarter",
+            }
+            operator = operators.get(unit)
+            if operator is None:
+                raise ConversionError(
+                    f"EXTRACT com unidade {unit!r} ainda não tem contrato MBQL explícito nesta skill."
+                )
+            return [operator, {}, self._expr(node.expression)]
         if isinstance(node, exp.TryCast):
             raise ConversionError("TRY_CAST não tem contrato equivalente no subconjunto MBQL suportado.")
         if isinstance(node, exp.Cast):
