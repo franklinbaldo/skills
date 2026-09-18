@@ -497,11 +497,19 @@ class SqlToMbqlTests(unittest.TestCase):
             [["field", {}, "status"], ["field", {}, "sum"]],
         )
 
-    @unittest.expectedFailure
-    def test_grouped_breakout_alias_needs_cross_stage_name_contract(self) -> None:
+    def test_grouped_breakout_alias_resolves_to_source_machine_name(self) -> None:
         query = convert_sql(
             "SELECT s FROM (SELECT status AS s, sum(total) AS revenue "
             "FROM orders GROUP BY status) q",
+            database="Analytics",
+        )
+        self.assertEqual(query["stages"][1]["fields"], [["field", {}, "status"]])
+
+    @unittest.expectedFailure
+    def test_grouped_breakout_expression_alias_remains_ambiguous(self) -> None:
+        query = convert_sql(
+            "SELECT s FROM (SELECT lower(status) AS s, sum(total) AS revenue "
+            "FROM orders GROUP BY lower(status)) q",
             database="Analytics",
         )
         self.assertEqual(query["stages"][1]["fields"], [["field", {}, "s"]])
