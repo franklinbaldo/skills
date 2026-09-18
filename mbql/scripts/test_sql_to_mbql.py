@@ -380,13 +380,12 @@ class SqlToMbqlTests(unittest.TestCase):
                     [["stddev", {}, ["field", {}, ["Analytics", "main", "orders", "total"]]]],
                 )
 
-    @unittest.expectedFailure
-    def test_stddev_pop_remains_semantically_distinct(self) -> None:
-        query = convert_sql(
-            "SELECT stddev_pop(total) AS spread FROM orders",
-            database="Analytics",
-        )
-        self.assertEqual(query["stages"][0]["aggregation"][0][0], "stddev-pop")
+    def test_stddev_pop_fails_instead_of_using_sample_stddev(self) -> None:
+        with self.assertRaisesRegex(ConversionError, "não suportada"):
+            convert_sql(
+                "SELECT stddev_pop(total) AS spread FROM orders",
+                database="Analytics",
+            )
 
     def test_count_distinct_maps_to_distinct_aggregation(self) -> None:
         query = convert_sql(
