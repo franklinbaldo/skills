@@ -410,13 +410,32 @@ class SqlToMbqlTests(unittest.TestCase):
             [["<", {}, ["field", {}, "total"], 100]],
         )
 
-    @unittest.expectedFailure
-    def test_subquery_aggregate_alias_needs_cross_stage_name_contract(self) -> None:
+    def test_subquery_aggregate_alias_resolves_to_machine_name(self) -> None:
         query = convert_sql(
             "SELECT revenue FROM (SELECT sum(total) AS revenue FROM orders) q",
             database="Analytics",
         )
-        self.assertEqual(query["stages"][1]["fields"], [["field", {}, "revenue"]])
+        self.assertEqual(query["stages"][1]["fields"], [["field", {}, "sum"]])
+
+    def test_grouped_subquery_exposes_plain_breakout_and_aggregate_alias(self) -> None:
+        query = convert_sql(
+            "SELECT status, revenue FROM "
+            "(SELECT status, sum(total) AS revenue FROM orders GROUP BY status) q",
+            database="Analytics",
+        )
+        self.assertEqual(
+            query["stages"][1]["fields"],
+            [["field", {}, "status"], ["field", {}, "sum"]],
+        )
+
+    @unittest.expectedFailure
+    def test_grouped_breakout_alias_needs_cross_stage_name_contract(self) -> None:
+        query = convert_sql(
+            "SELECT s FROM (SELECT status AS s, sum(total) AS revenue "
+            "FROM orders GROUP BY status) q",
+            database="Analytics",
+        )
+        self.assertEqual(query["stages"][1]["fields"], [["field", {}, "s"]])
 
     def test_subquery_still_fails_explicitly(self) -> None:
         with self.assertRaisesRegex(ConversionError, "subquery|Subquery|FROM"):
