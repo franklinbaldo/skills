@@ -75,6 +75,20 @@ def test_classifier_drift_is_a_classification_gap(tmp_path: Path, monkeypatch: p
     assert payload["results"][0]["converted"] is True
 
 
+def test_corpus_reports_driver_capability_requirements(tmp_path: Path) -> None:
+    corpus = tmp_path / "caps.sql"
+    corpus.write_text(
+        "SELECT lower(status) AS s FROM orders;\n"
+        "WITH x AS (SELECT id FROM orders) SELECT id FROM x;\n",
+        encoding="utf-8",
+    )
+
+    payload = corpus_runner.run_corpus(corpus, database="Analytics")
+
+    assert payload["driver_feature_counts"]["expressions"] == 1
+    assert payload["driver_feature_counts"]["nested-queries"] == 1
+
+
 def test_directory_corpus_is_recursive(tmp_path: Path) -> None:
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
