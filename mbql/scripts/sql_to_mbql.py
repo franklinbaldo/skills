@@ -437,7 +437,7 @@ class Converter:
             inner_converter = Converter(database=self.database, default_schema=self.default_schema)
             inner_query = inner_converter.convert(join.this.this.sql(dialect="duckdb"))
             stages = inner_query["stages"]
-            self.derived_join_name_maps[alias.lower()] = dict(inner_converter.aggregation_alias_outputs)
+            self.derived_join_name_maps[alias.lower()] = self._output_name_map(join.this.this, inner_converter)
         else:
             raise ConversionError("JOIN suporta tabela direta ou subquery SELECT linear.")
 
