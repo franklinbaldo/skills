@@ -33,6 +33,8 @@ FEATURE_MATRIX: tuple[FeatureResult, ...] = (
     FeatureResult("select", Status.SUPPORTED, "single SELECT over a direct table"),
     FeatureResult("where", Status.SUPPORTED, "boolean filters and common comparisons"),
     FeatureResult("scalar_functions_common", Status.SUPPORTED, "LOWER/UPPER/COALESCE/ABS map to MBQL expressions"),
+    FeatureResult("cast_basic", Status.SUPPORTED, "VARCHAR/integer/FLOAT-DOUBLE casts map to MBQL text/integer/float"),
+    FeatureResult("cast_unsupported", Status.UNSUPPORTED, "DECIMAL, temporal and TRY_CAST semantics are not approximated"),
     FeatureResult("group_by", Status.SUPPORTED, "breakout in first MBQL stage"),
     FeatureResult("having_simple", Status.SUPPORTED, "second-stage filter over projected aggregate"),
     FeatureResult("having_expression", Status.AMBIGUOUS, "aggregate-expression output naming across stages is unresolved"),
@@ -133,6 +135,13 @@ def classify(sql: str) -> list[FeatureResult]:
 
     if any(isinstance(item, (exp.Lower, exp.Upper, exp.Coalesce, exp.Abs)) for item in node.walk()):
         add("scalar_functions_common")
+    safe_cast_targets = {"VARCHAR", "TEXT", "TINYINT", "SMALLINT", "INTEGER", "INT", "BIGINT", "HUGEINT", "REAL", "FLOAT", "DOUBLE"}
+    for item in node.walk():
+        if isinstance(item, exp.TryCast):
+            add("cast_unsupported")
+        elif isinstance(item, exp.Cast):
+            target = item.to.sql(dialect="duckdb").upper()
+            add("cast_basic" if target in safe_cast_targets else "cast_unsupported")
     if any(node.find_all(exp.Window)):
         add("window")
     if any(node.find_all(exp.Subquery)):
