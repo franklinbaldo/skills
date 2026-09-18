@@ -166,6 +166,11 @@ def test_feature_report_has_three_explicit_outcomes_and_zero_silent_mismatch_bud
     ("sql", "feature", "status"),
     [
         ("SELECT id FROM orders WHERE total > 10", "where", Status.SUPPORTED),
+        ("SELECT median(total) FROM orders", "median", Status.SUPPORTED),
+        ("SELECT stddev(total) FROM orders", "stddev_sample", Status.SUPPORTED),
+        ("SELECT stddev_samp(total) FROM orders", "stddev_sample", Status.SUPPORTED),
+        ("SELECT stddev_pop(total) FROM orders", "stddev_population", Status.UNSUPPORTED),
+        ("SELECT corr(total, quantity) FROM orders", "aggregation_unsupported", Status.UNSUPPORTED),
         ("SELECT lower(status) AS s FROM orders", "scalar_functions_common", Status.SUPPORTED),
         ("SELECT cast(total AS INTEGER) AS n FROM orders", "cast_basic", Status.SUPPORTED),
         ("SELECT substring(status, 2, 3) AS s FROM orders", "string_functions_common", Status.SUPPORTED),
