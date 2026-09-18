@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#   "cyclopts>=3.0",
 #   "httpx>=0.28",
 #   "sqlglot>=27,<29",
 # ]
@@ -10,7 +11,6 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
@@ -18,6 +18,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+import cyclopts
 import httpx
 from sqlglot import parse_one
 
@@ -190,39 +191,44 @@ def run_live(
         return result
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("sql", nargs="?", help="DuckDB SQL SELECT")
-    parser.add_argument("--file", type=Path)
-    parser.add_argument("--url", default=os.environ.get("METABASE_URL"), help="Metabase base URL or METABASE_URL")
-    parser.add_argument("--api-key", default=os.environ.get("METABASE_API_KEY"), help="API key or METABASE_API_KEY")
-    parser.add_argument("--database", required=True, help="exact Metabase database name used in portable FKs")
-    parser.add_argument("--database-id", type=int, help="numeric database id for --compare-native")
-    parser.add_argument("--schema", default="main")
-    parser.add_argument("--execute", action="store_true", help="execute resolved MBQL after validation")
-    parser.add_argument("--compare-native", action="store_true", help="execute SQL and MBQL and require equivalent rows")
-    args = parser.parse_args(argv)
+app = cyclopts.App(name="mbql-live-conformance", help=__doc__)
 
+
+@app.default
+def main(
+    sql: str | None = None,
+    *,
+    database: str,
+    file: Path | None = None,
+    url: str | None = os.environ.get("METABASE_URL"),
+    api_key: str | None = os.environ.get("METABASE_API_KEY"),
+    database_id: int | None = None,
+    schema: str = "main",
+    execute: bool = False,
+    compare_native: bool = False,
+) -> int:
+    """Validate and optionally execute/diff one DuckDB SQL query against Metabase."""
     try:
-        if not args.url or not args.api_key:
+        if not url or not api_key:
             raise LiveConformanceError("Defina --url/METABASE_URL e --api-key/METABASE_API_KEY.")
-        sql = _read_sql(args.sql, args.file)
+        source = _read_sql(sql, file)
         payload = run_live(
-            sql,
-            url=args.url,
-            api_key=args.api_key,
-            database=args.database,
-            database_id=args.database_id,
-            schema=args.schema or None,
-            execute=args.execute,
-            compare_native=args.compare_native,
+            source,
+            url=url,
+            api_key=api_key,
+            database=database,
+            database_id=database_id,
+            schema=schema or None,
+            execute=execute,
+            compare_native=compare_native,
         )
     except (ConversionError, LiveConformanceError, OSError, httpx.HTTPError) as exc:
-        parser.error(str(exc))
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(app())
