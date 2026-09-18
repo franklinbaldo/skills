@@ -51,6 +51,7 @@ class Converter:
         self.projection_position_aliases: list[str | None] = []
         self.breakout_aliases: set[str] = set()
         self.cross_stage_alias: str | None = None
+        self.cross_stage_name_map: dict[str, str] = {}
         self._aggregation_name_counts: Counter[str] = Counter()
 
     def convert(self, sql: str) -> dict[str, Any]:
@@ -119,16 +120,12 @@ class Converter:
     ) -> dict[str, Any]:
         if outer.args.get("joins"):
             raise ConversionError("JOIN sobre subquery/CTE linear ainda não é suportado.")
-        if any(self._is_aggregate(self._unwrap_alias(item)[0]) for item in inner.expressions):
-            raise ConversionError(
-                "Agregação na fonte derivada ainda não preserva aliases SQL como machine names MBQL; "
-                "há xfail específico para esse contrato."
-            )
+        self._validate_cross_stage_outputs(inner)
 
-        inner_query = Converter(database=self.database, default_schema=self.default_schema).convert(
-            inner.sql(dialect="duckdb")
-        )
+        inner_converter = Converter(database=self.database, default_schema=self.default_schema)
+        inner_query = inner_converter.convert(inner.sql(dialect="duckdb"))
         self.cross_stage_alias = alias
+        self.cross_stage_name_map = dict(inner_converter.aggregation_alias_outputs)
         self.source = None
         stage: dict[str, Any] = {"lib/type": "mbql.stage/mbql"}
         compiled = self._compile_stage(outer, stage)
@@ -136,6 +133,25 @@ class Converter:
             "lib/type": "mbql/query",
             "stages": [*inner_query["stages"], *compiled["stages"]],
         }
+
+    def _validate_cross_stage_outputs(self, inner: exp.Select) -> None:
+        grouped = inner.args.get("group") is not None
+        for projection in inner.expressions:
+            expression, alias = self._unwrap_alias(projection)
+            if self._is_aggregate(expression):
+                if not alias:
+                    raise ConversionError(
+                        "Agregação em fonte derivada precisa de alias SQL explícito para resolver o machine name MBQL."
+                    )
+                continue
+            if grouped and not isinstance(expression, exp.Column):
+                raise ConversionError(
+                    "Breakout por expressão dentro de fonte derivada ainda não tem machine name cross-stage estável."
+                )
+            if grouped and alias and isinstance(expression, exp.Column) and alias.lower() != expression.name.lower():
+                raise ConversionError(
+                    "Alias de breakout agrupado ainda não é preservado como machine name MBQL cross-stage."
+                )
 
     def _compile_stage(self, node: exp.Select, stage: dict[str, Any]) -> dict[str, Any]:
         self._register_projection_metadata(node)
@@ -361,7 +377,8 @@ class Converter:
                 raise ConversionError(
                     f"Alias desconhecido em ref cross-stage {column.sql()!r}; esperado {self.cross_stage_alias!r}."
                 )
-            return ["field", {}, column.name]
+            name = self.cross_stage_name_map.get(column.name.lower(), column.name)
+            return ["field", {}, name]
         if column.table:
             ref = self.tables.get(column.table.lower())
             if ref is None:
