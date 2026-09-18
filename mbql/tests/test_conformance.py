@@ -181,7 +181,10 @@ def test_feature_report_has_three_explicit_outcomes_and_zero_silent_mismatch_bud
         ("SELECT id FROM orders LIMIT 10 OFFSET 20", "offset_aligned", Status.SUPPORTED),
         ("SELECT id FROM orders LIMIT 10 OFFSET 5", "offset_unaligned", Status.AMBIGUOUS),
         ("SELECT id FROM orders OFFSET 5", "offset_without_limit", Status.UNSUPPORTED),
-        ("WITH x AS (SELECT id FROM orders) SELECT * FROM x", "cte", Status.UNSUPPORTED),
+        ("WITH x AS (SELECT id FROM orders) SELECT * FROM x", "cte_linear", Status.SUPPORTED),
+        ("WITH x AS (SELECT id FROM orders), y AS (SELECT id FROM orders) SELECT * FROM x", "cte_complex", Status.UNSUPPORTED),
+        ("SELECT id FROM (SELECT id, total FROM orders) q", "subquery_linear", Status.SUPPORTED),
+        ("SELECT revenue FROM (SELECT sum(total) AS revenue FROM orders) q", "subquery_complex", Status.UNSUPPORTED),
         ("SELECT row_number() OVER (ORDER BY id) FROM orders", "window", Status.AMBIGUOUS),
         ("SELECT * FROM orders UNION SELECT * FROM customers", "set_operations", Status.UNSUPPORTED),
     ],
@@ -228,9 +231,12 @@ def test_duckdb_vs_mbql_differential_oracle_boundary_is_explicit() -> None:
     assert metabase_rows == duckdb_rows, mbql
 
 
-def test_unsupported_cte_must_fail_loudly() -> None:
+def test_complex_cte_must_fail_loudly() -> None:
     with pytest.raises(ConversionError, match="CTE"):
-        convert_sql("WITH x AS (SELECT id FROM orders) SELECT * FROM x", database="Analytics")
+        convert_sql(
+            "WITH x AS (SELECT id FROM orders), y AS (SELECT id FROM orders) SELECT * FROM x",
+            database="Analytics",
+        )
 
 
 def test_counterexample_is_serializable_for_replay() -> None:
