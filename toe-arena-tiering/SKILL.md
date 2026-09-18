@@ -127,7 +127,4 @@ scientific record underneath stays sober. Attack claims, not people. Make uncert
 
 ## Real-use postmortem
 
-After material use, assess whether the rubric changed the result, whether provenance was
-sufficient, and whether any recurring ambiguity or missing criterion should become a concrete
-skill improvement. Routine success stays ephemeral; actionable learning should update the skill
-or a sanitized issue without publishing private or confidential material.
+After material use, assess routing, outcome, quality delta, concrete instruction effect, and any friction/workaround. Routine success stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and update a matching issue or open a sanitized **Skill use feedback** issue. Never publish secrets or private/confidential data merely to report feedback.
