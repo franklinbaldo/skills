@@ -34,6 +34,7 @@ FEATURE_MATRIX: tuple[FeatureResult, ...] = (
     FeatureResult("where", Status.SUPPORTED, "boolean filters and common comparisons"),
     FeatureResult("scalar_functions_common", Status.SUPPORTED, "LOWER/UPPER/COALESCE/ABS map to MBQL expressions"),
     FeatureResult("string_functions_common", Status.SUPPORTED, "CONCAT/SUBSTRING/REPLACE/TRIM/LENGTH map to MBQL expressions"),
+    FeatureResult("case_expression", Status.SUPPORTED, "searched/simple CASE map to MBQL case clauses"),
     FeatureResult("cast_basic", Status.SUPPORTED, "VARCHAR/integer/FLOAT-DOUBLE casts map to MBQL text/integer/float"),
     FeatureResult("cast_unsupported", Status.UNSUPPORTED, "DECIMAL, temporal and TRY_CAST semantics are not approximated"),
     FeatureResult("group_by", Status.SUPPORTED, "breakout in first MBQL stage"),
@@ -138,6 +139,8 @@ def classify(sql: str) -> list[FeatureResult]:
         add("scalar_functions_common")
     if any(isinstance(item, (exp.Concat, exp.Substring, exp.Replace, exp.Trim, exp.Length)) for item in node.walk()):
         add("string_functions_common")
+    if any(isinstance(item, exp.Case) for item in node.walk()):
+        add("case_expression")
     safe_cast_targets = {"VARCHAR", "TEXT", "TINYINT", "SMALLINT", "INTEGER", "INT", "BIGINT", "HUGEINT", "REAL", "FLOAT", "DOUBLE"}
     for item in node.walk():
         if isinstance(item, exp.TryCast):
