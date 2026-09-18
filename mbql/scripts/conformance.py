@@ -53,8 +53,10 @@ FEATURE_MATRIX: tuple[FeatureResult, ...] = (
     FeatureResult("select_distinct_complex", Status.AMBIGUOUS, "DISTINCT expressions/aliases/composite forms need explicit contracts"),
     FeatureResult("count_distinct", Status.SUPPORTED, "single-field COUNT DISTINCT maps to distinct aggregation"),
     FeatureResult("median", Status.SUPPORTED, "DuckDB MEDIAN maps to MBQL median and requires percentile-aggregations"),
-    FeatureResult("stddev_sample", Status.SUPPORTED, "STDDEV/STDDEV_SAMP map to MBQL stddev"),
-    FeatureResult("stddev_population", Status.UNSUPPORTED, "MBQL has no distinct population-standard-deviation aggregation"),
+    FeatureResult("stddev_population", Status.SUPPORTED, "STDDEV_POP maps exactly to MBQL stddev (population semantics)"),
+    FeatureResult("stddev_sample", Status.UNSUPPORTED, "DuckDB STDDEV/STDDEV_SAMP are sample statistics; MBQL stddev is population"),
+    FeatureResult("variance_population", Status.SUPPORTED, "VAR_POP maps exactly to MBQL var (population semantics)"),
+    FeatureResult("variance_sample", Status.UNSUPPORTED, "DuckDB VARIANCE/VAR_SAMP are sample statistics; MBQL var is population"),
     FeatureResult("aggregation_unsupported", Status.UNSUPPORTED, "aggregate function has no explicit DuckDB-to-MBQL contract"),
     FeatureResult("joins", Status.SUPPORTED, "inner/left/right/full joins with conjunctive comparisons"),
     FeatureResult("join_subquery_linear", Status.SUPPORTED, "derived SELECT join sources map to nested join stages"),
@@ -258,10 +260,14 @@ def classify(sql: str) -> list[FeatureResult]:
         add("count_distinct")
     if any(isinstance(x, exp.Median) for x in node.walk()):
         add("median")
-    if any(isinstance(x, (exp.Stddev, exp.StddevSamp)) for x in node.walk()):
-        add("stddev_sample")
     if any(isinstance(x, exp.StddevPop) for x in node.walk()):
         add("stddev_population")
+    if any(isinstance(x, (exp.Stddev, exp.StddevSamp)) for x in node.walk()):
+        add("stddev_sample")
+    if any(isinstance(x, exp.VariancePop) for x in node.walk()):
+        add("variance_population")
+    if any(isinstance(x, exp.Variance) for x in node.walk()):
+        add("variance_sample")
 
     supported_aggregates = (
         exp.Count,
@@ -270,13 +276,13 @@ def classify(sql: str) -> list[FeatureResult]:
         exp.Min,
         exp.Max,
         exp.Median,
-        exp.Stddev,
-        exp.StddevSamp,
+        exp.StddevPop,
+        exp.VariancePop,
     )
     if any(
         isinstance(item, exp.AggFunc)
         and not isinstance(item, supported_aggregates)
-        and not isinstance(item, exp.StddevPop)
+        and not isinstance(item, (exp.Stddev, exp.StddevSamp, exp.Variance))
         for item in node.walk()
     ):
         add("aggregation_unsupported")
@@ -325,7 +331,10 @@ def required_driver_features(sql: str) -> set[str]:
         required.add("basic-aggregations")
     if any(isinstance(item, exp.Median) for item in node.walk()):
         required.add("percentile-aggregations")
-    if any(isinstance(item, (exp.Stddev, exp.StddevSamp, exp.StddevPop)) for item in node.walk()):
+    if any(
+        isinstance(item, (exp.Stddev, exp.StddevSamp, exp.StddevPop, exp.Variance, exp.VariancePop))
+        for item in node.walk()
+    ):
         required.add("standard-deviation-aggregations")
 
     expression_nodes = (
