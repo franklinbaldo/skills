@@ -249,6 +249,11 @@ class Converter:
         else:
             if self.source is None:
                 raise AssertionError("source not initialized")
+            if any(table.join_alias for table in self.tables.values()):
+                raise ConversionError(
+                    f"Coluna sem qualificação em query com JOIN é ambígua: {column.name!r}; "
+                    "qualifique com o alias/tabela de origem."
+                )
             ref = self.source
         options: dict[str, Any] = {}
         if ref.join_alias:
