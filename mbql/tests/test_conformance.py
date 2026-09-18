@@ -184,6 +184,7 @@ def test_feature_report_has_three_explicit_outcomes_and_zero_silent_mismatch_bud
         ("SELECT id FROM orders LIMIT 10 OFFSET 5", "offset_unaligned", Status.AMBIGUOUS),
         ("SELECT id FROM orders OFFSET 5", "offset_without_limit", Status.UNSUPPORTED),
         ("WITH x AS (SELECT id FROM orders) SELECT * FROM x", "cte_linear", Status.SUPPORTED),
+        ("WITH x AS (SELECT id, total FROM orders), y AS (SELECT id, total FROM x WHERE total > 10) SELECT id FROM y", "cte_linear", Status.SUPPORTED),
         ("WITH x AS (SELECT id FROM orders), y AS (SELECT id FROM orders) SELECT * FROM x", "cte_complex", Status.UNSUPPORTED),
         ("SELECT id FROM (SELECT id, total FROM orders) q", "subquery_linear", Status.SUPPORTED),
         ("SELECT revenue FROM (SELECT sum(total) AS revenue FROM orders) q", "subquery_linear", Status.SUPPORTED),
