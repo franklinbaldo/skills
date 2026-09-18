@@ -39,6 +39,39 @@ class SqlToMbqlTests(unittest.TestCase):
         self.assertEqual(stage["limit"], 5)
         self.assertEqual(stage["order-by"][0][0], "desc")
 
+    def test_group_by_and_order_by_ordinals_resolve_select_positions(self) -> None:
+        query = convert_sql(
+            "SELECT status, COUNT(*) AS n FROM orders GROUP BY 1 ORDER BY 2 DESC",
+            database="Analytics",
+        )
+        stage = query["stages"][0]
+        self.assertEqual(
+            stage["breakout"],
+            [["field", {}, ["Analytics", "main", "orders", "status"]]],
+        )
+        self.assertEqual(stage["order-by"], [["desc", {}, ["aggregation", {}, 0]]])
+
+    def test_group_by_projection_alias_resolves_underlying_expression(self) -> None:
+        query = convert_sql(
+            "SELECT lower(status) AS normalized, COUNT(*) AS n "
+            "FROM orders GROUP BY normalized ORDER BY normalized ASC",
+            database="Analytics",
+        )
+        field = ["field", {}, ["Analytics", "main", "orders", "status"]]
+        stage = query["stages"][0]
+        self.assertEqual(stage["breakout"], [["lower", {}, field]])
+        self.assertEqual(stage["order-by"], [["asc", {}, ["lower", {}, field]]])
+
+    def test_order_by_nonaggregate_projection_alias_uses_expression_ref(self) -> None:
+        query = convert_sql(
+            "SELECT total * quantity AS gross FROM orders ORDER BY gross DESC",
+            database="Analytics",
+        )
+        self.assertEqual(
+            query["stages"][0]["order-by"],
+            [["desc", {}, ["expression", {}, "gross"]]],
+        )
+
     def test_grouped_aggregation(self) -> None:
         query = convert_sql(
             "SELECT status, COUNT(*) AS n, SUM(total) AS revenue "
