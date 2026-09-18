@@ -1,18 +1,18 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["sqlglot>=27,<29"]
+# dependencies = ["cyclopts>=3.0", "sqlglot>=27,<29"]
 # ///
 """Run SQL and DuckDB SQLLogicTest corpora through the MBQL contract."""
 
 from __future__ import annotations
 
-import argparse
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
+import cyclopts
 from sqlglot import parse, parse_one
 from sqlglot.errors import ParseError
 
@@ -216,18 +216,22 @@ def run_corpus(path: Path, *, database: str, schema: str | None = "main") -> dic
     }
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("path", type=Path, help=".sql/.test file or directory tree")
-    parser.add_argument("--database", required=True, help="portable Metabase database name")
-    parser.add_argument("--schema", default="main")
-    parser.add_argument("--compact", action="store_true")
-    args = parser.parse_args(argv)
+app = cyclopts.App(name="mbql-corpus", help=__doc__)
 
-    payload = run_corpus(args.path, database=args.database, schema=args.schema or None)
-    print(json.dumps(payload, ensure_ascii=False, indent=None if args.compact else 2))
+
+@app.default
+def main(
+    path: Path,
+    *,
+    database: str,
+    schema: str = "main",
+    compact: bool = False,
+) -> int:
+    """Classify a .sql/.test file or directory tree."""
+    payload = run_corpus(path, database=database, schema=schema or None)
+    print(json.dumps(payload, ensure_ascii=False, indent=None if compact else 2))
     return 1 if payload["contract_gaps"] or payload["classification_gaps"] else 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(app())
