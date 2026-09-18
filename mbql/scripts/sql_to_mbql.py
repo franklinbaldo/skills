@@ -68,7 +68,7 @@ class Converter:
     def _convert_select(self, node: exp.Select) -> dict[str, Any]:
         with_ = node.args.get("with_")
         if with_ is not None:
-            return self._convert_single_cte(node, with_)
+            return self._convert_cte_chain(node, with_)
         if any(node.find_all(exp.Window)):
             raise ConversionError("Window functions ainda não são suportadas.")
         if node.args.get("qualify"):
@@ -89,21 +89,74 @@ class Converter:
         }
         return self._compile_stage(node, stage)
 
-    def _convert_single_cte(self, node: exp.Select, with_: exp.With) -> dict[str, Any]:
+    def _convert_cte_chain(self, node: exp.Select, with_: exp.With) -> dict[str, Any]:
         if bool(with_.args.get("recursive")):
             raise ConversionError("WITH RECURSIVE ainda não é suportado.")
-        if len(with_.expressions) != 1:
-            raise ConversionError("Apenas um CTE linear é suportado; múltiplos CTEs permanecem fora do contrato.")
-        cte = with_.expressions[0]
-        if not isinstance(cte, exp.CTE) or not isinstance(cte.this, exp.Select):
-            raise ConversionError("CTE deve conter um SELECT simples.")
-        alias = cte.alias_or_name
-        from_ = node.args.get("from_")
-        if from_ is None or not isinstance(from_.this, exp.Table) or from_.this.name.lower() != alias.lower():
-            raise ConversionError("CTE suportado deve ser a fonte única da query externa.")
+        if not with_.expressions:
+            raise ConversionError("WITH sem CTE não é suportado.")
+
+        stages: list[dict[str, Any]] = []
+        previous_alias: str | None = None
+        previous_name_map: dict[str, str] = {}
+
+        for index, raw_cte in enumerate(with_.expressions):
+            if not isinstance(raw_cte, exp.CTE) or not isinstance(raw_cte.this, exp.Select):
+                raise ConversionError("Cada CTE da cadeia deve conter um SELECT.")
+            alias = raw_cte.alias_or_name
+            if not alias:
+                raise ConversionError("Cada CTE da cadeia precisa de alias.")
+
+            select = raw_cte.this
+            self._validate_cross_stage_outputs(select)
+
+            if index == 0:
+                compiler = Converter(database=self.database, default_schema=self.default_schema)
+                compiled = compiler.convert(select.sql(dialect="duckdb"))
+                stages.extend(compiled["stages"])
+            else:
+                from_ = select.args.get("from_")
+                if (
+                    from_ is None
+                    or not isinstance(from_.this, exp.Table)
+                    or previous_alias is None
+                    or from_.this.name.lower() != previous_alias.lower()
+                    or select.args.get("joins")
+                ):
+                    raise ConversionError(
+                        "Múltiplos CTEs só são suportados quando formam uma cadeia linear, "
+                        "cada um consumindo exclusivamente o CTE anterior."
+                    )
+                compiler = Converter(database=self.database, default_schema=self.default_schema)
+                compiler.cross_stage_alias = previous_alias
+                compiler.cross_stage_name_map = dict(previous_name_map)
+                compiled = compiler._compile_stage(select, {"lib/type": "mbql.stage/mbql"})
+                stages.extend(compiled["stages"])
+
+            previous_alias = alias
+            previous_name_map = self._output_name_map(select, compiler)
+
         outer = node.copy()
         outer.set("with_", None)
-        return self._convert_linear_source(outer, cte.this, alias)
+        from_ = outer.args.get("from_")
+        if (
+            from_ is None
+            or not isinstance(from_.this, exp.Table)
+            or previous_alias is None
+            or from_.this.name.lower() != previous_alias.lower()
+            or outer.args.get("joins")
+        ):
+            raise ConversionError(
+                "A query externa deve consumir exclusivamente o último CTE da cadeia linear."
+            )
+
+        self.cross_stage_alias = previous_alias
+        self.cross_stage_name_map = dict(previous_name_map)
+        self.source = None
+        compiled_outer = self._compile_stage(outer, {"lib/type": "mbql.stage/mbql"})
+        return {
+            "lib/type": "mbql/query",
+            "stages": [*stages, *compiled_outer["stages"]],
+        }
 
     def _convert_linear_subquery(self, node: exp.Select, subquery: exp.Subquery) -> dict[str, Any]:
         if not isinstance(subquery.this, exp.Select):
@@ -126,7 +179,7 @@ class Converter:
         inner_converter = Converter(database=self.database, default_schema=self.default_schema)
         inner_query = inner_converter.convert(inner.sql(dialect="duckdb"))
         self.cross_stage_alias = alias
-        self.cross_stage_name_map = dict(inner_converter.aggregation_alias_outputs)
+        self.cross_stage_name_map = self._output_name_map(inner, inner_converter)
         self.source = None
         stage: dict[str, Any] = {"lib/type": "mbql.stage/mbql"}
         compiled = self._compile_stage(outer, stage)
@@ -134,6 +187,34 @@ class Converter:
             "lib/type": "mbql/query",
             "stages": [*inner_query["stages"], *compiled["stages"]],
         }
+
+    def _output_name_map(self, select: exp.Select, compiler: "Converter") -> dict[str, str]:
+        mapping: dict[str, str] = {}
+        grouped = select.args.get("group") is not None
+        for projection in select.expressions:
+            expression, alias = self._unwrap_alias(projection)
+            if isinstance(expression, exp.Star):
+                continue
+            if self._is_aggregate(expression):
+                if alias:
+                    machine = compiler.aggregation_alias_outputs.get(alias.lower())
+                    if machine is not None:
+                        mapping[alias.lower()] = machine
+                continue
+            if alias:
+                if grouped and isinstance(expression, exp.Column):
+                    mapping[alias.lower()] = expression.name
+                else:
+                    mapping[alias.lower()] = alias
+                continue
+            if isinstance(expression, exp.Column):
+                actual = (
+                    compiler.cross_stage_name_map.get(expression.name.lower(), expression.name)
+                    if compiler.cross_stage_alias is not None
+                    else expression.name
+                )
+                mapping[expression.name.lower()] = actual
+        return mapping
 
     def _validate_cross_stage_outputs(self, inner: exp.Select) -> None:
         grouped = inner.args.get("group") is not None
@@ -148,6 +229,10 @@ class Converter:
             if grouped and not isinstance(expression, exp.Column):
                 raise ConversionError(
                     "Breakout por expressão dentro de fonte derivada ainda não tem machine name cross-stage estável."
+                )
+            if not grouped and not isinstance(expression, (exp.Column, exp.Star)) and not alias:
+                raise ConversionError(
+                    "Expressão sem alias em fonte derivada não tem machine name cross-stage estável."
                 )
             if grouped and alias and isinstance(expression, exp.Column) and alias.lower() != expression.name.lower():
                 raise ConversionError(
