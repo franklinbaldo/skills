@@ -68,8 +68,10 @@ Continuam ambíguos ou não suportados, conforme o caso:
 - `SELECT DISTINCT` sobre expressão/alias/composição;
 - window functions e `QUALIFY`;
 - `HAVING` com aritmética entre agregações ainda não materializada;
-- agregação dentro de fonte derivada quando o alias SQL precisaria sobreviver
-  como machine name cross-stage;
+- agregação em fonte derivada **sem alias SQL explícito**; com alias, o
+  conversor resolve o nome SQL para o machine name MBQL (`sum`, `sum_2`, etc.);
+- breakout agrupado renomeado/por expressão quando o machine name cross-stage
+  não é estável;
 - múltiplos CTEs, CTE recursivo ou CTE fora do pipeline linear;
 - JOIN externo sobre subquery/CTE linear;
 - coluna sem qualificação em query com JOIN;
