@@ -45,6 +45,7 @@ FEATURE_MATRIX: tuple[FeatureResult, ...] = (
     FeatureResult("select_distinct_complex", Status.AMBIGUOUS, "DISTINCT expressions/aliases/composite forms need explicit contracts"),
     FeatureResult("count_distinct", Status.SUPPORTED, "single-field COUNT DISTINCT maps to distinct aggregation"),
     FeatureResult("joins", Status.SUPPORTED, "inner/left/right/full joins with conjunctive comparisons"),
+    FeatureResult("join_unqualified_column", Status.AMBIGUOUS, "without schema metadata, unqualified columns in joins cannot be attributed safely"),
     FeatureResult("subquery", Status.UNSUPPORTED, "no direct-table source semantics implemented"),
     FeatureResult("cte", Status.UNSUPPORTED, "multi-source staging contract not implemented"),
     FeatureResult("window", Status.AMBIGUOUS, "requires explicit cross-stage/window semantics"),
@@ -116,6 +117,17 @@ def classify(sql: str) -> list[FeatureResult]:
             add("select_distinct_simple" if simple else "select_distinct_complex")
         if node.args.get("joins"):
             add("joins")
+            scoped_nodes = [*node.expressions]
+            if node.args.get("where"):
+                scoped_nodes.append(node.args["where"].this)
+            if node.args.get("group"):
+                scoped_nodes.extend(node.args["group"].expressions)
+            if any(
+                isinstance(column, exp.Column) and not column.table
+                for scoped in scoped_nodes
+                for column in scoped.find_all(exp.Column)
+            ):
+                add("join_unqualified_column")
         if node.args.get("qualify"):
             add("qualify")
 
