@@ -430,6 +430,29 @@ class SqlToMbqlTests(unittest.TestCase):
         )
         self.assertNotIn("source-table", outer)
 
+    def test_multiple_ctes_in_linear_chain_become_multiple_stages(self) -> None:
+        query = convert_sql(
+            "WITH x AS (SELECT id, total FROM orders), "
+            "y AS (SELECT id, total FROM x WHERE total > 10) "
+            "SELECT id FROM y WHERE id > 1",
+            database="Analytics",
+        )
+        self.assertEqual(len(query["stages"]), 3)
+        self.assertEqual(query["stages"][1]["filters"], [[">", {}, ["field", {}, "total"], 10]])
+        self.assertEqual(query["stages"][2]["fields"], [["field", {}, "id"]])
+        self.assertEqual(query["stages"][2]["filters"], [[">", {}, ["field", {}, "id"], 1]])
+
+    def test_cte_chain_preserves_aggregate_sql_name_mapping(self) -> None:
+        query = convert_sql(
+            "WITH x AS (SELECT status, sum(total) AS revenue FROM orders GROUP BY status), "
+            "y AS (SELECT status, revenue FROM x WHERE revenue > 10) "
+            "SELECT revenue FROM y",
+            database="Analytics",
+        )
+        self.assertEqual(len(query["stages"]), 3)
+        self.assertEqual(query["stages"][1]["fields"], [["field", {}, "status"], ["field", {}, "sum"]])
+        self.assertEqual(query["stages"][2]["fields"], [["field", {}, "sum"]])
+
     def test_single_cte_single_use_linearizes_to_second_stage(self) -> None:
         query = convert_sql(
             "WITH x AS (SELECT id, total FROM orders WHERE total > 10) "
