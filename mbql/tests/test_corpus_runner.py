@@ -29,14 +29,15 @@ def test_corpus_reports_supported_ambiguous_and_unsupported(tmp_path: Path) -> N
         "SELECT id FROM orders ORDER BY id LIMIT 10 OFFSET 20;\n"
         "SELECT id FROM orders ORDER BY id LIMIT 10 OFFSET 5;\n"
         "SELECT DISTINCT status FROM orders;\n"
-        "WITH x AS (SELECT id FROM orders) SELECT * FROM x;\n",
+        "WITH x AS (SELECT id FROM orders) SELECT * FROM x;\n"
+        "WITH x AS (SELECT id FROM orders), y AS (SELECT id FROM orders) SELECT * FROM x;\n",
         encoding="utf-8",
     )
 
     payload = corpus_runner.run_corpus(corpus, database="Analytics")
 
-    assert payload["statements"] == 5
-    assert payload["counts"]["supported"] == 3
+    assert payload["statements"] == 6
+    assert payload["counts"]["supported"] == 4
     assert payload["counts"]["ambiguous"] == 1
     assert payload["counts"]["unsupported"] == 1
     assert payload["contract_gaps"] == 0
