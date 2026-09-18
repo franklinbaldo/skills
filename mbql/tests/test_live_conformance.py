@@ -47,6 +47,13 @@ def test_required_driver_features_are_derived_from_sql_shape() -> None:
         "WITH x AS (SELECT id FROM orders) SELECT id FROM x"
     ) == {"nested-queries"}
 
+    assert required_driver_features(
+        "SELECT median(total) FROM orders"
+    ) == {"percentile-aggregations"}
+    assert required_driver_features(
+        "SELECT stddev(total) FROM orders"
+    ) == {"standard-deviation-aggregations"}
+
 
 def test_database_features_are_read_and_missing_capabilities_fail() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
