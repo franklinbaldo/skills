@@ -28,6 +28,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
 
       - name: Classify DuckDB SQLLogicTest corpus
+        id: audit
         shell: bash
         run: |
           set +e
@@ -36,6 +37,7 @@ jobs:
             --database Corpus \
             > mbql-duckdb-corpus.json
           code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           echo "corpus_runner_exit=$code" >> "$GITHUB_STEP_SUMMARY"
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
@@ -45,20 +47,38 @@ jobs:
           print("## DuckDB → MBQL corpus audit")
           print(f"Statements: {payload['statements']}")
           print(f"Contract gaps: {payload['contract_gaps']}")
+          print(f"Classification gaps: {payload['classification_gaps']}")
           print(f"Parse errors: {payload['parse_errors']}")
+
           print("\n### Status counts")
           for key, value in sorted(payload["counts"].items()):
               print(f"- {key}: {value}")
-          print("\n### Top features")
+
+          print("\n### Top language features")
           for key, value in sorted(payload["feature_counts"].items(), key=lambda kv: (-kv[1], kv[0]))[:25]:
               print(f"- {key}: {value}")
+
+          print("\n### Driver capabilities required")
+          for key, value in sorted(payload["driver_feature_counts"].items(), key=lambda kv: (-kv[1], kv[0])):
+              print(f"- {key}: {value}")
           PY
-          # Discovery job: contract gaps are reported and artifacted, not a gate yet.
           exit 0
 
       - name: Upload corpus report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mbql-duckdb-corpus
           path: mbql-duckdb-corpus.json
           if-no-files-found: error
+
+      - name: Enforce conformance contract
+        if: always()
+        shell: bash
+        run: |
+          code="${{ steps.audit.outputs.exit_code }}"
+          if [ -z "$code" ]; then
+            echo "Corpus audit did not produce an exit code" >&2
+            exit 1
+          fi
+          exit "$code"
