@@ -163,6 +163,31 @@ class SqlToMbqlTests(unittest.TestCase):
             ],
         )
 
+    def test_temporal_extract_components_map_to_mbql_getters(self) -> None:
+        query = convert_sql(
+            "SELECT extract(year FROM created_at) AS y, extract(month FROM created_at) AS m, "
+            "extract(day FROM created_at) AS d, extract(hour FROM created_at) AS h, "
+            "extract(minute FROM created_at) AS mi, extract(second FROM created_at) AS s, "
+            "extract(quarter FROM created_at) AS q FROM orders",
+            database="Analytics",
+        )
+        field = ["field", {}, ["Analytics", "main", "orders", "created_at"]]
+        expressions = query["stages"][0]["expressions"]
+        for alias, op in {
+            "y": "get-year",
+            "m": "get-month",
+            "d": "get-day",
+            "h": "get-hour",
+            "mi": "get-minute",
+            "s": "get-second",
+            "q": "get-quarter",
+        }.items():
+            self.assertEqual(expressions[alias], [op, {}, field])
+
+    def test_temporal_extract_with_calendar_semantics_is_not_approximated(self) -> None:
+        with self.assertRaisesRegex(ConversionError, "EXTRACT|extract|unidade"):
+            convert_sql("SELECT extract(week FROM created_at) AS w FROM orders", database="Analytics")
+
     def test_simple_case_is_rewritten_as_explicit_equalities(self) -> None:
         query = convert_sql(
             "SELECT CASE status WHEN 'paid' THEN 1 WHEN 'open' THEN 2 ELSE 0 END AS code FROM orders",
