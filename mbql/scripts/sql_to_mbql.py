@@ -258,8 +258,8 @@ class Converter:
         distinct = bool(node.args.get("distinct"))
         simple_distinct = (
             distinct
-            and len(node.expressions) == 1
-            and isinstance(node.expressions[0], exp.Column)
+            and bool(node.expressions)
+            and all(isinstance(item, exp.Column) for item in node.expressions)
             and not group_exprs
             and node.args.get("having") is None
         )
@@ -270,7 +270,7 @@ class Converter:
             )
 
         if simple_distinct:
-            stage["breakout"] = [self._expr(node.expressions[0])]
+            stage["breakout"] = [self._expr(item) for item in node.expressions]
         else:
             self._project(node, stage, group_exprs)
 
