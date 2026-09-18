@@ -178,8 +178,8 @@ def classify(sql: str) -> list[FeatureResult]:
 
         if node.args.get("distinct"):
             simple = (
-                len(node.expressions) == 1
-                and isinstance(node.expressions[0], exp.Column)
+                bool(node.expressions)
+                and all(isinstance(item, exp.Column) for item in node.expressions)
                 and not node.args.get("group")
                 and not node.args.get("having")
             )
