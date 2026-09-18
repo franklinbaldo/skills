@@ -19,8 +19,9 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from sql_to_mbql import ConversionError, convert_sql
 from sqlglot import exp, parse_one
+
+from sql_to_mbql import ConversionError, convert_sql
 
 
 class LiveConformanceError(RuntimeError):
