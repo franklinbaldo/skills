@@ -77,15 +77,27 @@ def _literal_int(node: exp.Expression | None) -> int | None:
 
 
 
-def _inner_has_aggregate(select: exp.Select) -> bool:
-    return any(isinstance(node, exp.AggFunc) for projection in select.expressions for node in projection.walk())
+def _inner_cross_stage_safe(select: exp.Select) -> bool:
+    grouped = select.args.get("group") is not None
+    for projection in select.expressions:
+        expression = projection.this if isinstance(projection, exp.Alias) else projection
+        alias = projection.alias if isinstance(projection, exp.Alias) else None
+        if isinstance(expression, exp.AggFunc):
+            if not alias:
+                return False
+            continue
+        if grouped and not isinstance(expression, exp.Column):
+            return False
+        if grouped and alias and isinstance(expression, exp.Column) and alias.lower() != expression.name.lower():
+            return False
+    return True
 
 
 def _linear_subquery_source(node: exp.Select) -> bool:
     from_ = node.args.get("from_")
     if from_ is None or not isinstance(from_.this, exp.Subquery) or not isinstance(from_.this.this, exp.Select):
         return False
-    return not node.args.get("joins") and not _inner_has_aggregate(from_.this.this)
+    return not node.args.get("joins") and _inner_cross_stage_safe(from_.this.this)
 
 
 def _linear_cte_source(node: exp.Select) -> bool:
@@ -93,7 +105,7 @@ def _linear_cte_source(node: exp.Select) -> bool:
     if with_ is None or bool(with_.args.get("recursive")) or len(with_.expressions) != 1:
         return False
     cte = with_.expressions[0]
-    if not isinstance(cte, exp.CTE) or not isinstance(cte.this, exp.Select) or _inner_has_aggregate(cte.this):
+    if not isinstance(cte, exp.CTE) or not isinstance(cte.this, exp.Select) or not _inner_cross_stage_safe(cte.this):
         return False
     from_ = node.args.get("from_")
     return (
