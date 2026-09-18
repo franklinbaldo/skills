@@ -388,6 +388,12 @@ class Converter:
             return ["trim", {}, self._expr(node.this)]
         if isinstance(node, exp.Length):
             return ["length", {}, self._expr(node.this)]
+        if isinstance(node, exp.If):
+            clause: list[Any] = ["case", {}, [[self._expr(node.this), self._expr(node.args["true"])]]]
+            fallback = node.args.get("false")
+            if fallback is not None:
+                clause.append(self._expr(fallback))
+            return clause
         if isinstance(node, exp.Case):
             base = node.this
             cases: list[list[Any]] = []
