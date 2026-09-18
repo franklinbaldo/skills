@@ -196,6 +196,17 @@ class SqlToMbqlTests(unittest.TestCase):
             ],
         )
 
+    def test_if_function_maps_to_single_branch_case(self) -> None:
+        query = convert_sql(
+            "SELECT if(total > 100, 'high', 'low') AS bucket FROM orders",
+            database="Analytics",
+        )
+        total = ["field", {}, ["Analytics", "main", "orders", "total"]]
+        self.assertEqual(
+            query["stages"][0]["expressions"]["bucket"],
+            ["case", {}, [[[">", {}, total, 100], "high"]], "low"],
+        )
+
     def test_temporal_extract_components_map_to_mbql_getters(self) -> None:
         query = convert_sql(
             "SELECT extract(year FROM created_at) AS y, extract(month FROM created_at) AS m, "
