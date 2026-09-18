@@ -150,6 +150,28 @@ class SqlToMbqlTests(unittest.TestCase):
             ],
         )
 
+    def test_join_subquery_maps_plain_projection_aliases(self) -> None:
+        query = convert_sql(
+            "SELECT o.id, q.customer FROM orders o "
+            "LEFT JOIN (SELECT id AS customer, active FROM customers) q "
+            "ON o.customer_id = q.customer",
+            database="Analytics",
+        )
+        stage = query["stages"][0]
+        self.assertEqual(
+            stage["joins"][0]["conditions"],
+            [[
+                "=",
+                {},
+                ["field", {}, ["Analytics", "main", "orders", "customer_id"]],
+                ["field", {"join-alias": "q"}, "customer"],
+            ]],
+        )
+        self.assertEqual(
+            stage["fields"][1],
+            ["field", {"join-alias": "q"}, "customer"],
+        )
+
     def test_unqualified_column_with_join_is_rejected_as_ambiguous(self) -> None:
         with self.assertRaisesRegex(ConversionError, "qualific|ambígu"):
             convert_sql(
