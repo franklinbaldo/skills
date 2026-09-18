@@ -234,10 +234,6 @@ class Converter:
                 raise ConversionError(
                     "Expressão sem alias em fonte derivada não tem machine name cross-stage estável."
                 )
-            if grouped and alias and isinstance(expression, exp.Column) and alias.lower() != expression.name.lower():
-                raise ConversionError(
-                    "Alias de breakout agrupado ainda não é preservado como machine name MBQL cross-stage."
-                )
 
     def _compile_stage(self, node: exp.Select, stage: dict[str, Any]) -> dict[str, Any]:
         self._register_projection_metadata(node)
