@@ -678,7 +678,7 @@ class Converter:
         mapping: tuple[tuple[type[exp.Expression], str], ...] = (
             (exp.Sum, "sum"), (exp.Avg, "avg"), (exp.Min, "min"),
             (exp.Max, "max"), (exp.Median, "median"),
-            (exp.Stddev, "stddev"), (exp.StddevSamp, "stddev"),
+            (exp.StddevPop, "stddev"), (exp.VariancePop, "var"),
         )
         for cls, operator in mapping:
             if isinstance(expression, cls):
@@ -689,7 +689,7 @@ class Converter:
     def _is_aggregate(node: exp.Expression) -> bool:
         return isinstance(
             node,
-            (exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max, exp.Median, exp.Stddev, exp.StddevSamp),
+            (exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max, exp.Median, exp.StddevPop, exp.VariancePop),
         )
 
     @staticmethod
@@ -700,7 +700,7 @@ class Converter:
             return "count"
         for cls, name in (
             (exp.Sum, "sum"), (exp.Avg, "avg"), (exp.Min, "min"), (exp.Max, "max"),
-            (exp.Median, "median"), (exp.Stddev, "stddev"), (exp.StddevSamp, "stddev"),
+            (exp.Median, "median"), (exp.StddevPop, "stddev"), (exp.VariancePop, "var"),
         ):
             if isinstance(node, cls):
                 return name
