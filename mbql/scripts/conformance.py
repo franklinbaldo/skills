@@ -54,8 +54,10 @@ FEATURE_MATRIX: tuple[FeatureResult, ...] = (
     FeatureResult("count_distinct", Status.SUPPORTED, "single-field COUNT DISTINCT maps to distinct aggregation"),
     FeatureResult("joins", Status.SUPPORTED, "inner/left/right/full joins with conjunctive comparisons"),
     FeatureResult("join_unqualified_column", Status.AMBIGUOUS, "without schema metadata, unqualified columns in joins cannot be attributed safely"),
-    FeatureResult("subquery", Status.UNSUPPORTED, "no direct-table source semantics implemented"),
-    FeatureResult("cte", Status.UNSUPPORTED, "multi-source staging contract not implemented"),
+    FeatureResult("subquery_linear", Status.SUPPORTED, "single derived SELECT source maps to the preceding MBQL stage"),
+    FeatureResult("subquery_complex", Status.UNSUPPORTED, "aggregate/outer-join derived sources need stronger cross-stage contracts"),
+    FeatureResult("cte_linear", Status.SUPPORTED, "single non-recursive CTE used as the only source maps to linear stages"),
+    FeatureResult("cte_complex", Status.UNSUPPORTED, "multiple/recursive/non-linear CTEs are outside the current stage contract"),
     FeatureResult("window", Status.AMBIGUOUS, "requires explicit cross-stage/window semantics"),
     FeatureResult("qualify", Status.UNSUPPORTED, "depends on window output semantics"),
     FeatureResult("set_operations", Status.UNSUPPORTED, "UNION/INTERSECT/EXCEPT are outside current MBQL stage contract"),
@@ -74,6 +76,33 @@ def _literal_int(node: exp.Expression | None) -> int | None:
         return None
 
 
+
+def _inner_has_aggregate(select: exp.Select) -> bool:
+    return any(isinstance(node, exp.AggFunc) for projection in select.expressions for node in projection.walk())
+
+
+def _linear_subquery_source(node: exp.Select) -> bool:
+    from_ = node.args.get("from_")
+    if from_ is None or not isinstance(from_.this, exp.Subquery) or not isinstance(from_.this.this, exp.Select):
+        return False
+    return not node.args.get("joins") and not _inner_has_aggregate(from_.this.this)
+
+
+def _linear_cte_source(node: exp.Select) -> bool:
+    with_ = node.args.get("with_")
+    if with_ is None or bool(with_.args.get("recursive")) or len(with_.expressions) != 1:
+        return False
+    cte = with_.expressions[0]
+    if not isinstance(cte, exp.CTE) or not isinstance(cte.this, exp.Select) or _inner_has_aggregate(cte.this):
+        return False
+    from_ = node.args.get("from_")
+    return (
+        from_ is not None
+        and isinstance(from_.this, exp.Table)
+        and from_.this.name.lower() == cte.alias_or_name.lower()
+        and not node.args.get("joins")
+    )
+
 def classify(sql: str) -> list[FeatureResult]:
     node = parse_one(sql, read="duckdb")
     found: list[FeatureResult] = []
@@ -87,7 +116,7 @@ def classify(sql: str) -> list[FeatureResult]:
     if isinstance(node, exp.Select):
         add("select")
         if node.args.get("with_"):
-            add("cte")
+            add("cte_linear" if _linear_cte_source(node) else "cte_complex")
         if node.args.get("where"):
             add("where")
         if node.args.get("group"):
@@ -165,7 +194,7 @@ def classify(sql: str) -> list[FeatureResult]:
     if any(node.find_all(exp.Window)):
         add("window")
     if any(node.find_all(exp.Subquery)):
-        add("subquery")
+        add("subquery_linear" if _linear_subquery_source(node) else "subquery_complex")
     if any(isinstance(x, exp.Count) and isinstance(x.this, exp.Distinct) for x in node.walk()):
         add("count_distinct")
     if isinstance(node, (exp.Union, exp.Intersect, exp.Except)):
