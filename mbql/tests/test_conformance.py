@@ -176,6 +176,8 @@ def test_feature_report_has_three_explicit_outcomes_and_zero_silent_mismatch_bud
         ("SELECT extract(week FROM created_at) AS w FROM orders", "temporal_extract_calendar", Status.UNSUPPORTED),
         ("SELECT cast(total AS DECIMAL(18,2)) AS n FROM orders", "cast_unsupported", Status.UNSUPPORTED),
         ("SELECT name FROM orders o JOIN customers c ON o.customer_id = c.id", "join_unqualified_column", Status.AMBIGUOUS),
+        ("SELECT o.id, q.revenue FROM orders o LEFT JOIN (SELECT customer_id, sum(total) AS revenue FROM invoices GROUP BY customer_id) q ON o.customer_id = q.customer_id", "join_subquery_linear", Status.SUPPORTED),
+        ("SELECT o.id, q.s FROM orders o LEFT JOIN (SELECT status AS s, sum(total) AS revenue FROM invoices GROUP BY status) q ON o.status = q.s", "join_subquery_complex", Status.UNSUPPORTED),
         ("SELECT DISTINCT status FROM orders", "select_distinct_simple", Status.SUPPORTED),
         ("SELECT DISTINCT lower(status) FROM orders", "select_distinct_complex", Status.AMBIGUOUS),
         ("SELECT id FROM orders LIMIT 10 OFFSET 20", "offset_aligned", Status.SUPPORTED),
