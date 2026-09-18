@@ -266,6 +266,59 @@ def classify(sql: str) -> list[FeatureResult]:
     return found
 
 
+def required_driver_features(sql: str) -> set[str]:
+    """Return Metabase driver capabilities needed to execute the generated MBQL."""
+    node = parse_one(sql, read="duckdb")
+    required: set[str] = set()
+
+    if node.args.get("with_") or any(node.find_all(exp.Subquery)):
+        required.add("nested-queries")
+    if isinstance(node, exp.Select) and node.args.get("having"):
+        required.add("nested-queries")
+
+    for join in node.find_all(exp.Join):
+        side = (join.args.get("side") or "").upper()
+        kind = (join.args.get("kind") or "").upper()
+        if side == "LEFT":
+            required.add("left-join")
+        elif side == "RIGHT":
+            required.add("right-join")
+        elif side == "FULL":
+            required.add("full-join")
+        elif kind in {"", "INNER"}:
+            required.add("inner-join")
+        if isinstance(join.this, exp.Subquery):
+            required.add("nested-queries")
+
+    if any(node.find_all(exp.AggFunc)):
+        required.add("basic-aggregations")
+
+    expression_nodes = (
+        exp.Lower,
+        exp.Upper,
+        exp.Coalesce,
+        exp.Abs,
+        exp.Concat,
+        exp.Substring,
+        exp.Replace,
+        exp.Trim,
+        exp.Length,
+        exp.If,
+        exp.Case,
+        exp.Extract,
+        exp.Cast,
+        exp.Add,
+        exp.Sub,
+        exp.Mul,
+        exp.Div,
+        exp.Mod,
+    )
+    if any(isinstance(item, expression_nodes) for item in node.walk()):
+        required.add("expressions")
+
+    return required
+
+
 def report(rows: Iterable[FeatureResult] = FEATURE_MATRIX) -> dict[str, object]:
     rows = tuple(rows)
     counts = {status.value: sum(row.status == status for row in rows) for status in Status}
