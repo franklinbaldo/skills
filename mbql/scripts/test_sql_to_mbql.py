@@ -117,6 +117,39 @@ class SqlToMbqlTests(unittest.TestCase):
             [["=", {}, ["field", {"join-alias": "c"}, ["Analytics", "main", "customers", "active"]], True]],
         )
 
+    def test_join_against_linear_subquery_uses_nested_join_stages(self) -> None:
+        query = convert_sql(
+            "SELECT o.id, q.revenue FROM orders o "
+            "LEFT JOIN (SELECT customer_id, sum(total) AS revenue "
+            "FROM invoices GROUP BY customer_id) q "
+            "ON o.customer_id = q.customer_id",
+            database="Analytics",
+        )
+        stage = query["stages"][0]
+        join = stage["joins"][0]
+        self.assertEqual(join["alias"], "q")
+        self.assertEqual(join["strategy"], "left-join")
+        self.assertEqual(
+            join["stages"][0]["source-table"],
+            ["Analytics", "main", "invoices"],
+        )
+        self.assertEqual(
+            join["conditions"],
+            [[
+                "=",
+                {},
+                ["field", {}, ["Analytics", "main", "orders", "customer_id"]],
+                ["field", {"join-alias": "q"}, "customer_id"],
+            ]],
+        )
+        self.assertEqual(
+            stage["fields"],
+            [
+                ["field", {}, ["Analytics", "main", "orders", "id"]],
+                ["field", {"join-alias": "q"}, "sum"],
+            ],
+        )
+
     def test_unqualified_column_with_join_is_rejected_as_ambiguous(self) -> None:
         with self.assertRaisesRegex(ConversionError, "qualific|ambígu"):
             convert_sql(
