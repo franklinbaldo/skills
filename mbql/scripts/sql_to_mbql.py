@@ -311,6 +311,20 @@ class Converter:
             return ["coalesce", {}, *[self._expr(item) for item in args if item is not None]]
         if isinstance(node, exp.Abs):
             return ["abs", {}, self._expr(node.this)]
+        if isinstance(node, exp.TryCast):
+            raise ConversionError("TRY_CAST não tem contrato equivalente no subconjunto MBQL suportado.")
+        if isinstance(node, exp.Cast):
+            target = node.to.sql(dialect="duckdb").upper()
+            if target in {"VARCHAR", "TEXT"}:
+                return ["text", {}, self._expr(node.this)]
+            if target in {"TINYINT", "SMALLINT", "INTEGER", "INT", "BIGINT", "HUGEINT"}:
+                return ["integer", {}, self._expr(node.this)]
+            if target in {"REAL", "FLOAT", "DOUBLE"}:
+                return ["float", {}, self._expr(node.this)]
+            raise ConversionError(
+                f"CAST para {target} ainda não tem equivalência MBQL explícita; "
+                "não será aproximado por outra conversão."
+            )
         if isinstance(node, exp.Alias):
             return self._expr(node.this)
 
