@@ -1,13 +1,12 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["sqlglot>=27,<29"]
+# dependencies = ["cyclopts>=3.0", "sqlglot>=27,<29"]
 # ///
 """Convert a practical subset of DuckDB SQL to portable Metabase MBQL 5."""
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from collections import Counter
@@ -15,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import cyclopts
 from sqlglot import exp, parse_one
 from sqlglot.errors import ParseError
 
@@ -841,28 +841,33 @@ def _read_sql(value: str | None, file: Path | None) -> str:
     raise ConversionError("Informe o SQL como argumento, --file, ou stdin.")
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("sql", nargs="?", help="DuckDB SQL SELECT")
-    parser.add_argument("--file", type=Path, help="arquivo .sql (alternativa ao argumento)")
-    parser.add_argument("--database", required=True, help="nome exato do database no Metabase")
-    parser.add_argument("--schema", default="main", help="schema para tabelas não qualificadas (default: main)")
-    parser.add_argument("--compact", action="store_true", help="emitir JSON em uma linha")
-    args = parser.parse_args(argv)
+app = cyclopts.App(name="sql-to-mbql", help=__doc__)
 
+
+@app.default
+def main(
+    sql: str | None = None,
+    *,
+    database: str,
+    file: Path | None = None,
+    schema: str = "main",
+    compact: bool = False,
+) -> int:
+    """Convert one DuckDB SELECT to portable MBQL 5."""
     try:
-        sql = _read_sql(args.sql, args.file)
-        query = convert_sql(sql, database=args.database, schema=args.schema or None)
+        source = _read_sql(sql, file)
+        query = convert_sql(source, database=database, schema=schema or None)
     except (ConversionError, OSError) as exc:
-        parser.error(str(exc))
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
     print(
         json.dumps(query, ensure_ascii=False, separators=(",", ":"))
-        if args.compact
+        if compact
         else json.dumps(query, ensure_ascii=False, indent=2)
     )
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(app())
