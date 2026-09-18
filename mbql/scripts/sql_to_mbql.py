@@ -45,6 +45,11 @@ class Converter:
         self.aggregation_aliases: dict[str, int] = {}
         self.aggregation_alias_outputs: dict[str, str] = {}
         self.aggregation_expression_outputs: dict[str, str] = {}
+        self.aggregation_expression_indices: dict[str, int] = {}
+        self.projection_aliases: dict[str, exp.Expression] = {}
+        self.projection_positions: list[exp.Expression] = []
+        self.projection_position_aliases: list[str | None] = []
+        self.breakout_aliases: set[str] = set()
         self._aggregation_name_counts: Counter[str] = Counter()
 
     def convert(self, sql: str) -> dict[str, Any]:
@@ -71,6 +76,7 @@ class Converter:
             "lib/type": "mbql.stage/mbql",
             "source-table": self.source.portable,
         }
+        self._register_projection_metadata(node)
 
         joins = node.args.get("joins") or []
         if joins:
@@ -81,7 +87,7 @@ class Converter:
             stage["filters"] = [self._expr(where.this)]
 
         group = node.args.get("group")
-        group_exprs = list(group.expressions) if group is not None else []
+        group_exprs = self._resolve_group_exprs(group)
         if group_exprs:
             stage["breakout"] = [self._expr(item) for item in group_exprs]
 
@@ -121,6 +127,49 @@ class Converter:
             )
         return {"lib/type": "mbql/query", "stages": stages}
 
+    def _register_projection_metadata(self, node: exp.Select) -> None:
+        self.projection_positions = []
+        self.projection_position_aliases = []
+        for projection in node.expressions:
+            expression, alias = self._unwrap_alias(projection)
+            self.projection_positions.append(expression)
+            self.projection_position_aliases.append(alias)
+            if alias:
+                key = alias.lower()
+                existing = self.projection_aliases.get(key)
+                if existing is not None and existing != expression:
+                    raise ConversionError(f"Alias de projeção ambíguo: {alias!r}.")
+                self.projection_aliases[key] = expression
+
+    def _projection_at(self, ordinal: exp.Expression, *, label: str) -> tuple[exp.Expression, str | None]:
+        if not isinstance(ordinal, exp.Literal) or ordinal.is_string:
+            raise ConversionError(f"{label} ordinal deve ser inteiro literal.")
+        try:
+            position = int(ordinal.this)
+        except ValueError as exc:
+            raise ConversionError(f"{label} ordinal deve ser inteiro literal.") from exc
+        if position < 1 or position > len(self.projection_positions):
+            raise ConversionError(
+                f"{label} ordinal fora do SELECT: {position}; há {len(self.projection_positions)} projeções."
+            )
+        index = position - 1
+        return self.projection_positions[index], self.projection_position_aliases[index]
+
+    def _resolve_group_exprs(self, group: exp.Group | None) -> list[exp.Expression]:
+        if group is None:
+            return []
+        resolved: list[exp.Expression] = []
+        for item in group.expressions:
+            expression = item
+            if isinstance(item, exp.Literal) and not item.is_string:
+                expression, _ = self._projection_at(item, label="GROUP BY")
+            elif isinstance(item, exp.Column) and not item.table:
+                expression = self.projection_aliases.get(item.name.lower(), item)
+            if self._is_aggregate(expression):
+                raise ConversionError("GROUP BY não pode resolver para uma agregação.")
+            resolved.append(expression)
+        return resolved
+
     def _project(self, node: exp.Select, stage: dict[str, Any], group_exprs: list[exp.Expression]) -> None:
         aggregations: list[Any] = []
         fields: list[Any] = []
@@ -138,6 +187,7 @@ class Converter:
                 has_aggregate = True
                 idx = len(aggregations)
                 aggregations.append(self._aggregate(expression))
+                self.aggregation_expression_indices[self._expression_key(expression)] = idx
                 output_name = self._register_aggregation_output(expression)
                 if alias:
                     self.aggregation_aliases[alias.lower()] = idx
@@ -149,6 +199,8 @@ class Converter:
                     raise ConversionError(
                         f"Projeção não agregada fora do GROUP BY: {expression.sql(dialect='duckdb')}"
                     )
+                if alias:
+                    self.breakout_aliases.add(alias.lower())
                 continue
 
             if alias:
@@ -517,12 +569,29 @@ class Converter:
     def _order(self, ordered: exp.Expression) -> list[Any]:
         node = ordered.this if isinstance(ordered, exp.Ordered) else ordered
         direction = "desc" if isinstance(ordered, exp.Ordered) and bool(ordered.args.get("desc")) else "asc"
+        ordinal_alias: str | None = None
+        if isinstance(node, exp.Literal) and not node.is_string:
+            node, ordinal_alias = self._projection_at(node, label="ORDER BY")
+
         if isinstance(node, exp.Column) and not node.table:
-            idx = self.aggregation_aliases.get(node.name.lower())
+            alias_key = node.name.lower()
+            idx = self.aggregation_aliases.get(alias_key)
             if idx is not None:
                 return [direction, {}, ["aggregation", {}, idx]]
+            projection = self.projection_aliases.get(alias_key)
+            if projection is not None:
+                if alias_key in self.breakout_aliases:
+                    return [direction, {}, self._expr(projection)]
+                return [direction, {}, ["expression", {}, node.name]]
+
         if self._is_aggregate(node):
+            idx = self.aggregation_expression_indices.get(self._expression_key(node))
+            if idx is not None:
+                return [direction, {}, ["aggregation", {}, idx]]
             return [direction, {}, self._aggregate(node)]
+
+        if ordinal_alias and ordinal_alias.lower() not in self.breakout_aliases:
+            return [direction, {}, ["expression", {}, ordinal_alias]]
         return [direction, {}, self._expr(node)]
 
     @staticmethod
