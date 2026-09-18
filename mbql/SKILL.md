@@ -38,12 +38,12 @@ O conversor cobre, entre outros:
 - `GROUP BY` por coluna, alias de projeção ou ordinal;
 - `ORDER BY` por coluna, expressão/alias, agregação ou ordinal;
 - `COUNT`, `COUNT(DISTINCT campo)`, `SUM`, `AVG`, `MIN`, `MAX`,
-  `MEDIAN`;
+  `MEDIAN`, `STDDEV_POP` e `VAR_POP`;
 - `HAVING` simples sobre agregações projetadas, via stage posterior;
 - `LIMIT`;
 - `LIMIT N OFFSET k*N` exatamente como
   `page: {page: k+1, items: N}`;
-- `SELECT DISTINCT coluna` simples como breakout/distinct-values;
+- `SELECT DISTINCT` de uma ou várias colunas diretas como breakouts/distinct-values;
 - `INNER`, `LEFT`, `RIGHT` e `FULL JOIN` com comparações ligadas por
   `AND`, desde que campos em contexto de JOIN estejam qualificados;
 - `LOWER`, `UPPER`, `COALESCE`, `ABS`;
@@ -51,10 +51,13 @@ O conversor cobre, entre outros:
 - `CASE` pesquisado e simples, além de `IF`;
 - `EXTRACT` para year/month/day/hour/minute/second/quarter;
 - casts seguros para texto, inteiros e float/double;
-- subquery linear em `FROM`: uma única fonte derivada SELECT sem agregação
-  interna, compilada como stage anterior;
-- CTE linear: um único CTE não recursivo, usado como única fonte externa,
-  também compilado como pipeline de stages.
+- subquery linear em `FROM`, inclusive agregações com alias SQL explícito,
+  compilada como stage anterior;
+- JOIN contra subquery derivada linear, usando `stages` próprios do join;
+- cadeia de CTEs não recursivos estritamente linear (`x -> y -> SELECT final`),
+  compilada como pipeline de stages;
+- aliases cross-stage de agregações e colunas diretas, resolvidos para os
+  machine names efetivos do MBQL.
 
 Em stages posteriores, refs usam nomes de coluna, por exemplo
 `["field", {}, "id"]`, em vez de FK portátil da tabela original.
@@ -70,15 +73,20 @@ Continuam ambíguos ou não suportados, conforme o caso:
 - `HAVING` com aritmética entre agregações ainda não materializada;
 - agregação em fonte derivada **sem alias SQL explícito**; com alias, o
   conversor resolve o nome SQL para o machine name MBQL (`sum`, `sum_2`, etc.);
-- breakout agrupado renomeado/por expressão quando o machine name cross-stage
-  não é estável;
-- múltiplos CTEs, CTE recursivo ou CTE fora do pipeline linear;
-- JOIN externo sobre subquery/CTE linear;
+- breakout agrupado **por expressão** quando o machine name cross-stage não é
+  estável;
+- CTE recursivo, cadeia ramificada/não linear ou query final que não consome
+  exclusivamente o último CTE;
+- JOIN sobre cadeia de CTEs; joins contra subquery derivada linear são suportados;
 - coluna sem qualificação em query com JOIN;
 - `UNION`, `INTERSECT`, `EXCEPT`;
 - `UNNEST`, `PIVOT`, `ASOF JOIN`;
 - `TRY_CAST`, casts DECIMAL/temporais ainda sem equivalência explícita;
 - `EXTRACT` de unidades com convenções calendáricas não fixadas, como week;
+- `STDDEV`/`STDDEV_SAMP` e `VARIANCE`/`VAR_SAMP`: DuckDB usa semântica
+  amostral, enquanto MBQL `stddev`/`var` são populacionais;
+- agregações sem contrato explícito (por exemplo, `CORR`) até mapeamento
+  semântico comprovado;
 - referência `catalog.schema.table`.
 
 Falhar explicitamente é parte do contrato.
@@ -118,11 +126,13 @@ Ambos fazem o runner sair com erro. Assim implementação e classificação não
 podem divergir silenciosamente.
 
 O runner entende diretamente a suíte SQLLogicTest do DuckDB, ignorando blocos
-`statement` de setup e extraindo os blocos `query`.
+`statement` de setup e extraindo os blocos `query`. O relatório também
+contabiliza `driver_feature_counts`, separando equivalência MBQL da capacidade
+real de execução de cada driver.
 
 ## Auditoria upstream do DuckDB
 
-O workflow `.github/workflows/mbql-duckdb-conformance.yml` faz checkout
+O workflow `.github/workflows/mbql-duckdb-corpus.yml` faz checkout
 esparso de `duckdb/test/sql`, roda o corpus runner e publica o relatório como
 artifact. A auditoria é exploratória: serve para transformar a linguagem real
 testada pelo DuckDB em backlog mensurável de gaps.
@@ -138,6 +148,11 @@ DuckDB SQL
   -> POST /api/agent/v2/construct-query
   -> POST /api/agent/v1/execute
 ```
+
+Com `--database-id`, o oracle consulta as capabilities reais do driver e
+falha cedo quando a query exige algo que o backend não oferece (por exemplo,
+`nested-queries`, `expressions`, `right-join`,
+`percentile-aggregations` ou `standard-deviation-aggregations`).
 
 Com `--compare-native`, também executa o SQL em
 `/api/agent/v1/execute-sql` e compara os resultados.
