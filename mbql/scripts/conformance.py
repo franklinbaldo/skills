@@ -53,6 +53,8 @@ FEATURE_MATRIX: tuple[FeatureResult, ...] = (
     FeatureResult("select_distinct_complex", Status.AMBIGUOUS, "DISTINCT expressions/aliases/composite forms need explicit contracts"),
     FeatureResult("count_distinct", Status.SUPPORTED, "single-field COUNT DISTINCT maps to distinct aggregation"),
     FeatureResult("joins", Status.SUPPORTED, "inner/left/right/full joins with conjunctive comparisons"),
+    FeatureResult("join_subquery_linear", Status.SUPPORTED, "derived SELECT join sources map to nested join stages"),
+    FeatureResult("join_subquery_complex", Status.UNSUPPORTED, "derived join source has unstable cross-stage outputs or non-linear semantics"),
     FeatureResult("join_unqualified_column", Status.AMBIGUOUS, "without schema metadata, unqualified columns in joins cannot be attributed safely"),
     FeatureResult("subquery_linear", Status.SUPPORTED, "single derived SELECT source maps to the preceding MBQL stage"),
     FeatureResult("subquery_complex", Status.UNSUPPORTED, "aggregate/outer-join derived sources need stronger cross-stage contracts"),
@@ -166,6 +168,20 @@ def classify(sql: str) -> list[FeatureResult]:
             add("select_distinct_simple" if simple else "select_distinct_complex")
         if node.args.get("joins"):
             add("joins")
+            subquery_joins = [
+                join.this
+                for join in node.args.get("joins") or []
+                if isinstance(join.this, exp.Subquery)
+            ]
+            for subquery in subquery_joins:
+                if (
+                    isinstance(subquery.this, exp.Select)
+                    and bool(subquery.alias_or_name)
+                    and _inner_cross_stage_safe(subquery.this)
+                ):
+                    add("join_subquery_linear")
+                else:
+                    add("join_subquery_complex")
             scoped_nodes = [*node.expressions]
             if node.args.get("where"):
                 scoped_nodes.append(node.args["where"].this)
@@ -205,8 +221,19 @@ def classify(sql: str) -> list[FeatureResult]:
             add("cast_basic" if target in safe_cast_targets else "cast_unsupported")
     if any(node.find_all(exp.Window)):
         add("window")
-    if any(node.find_all(exp.Subquery)):
+    from_ = node.args.get("from_") if isinstance(node, exp.Select) else None
+    top_subquery = from_.this if from_ is not None and isinstance(from_.this, exp.Subquery) else None
+    join_subqueries = {
+        id(join.this)
+        for join in (node.args.get("joins") or [])
+        if isinstance(join.this, exp.Subquery)
+    } if isinstance(node, exp.Select) else set()
+    if top_subquery is not None:
         add("subquery_linear" if _linear_subquery_source(node) else "subquery_complex")
+    for subquery in node.find_all(exp.Subquery):
+        if subquery is top_subquery or id(subquery) in join_subqueries:
+            continue
+        add("subquery_complex")
     if any(isinstance(x, exp.Count) and isinstance(x.this, exp.Distinct) for x in node.walk()):
         add("count_distinct")
     if isinstance(node, (exp.Union, exp.Intersect, exp.Except)):
