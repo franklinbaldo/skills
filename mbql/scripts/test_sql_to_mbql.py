@@ -143,6 +143,45 @@ class SqlToMbqlTests(unittest.TestCase):
         with self.assertRaisesRegex(ConversionError, "TRIM|trim"):
             convert_sql("SELECT trim('x' FROM status) AS x FROM orders", database="Analytics")
 
+    def test_searched_case_maps_to_mbql_case(self) -> None:
+        query = convert_sql(
+            "SELECT CASE WHEN total > 100 THEN 'high' WHEN total > 0 THEN 'positive' ELSE 'other' END AS bucket "
+            "FROM orders",
+            database="Analytics",
+        )
+        total = ["field", {}, ["Analytics", "main", "orders", "total"]]
+        self.assertEqual(
+            query["stages"][0]["expressions"]["bucket"],
+            [
+                "case",
+                {},
+                [
+                    [[">", {}, total, 100], "high"],
+                    [[">", {}, total, 0], "positive"],
+                ],
+                "other",
+            ],
+        )
+
+    def test_simple_case_is_rewritten_as_explicit_equalities(self) -> None:
+        query = convert_sql(
+            "SELECT CASE status WHEN 'paid' THEN 1 WHEN 'open' THEN 2 ELSE 0 END AS code FROM orders",
+            database="Analytics",
+        )
+        status = ["field", {}, ["Analytics", "main", "orders", "status"]]
+        self.assertEqual(
+            query["stages"][0]["expressions"]["code"],
+            [
+                "case",
+                {},
+                [
+                    [["=", {}, status, "paid"], 1],
+                    [["=", {}, status, "open"], 2],
+                ],
+                0,
+            ],
+        )
+
     def test_basic_casts_map_to_native_mbql_conversion_ops(self) -> None:
         query = convert_sql(
             "SELECT cast(status AS VARCHAR) AS text_status, "
