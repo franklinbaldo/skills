@@ -370,6 +370,19 @@ class SqlToMbqlTests(unittest.TestCase):
         self.assertEqual(stage["order-by"][0][0], "desc")
         self.assertEqual(stage["limit"], 10)
 
+    def test_select_distinct_multiple_direct_columns_maps_to_breakouts(self) -> None:
+        query = convert_sql(
+            "SELECT DISTINCT status, customer_id FROM orders ORDER BY status, customer_id",
+            database="Analytics",
+        )
+        self.assertEqual(
+            query["stages"][0]["breakout"],
+            [
+                ["field", {}, ["Analytics", "main", "orders", "status"]],
+                ["field", {}, ["Analytics", "main", "orders", "customer_id"]],
+            ],
+        )
+
     @unittest.expectedFailure
     def test_select_distinct_expression_remains_ambiguous(self) -> None:
         query = convert_sql(
