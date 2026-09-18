@@ -57,7 +57,7 @@ FEATURE_MATRIX: tuple[FeatureResult, ...] = (
     FeatureResult("join_subquery_complex", Status.UNSUPPORTED, "derived join source has unstable cross-stage outputs or non-linear semantics"),
     FeatureResult("join_unqualified_column", Status.AMBIGUOUS, "without schema metadata, unqualified columns in joins cannot be attributed safely"),
     FeatureResult("subquery_linear", Status.SUPPORTED, "single derived SELECT source maps to the preceding MBQL stage"),
-    FeatureResult("subquery_complex", Status.UNSUPPORTED, "aggregate/outer-join derived sources need stronger cross-stage contracts"),
+    FeatureResult("subquery_complex", Status.UNSUPPORTED, "grouped expressions or non-linear derived sources need stronger cross-stage contracts"),
     FeatureResult("cte_linear", Status.SUPPORTED, "single non-recursive CTE used as the only source maps to linear stages"),
     FeatureResult("cte_complex", Status.UNSUPPORTED, "multiple/recursive/non-linear CTEs are outside the current stage contract"),
     FeatureResult("window", Status.AMBIGUOUS, "requires explicit cross-stage/window semantics"),
@@ -89,8 +89,6 @@ def _inner_cross_stage_safe(select: exp.Select) -> bool:
                 return False
             continue
         if grouped and not isinstance(expression, exp.Column):
-            return False
-        if grouped and alias and isinstance(expression, exp.Column) and alias.lower() != expression.name.lower():
             return False
     return True
 
