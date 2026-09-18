@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["sqlglot>=27,<29"]
+# dependencies = ["cyclopts>=3.0", "sqlglot>=27,<29"]
 # ///
 """Regression/specification tests for the DuckDB SQL -> portable MBQL converter."""
 
