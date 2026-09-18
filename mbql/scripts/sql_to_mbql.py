@@ -336,6 +336,21 @@ class Converter:
             return ["trim", {}, self._expr(node.this)]
         if isinstance(node, exp.Length):
             return ["length", {}, self._expr(node.this)]
+        if isinstance(node, exp.Case):
+            base = node.this
+            cases: list[list[Any]] = []
+            for branch in node.args.get("ifs") or []:
+                condition = branch.this
+                if base is not None:
+                    condition = exp.EQ(this=base.copy(), expression=condition.copy())
+                cases.append([self._expr(condition), self._expr(branch.args["true"])])
+            if not cases:
+                raise ConversionError("CASE sem braços WHEN não é suportado.")
+            clause: list[Any] = ["case", {}, cases]
+            default = node.args.get("default")
+            if default is not None:
+                clause.append(self._expr(default))
+            return clause
         if isinstance(node, exp.TryCast):
             raise ConversionError("TRY_CAST não tem contrato equivalente no subconjunto MBQL suportado.")
         if isinstance(node, exp.Cast):
