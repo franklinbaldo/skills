@@ -379,6 +379,45 @@ class SqlToMbqlTests(unittest.TestCase):
         )
         self.assertIn("expressions", query["stages"][0])
 
+    def test_simple_from_subquery_linearizes_to_second_stage(self) -> None:
+        query = convert_sql(
+            "SELECT id FROM (SELECT id, total FROM orders WHERE total > 10) q WHERE id > 1",
+            database="Analytics",
+        )
+        self.assertEqual(len(query["stages"]), 2)
+        inner, outer = query["stages"]
+        self.assertEqual(inner["source-table"], ["Analytics", "main", "orders"])
+        self.assertEqual(
+            outer["fields"],
+            [["field", {}, "id"]],
+        )
+        self.assertEqual(
+            outer["filters"],
+            [[">", {}, ["field", {}, "id"], 1]],
+        )
+        self.assertNotIn("source-table", outer)
+
+    def test_single_cte_single_use_linearizes_to_second_stage(self) -> None:
+        query = convert_sql(
+            "WITH x AS (SELECT id, total FROM orders WHERE total > 10) "
+            "SELECT id FROM x WHERE total < 100",
+            database="Analytics",
+        )
+        self.assertEqual(len(query["stages"]), 2)
+        self.assertEqual(query["stages"][1]["fields"], [["field", {}, "id"]])
+        self.assertEqual(
+            query["stages"][1]["filters"],
+            [["<", {}, ["field", {}, "total"], 100]],
+        )
+
+    @unittest.expectedFailure
+    def test_subquery_aggregate_alias_needs_cross_stage_name_contract(self) -> None:
+        query = convert_sql(
+            "SELECT revenue FROM (SELECT sum(total) AS revenue FROM orders) q",
+            database="Analytics",
+        )
+        self.assertEqual(query["stages"][1]["fields"], [["field", {}, "revenue"]])
+
     def test_subquery_still_fails_explicitly(self) -> None:
         with self.assertRaisesRegex(ConversionError, "subquery|Subquery|FROM"):
             convert_sql(
