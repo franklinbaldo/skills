@@ -368,24 +368,28 @@ class SqlToMbqlTests(unittest.TestCase):
             [[">=", {}, ["field", {}, "sum"], 1000]],
         )
 
-    def test_stddev_and_stddev_samp_map_to_mbql_stddev(self) -> None:
-        for sql in (
-            "SELECT stddev(total) AS spread FROM orders",
-            "SELECT stddev_samp(total) AS spread FROM orders",
-        ):
+    def test_population_stddev_and_variance_map_to_mbql(self) -> None:
+        cases = (
+            ("SELECT stddev_pop(total) AS spread FROM orders", "stddev"),
+            ("SELECT var_pop(total) AS spread FROM orders", "var"),
+        )
+        for sql, operator in cases:
             with self.subTest(sql=sql):
                 query = convert_sql(sql, database="Analytics")
                 self.assertEqual(
                     query["stages"][0]["aggregation"],
-                    [["stddev", {}, ["field", {}, ["Analytics", "main", "orders", "total"]]]],
+                    [[operator, {}, ["field", {}, ["Analytics", "main", "orders", "total"]]]],
                 )
 
-    def test_stddev_pop_fails_instead_of_using_sample_stddev(self) -> None:
-        with self.assertRaisesRegex(ConversionError, "não suportada"):
-            convert_sql(
-                "SELECT stddev_pop(total) AS spread FROM orders",
-                database="Analytics",
-            )
+    def test_sample_stddev_and_variance_fail_instead_of_changing_semantics(self) -> None:
+        for sql in (
+            "SELECT stddev(total) AS spread FROM orders",
+            "SELECT stddev_samp(total) AS spread FROM orders",
+            "SELECT variance(total) AS spread FROM orders",
+            "SELECT var_samp(total) AS spread FROM orders",
+        ):
+            with self.subTest(sql=sql), self.assertRaisesRegex(ConversionError, "não suportada"):
+                convert_sql(sql, database="Analytics")
 
     def test_count_distinct_maps_to_distinct_aggregation(self) -> None:
         query = convert_sql(
