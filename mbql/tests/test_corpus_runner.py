@@ -57,6 +57,23 @@ def test_supported_matrix_drift_is_a_contract_gap(tmp_path: Path, monkeypatch: p
     assert payload["results"][0]["error"] == "regression"
 
 
+def test_classifier_drift_is_a_classification_gap(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    corpus = tmp_path / "corpus.sql"
+    corpus.write_text("SELECT id FROM orders;", encoding="utf-8")
+
+    monkeypatch.setattr(
+        corpus_runner,
+        "_effective_status",
+        lambda sql: (corpus_runner.Status.AMBIGUOUS, ("pretend_ambiguous",)),
+    )
+    payload = corpus_runner.run_corpus(corpus, database="Analytics")
+
+    assert payload["counts"] == {"classification_gap": 1}
+    assert payload["classification_gaps"] == 1
+    assert payload["contract_gaps"] == 0
+    assert payload["results"][0]["converted"] is True
+
+
 def test_directory_corpus_is_recursive(tmp_path: Path) -> None:
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
