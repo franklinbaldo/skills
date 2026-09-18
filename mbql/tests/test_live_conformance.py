@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#   "cyclopts>=3.0",
 #   "httpx>=0.28",
 #   "pytest>=8.4",
 #   "sqlglot>=27,<29",
