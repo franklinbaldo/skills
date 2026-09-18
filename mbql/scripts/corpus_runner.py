@@ -16,7 +16,7 @@ from typing import Iterable
 from sqlglot import parse, parse_one
 from sqlglot.errors import ParseError
 
-from conformance import Status, classify
+from conformance import Status, classify, required_driver_features
 from sql_to_mbql import ConversionError, convert_sql
 
 
@@ -28,6 +28,7 @@ class CorpusResult:
     status: str
     features: tuple[str, ...]
     converted: bool
+    driver_features: tuple[str, ...] = ()
     error: str | None = None
 
 
@@ -139,6 +140,7 @@ def _run_sql(sql: str, *, source: str, index: int, database: str, schema: str | 
         )
 
     status, features = _effective_status(sql)
+    driver_features = tuple(sorted(required_driver_features(sql)))
     converted = False
     error: str | None = None
     try:
@@ -164,6 +166,7 @@ def _run_sql(sql: str, *, source: str, index: int, database: str, schema: str | 
         status=status_text,
         features=features,
         converted=converted,
+        driver_features=driver_features,
         error=error,
     )
 
@@ -193,15 +196,19 @@ def run_corpus(path: Path, *, database: str, schema: str | None = "main") -> dic
     results = [row for file in iter_corpus_files(path) for row in run_file(file, database=database, schema=schema)]
     counts: dict[str, int] = {}
     feature_counts: dict[str, int] = {}
+    driver_feature_counts: dict[str, int] = {}
     for row in results:
         counts[row.status] = counts.get(row.status, 0) + 1
         for feature in row.features:
             feature_counts[feature] = feature_counts.get(feature, 0) + 1
+        for feature in row.driver_features:
+            driver_feature_counts[feature] = driver_feature_counts.get(feature, 0) + 1
     return {
         "source": str(path),
         "statements": len(results),
         "counts": counts,
         "feature_counts": dict(sorted(feature_counts.items())),
+        "driver_feature_counts": dict(sorted(driver_feature_counts.items())),
         "contract_gaps": sum(row.status == "contract_gap" for row in results),
         "classification_gaps": sum(row.status == "classification_gap" for row in results),
         "parse_errors": sum(row.status == "parse_error" for row in results),
