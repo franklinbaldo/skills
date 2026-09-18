@@ -21,7 +21,51 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from live_conformance import LiveConformanceError, compare_results, construct, execute_mbql, execute_sql
+from live_conformance import (
+    LiveConformanceError,
+    compare_results,
+    construct,
+    ensure_driver_features,
+    execute_mbql,
+    execute_sql,
+    fetch_database_features,
+    required_driver_features,
+)
+
+
+def test_required_driver_features_are_derived_from_sql_shape() -> None:
+    assert required_driver_features(
+        "SELECT lower(o.status) FROM orders o "
+        "LEFT JOIN customers c ON o.customer_id = c.id"
+    ) == {"expressions", "left-join"}
+
+    assert required_driver_features(
+        "SELECT status, sum(total) FROM orders GROUP BY status HAVING sum(total) > 10"
+    ) == {"basic-aggregations", "nested-queries"}
+
+    assert required_driver_features(
+        "WITH x AS (SELECT id FROM orders) SELECT id FROM x"
+    ) == {"nested-queries"}
+
+
+def test_database_features_are_read_and_missing_capabilities_fail() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/database/7"
+        return httpx.Response(
+            200,
+            json={"id": 7, "engine": "mongo", "features": ["inner-join", "left-join", "expressions"]},
+        )
+
+    client = httpx.Client(base_url="https://example.test", transport=httpx.MockTransport(handler))
+    try:
+        features = fetch_database_features(client, 7)
+    finally:
+        client.close()
+
+    assert features == {"inner-join", "left-join", "expressions"}
+    ensure_driver_features({"left-join", "expressions"}, features)
+    with pytest.raises(LiveConformanceError, match="right-join"):
+        ensure_driver_features({"right-join"}, features)
 
 
 def test_construct_posts_portable_query_to_agent_api() -> None:
