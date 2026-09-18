@@ -678,6 +678,7 @@ class Converter:
         mapping: tuple[tuple[type[exp.Expression], str], ...] = (
             (exp.Sum, "sum"), (exp.Avg, "avg"), (exp.Min, "min"),
             (exp.Max, "max"), (exp.Median, "median"),
+            (exp.Stddev, "stddev"), (exp.StddevSamp, "stddev"),
         )
         for cls, operator in mapping:
             if isinstance(expression, cls):
@@ -686,7 +687,10 @@ class Converter:
 
     @staticmethod
     def _is_aggregate(node: exp.Expression) -> bool:
-        return isinstance(node, (exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max, exp.Median))
+        return isinstance(
+            node,
+            (exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max, exp.Median, exp.Stddev, exp.StddevSamp),
+        )
 
     @staticmethod
     def _aggregate_machine_base(node: exp.Expression) -> str:
@@ -694,7 +698,10 @@ class Converter:
             if isinstance(node.this, exp.Distinct) or node.args.get("distinct"):
                 return "distinct"
             return "count"
-        for cls, name in ((exp.Sum, "sum"), (exp.Avg, "avg"), (exp.Min, "min"), (exp.Max, "max"), (exp.Median, "median")):
+        for cls, name in (
+            (exp.Sum, "sum"), (exp.Avg, "avg"), (exp.Min, "min"), (exp.Max, "max"),
+            (exp.Median, "median"), (exp.Stddev, "stddev"), (exp.StddevSamp, "stddev"),
+        ):
             if isinstance(node, cls):
                 return name
         raise ConversionError(f"Agregação sem machine name conhecido: {node.sql(dialect='duckdb')}")
