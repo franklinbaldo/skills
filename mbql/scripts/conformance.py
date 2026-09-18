@@ -52,13 +52,17 @@ FEATURE_MATRIX: tuple[FeatureResult, ...] = (
     FeatureResult("select_distinct_simple", Status.SUPPORTED, "single direct column maps to breakout distinct-values semantics"),
     FeatureResult("select_distinct_complex", Status.AMBIGUOUS, "DISTINCT expressions/aliases/composite forms need explicit contracts"),
     FeatureResult("count_distinct", Status.SUPPORTED, "single-field COUNT DISTINCT maps to distinct aggregation"),
+    FeatureResult("median", Status.SUPPORTED, "DuckDB MEDIAN maps to MBQL median and requires percentile-aggregations"),
+    FeatureResult("stddev_sample", Status.SUPPORTED, "STDDEV/STDDEV_SAMP map to MBQL stddev"),
+    FeatureResult("stddev_population", Status.UNSUPPORTED, "MBQL has no distinct population-standard-deviation aggregation"),
+    FeatureResult("aggregation_unsupported", Status.UNSUPPORTED, "aggregate function has no explicit DuckDB-to-MBQL contract"),
     FeatureResult("joins", Status.SUPPORTED, "inner/left/right/full joins with conjunctive comparisons"),
     FeatureResult("join_subquery_linear", Status.SUPPORTED, "derived SELECT join sources map to nested join stages"),
     FeatureResult("join_subquery_complex", Status.UNSUPPORTED, "derived join source has unstable cross-stage outputs or non-linear semantics"),
     FeatureResult("join_unqualified_column", Status.AMBIGUOUS, "without schema metadata, unqualified columns in joins cannot be attributed safely"),
     FeatureResult("subquery_linear", Status.SUPPORTED, "single derived SELECT source maps to the preceding MBQL stage"),
     FeatureResult("subquery_complex", Status.UNSUPPORTED, "grouped expressions or non-linear derived sources need stronger cross-stage contracts"),
-    FeatureResult("cte_linear", Status.SUPPORTED, "single non-recursive CTE used as the only source maps to linear stages"),
+    FeatureResult("cte_linear", Status.SUPPORTED, "non-recursive CTEs in a strict linear chain map to successive stages"),
     FeatureResult("cte_complex", Status.UNSUPPORTED, "multiple/recursive/non-linear CTEs are outside the current stage contract"),
     FeatureResult("window", Status.AMBIGUOUS, "requires explicit cross-stage/window semantics"),
     FeatureResult("qualify", Status.UNSUPPORTED, "depends on window output semantics"),
@@ -252,6 +256,30 @@ def classify(sql: str) -> list[FeatureResult]:
         add("subquery_complex")
     if any(isinstance(x, exp.Count) and isinstance(x.this, exp.Distinct) for x in node.walk()):
         add("count_distinct")
+    if any(isinstance(x, exp.Median) for x in node.walk()):
+        add("median")
+    if any(isinstance(x, (exp.Stddev, exp.StddevSamp)) for x in node.walk()):
+        add("stddev_sample")
+    if any(isinstance(x, exp.StddevPop) for x in node.walk()):
+        add("stddev_population")
+
+    supported_aggregates = (
+        exp.Count,
+        exp.Sum,
+        exp.Avg,
+        exp.Min,
+        exp.Max,
+        exp.Median,
+        exp.Stddev,
+        exp.StddevSamp,
+    )
+    if any(
+        isinstance(item, exp.AggFunc)
+        and not isinstance(item, supported_aggregates)
+        and not isinstance(item, exp.StddevPop)
+        for item in node.walk()
+    ):
+        add("aggregation_unsupported")
     if isinstance(node, (exp.Union, exp.Intersect, exp.Except)):
         add("set_operations")
 
@@ -290,8 +318,15 @@ def required_driver_features(sql: str) -> set[str]:
         if isinstance(join.this, exp.Subquery):
             required.add("nested-queries")
 
-    if any(node.find_all(exp.AggFunc)):
+    if any(
+        isinstance(item, (exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max))
+        for item in node.walk()
+    ):
         required.add("basic-aggregations")
+    if any(isinstance(item, exp.Median) for item in node.walk()):
+        required.add("percentile-aggregations")
+    if any(isinstance(item, (exp.Stddev, exp.StddevSamp, exp.StddevPop)) for item in node.walk()):
+        required.add("standard-deviation-aggregations")
 
     expression_nodes = (
         exp.Lower,
