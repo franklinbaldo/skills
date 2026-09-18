@@ -368,6 +368,26 @@ class SqlToMbqlTests(unittest.TestCase):
             [[">=", {}, ["field", {}, "sum"], 1000]],
         )
 
+    def test_stddev_and_stddev_samp_map_to_mbql_stddev(self) -> None:
+        for sql in (
+            "SELECT stddev(total) AS spread FROM orders",
+            "SELECT stddev_samp(total) AS spread FROM orders",
+        ):
+            with self.subTest(sql=sql):
+                query = convert_sql(sql, database="Analytics")
+                self.assertEqual(
+                    query["stages"][0]["aggregation"],
+                    [["stddev", {}, ["field", {}, ["Analytics", "main", "orders", "total"]]]],
+                )
+
+    @unittest.expectedFailure
+    def test_stddev_pop_remains_semantically_distinct(self) -> None:
+        query = convert_sql(
+            "SELECT stddev_pop(total) AS spread FROM orders",
+            database="Analytics",
+        )
+        self.assertEqual(query["stages"][0]["aggregation"][0][0], "stddev-pop")
+
     def test_count_distinct_maps_to_distinct_aggregation(self) -> None:
         query = convert_sql(
             "SELECT count(DISTINCT customer_id) AS customers FROM orders",
