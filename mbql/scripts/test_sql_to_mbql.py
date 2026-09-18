@@ -123,6 +123,26 @@ class SqlToMbqlTests(unittest.TestCase):
         self.assertIn("'lower'", rendered)
         self.assertIn("'abs'", rendered)
 
+    def test_common_string_functions_map_to_mbql(self) -> None:
+        query = convert_sql(
+            "SELECT concat(status, '-', id) AS joined, substring(status, 2, 3) AS piece, "
+            "replace(status, 'a', 'b') AS replaced, trim(status) AS trimmed, length(status) AS size "
+            "FROM orders",
+            database="Analytics",
+        )
+        expressions = query["stages"][0]["expressions"]
+        status = ["field", {}, ["Analytics", "main", "orders", "status"]]
+        ident = ["field", {}, ["Analytics", "main", "orders", "id"]]
+        self.assertEqual(expressions["joined"], ["concat", {}, status, "-", ident])
+        self.assertEqual(expressions["piece"], ["substring", {}, status, 2, 3])
+        self.assertEqual(expressions["replaced"], ["replace", {}, status, "a", "b"])
+        self.assertEqual(expressions["trimmed"], ["trim", {}, status])
+        self.assertEqual(expressions["size"], ["length", {}, status])
+
+    def test_complex_trim_is_not_approximated(self) -> None:
+        with self.assertRaisesRegex(ConversionError, "TRIM|trim"):
+            convert_sql("SELECT trim('x' FROM status) AS x FROM orders", database="Analytics")
+
     def test_basic_casts_map_to_native_mbql_conversion_ops(self) -> None:
         query = convert_sql(
             "SELECT cast(status AS VARCHAR) AS text_status, "
