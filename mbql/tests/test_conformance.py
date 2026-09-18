@@ -46,6 +46,8 @@ SCALAR_PROJECTIONS = (
     "replace(status, 'a', 'b') AS replaced_status",
     "trim(status) AS trimmed_status",
     "length(status) AS status_length",
+    "CASE WHEN total > 100 THEN 'high' ELSE 'low' END AS bucket",
+    "CASE status WHEN 'paid' THEN 1 ELSE 0 END AS paid_code",
 )
 
 
@@ -73,7 +75,7 @@ def assert_mbql_shape(query: dict[str, Any]) -> None:
             "and", "or", "not", "=", "!=", ">", ">=", "<", "<=", "+", "-", "*", "/", "mod",
             "between", "in", "is-null", "not-null", "contains", "starts-with", "ends-with", "asc", "desc",
             "lower", "upper", "coalesce", "abs", "text", "integer", "float",
-            "concat", "substring", "replace", "trim", "length",
+            "concat", "substring", "replace", "trim", "length", "case",
         }:
             assert len(clause) >= 2
             assert isinstance(clause[1], dict), clause
@@ -163,6 +165,7 @@ def test_feature_report_has_three_explicit_outcomes_and_zero_silent_mismatch_bud
         ("SELECT lower(status) AS s FROM orders", "scalar_functions_common", Status.SUPPORTED),
         ("SELECT cast(total AS INTEGER) AS n FROM orders", "cast_basic", Status.SUPPORTED),
         ("SELECT substring(status, 2, 3) AS s FROM orders", "string_functions_common", Status.SUPPORTED),
+        ("SELECT CASE WHEN total > 0 THEN 1 ELSE 0 END AS positive FROM orders", "case_expression", Status.SUPPORTED),
         ("SELECT cast(total AS DECIMAL(18,2)) AS n FROM orders", "cast_unsupported", Status.UNSUPPORTED),
         ("SELECT name FROM orders o JOIN customers c ON o.customer_id = c.id", "join_unqualified_column", Status.AMBIGUOUS),
         ("SELECT DISTINCT status FROM orders", "select_distinct_simple", Status.SUPPORTED),
