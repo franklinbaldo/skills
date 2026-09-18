@@ -123,6 +123,28 @@ class SqlToMbqlTests(unittest.TestCase):
         self.assertIn("'lower'", rendered)
         self.assertIn("'abs'", rendered)
 
+    def test_basic_casts_map_to_native_mbql_conversion_ops(self) -> None:
+        query = convert_sql(
+            "SELECT cast(status AS VARCHAR) AS text_status, "
+            "cast(total AS INTEGER) AS int_total, cast(total AS DOUBLE) AS float_total FROM orders",
+            database="Analytics",
+        )
+        expressions = query["stages"][0]["expressions"]
+        status = ["field", {}, ["Analytics", "main", "orders", "status"]]
+        total = ["field", {}, ["Analytics", "main", "orders", "total"]]
+        self.assertEqual(expressions["text_status"], ["text", {}, status])
+        self.assertEqual(expressions["int_total"], ["integer", {}, total])
+        self.assertEqual(expressions["float_total"], ["float", {}, total])
+
+    def test_unsafe_cast_families_fail_explicitly(self) -> None:
+        for sql in (
+            "SELECT cast(total AS DECIMAL(18,2)) AS x FROM orders",
+            "SELECT cast(created_at AS DATE) AS x FROM orders",
+            "SELECT try_cast(status AS INTEGER) AS x FROM orders",
+        ):
+            with self.subTest(sql=sql), self.assertRaisesRegex(ConversionError, "CAST|cast|convers"):
+                convert_sql(sql, database="Analytics")
+
     def test_in_between_like_and_null_predicates(self) -> None:
         query = convert_sql(
             "SELECT id FROM orders "
