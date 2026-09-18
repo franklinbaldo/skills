@@ -152,6 +152,7 @@ def test_feature_report_has_three_explicit_outcomes_and_zero_silent_mismatch_bud
     [
         ("SELECT id FROM orders WHERE total > 10", "where", Status.SUPPORTED),
         ("SELECT lower(status) AS s FROM orders", "scalar_functions_common", Status.SUPPORTED),
+        ("SELECT name FROM orders o JOIN customers c ON o.customer_id = c.id", "join_unqualified_column", Status.AMBIGUOUS),
         ("SELECT DISTINCT status FROM orders", "select_distinct_simple", Status.SUPPORTED),
         ("SELECT DISTINCT lower(status) FROM orders", "select_distinct_complex", Status.AMBIGUOUS),
         ("SELECT id FROM orders LIMIT 10 OFFSET 20", "offset_aligned", Status.SUPPORTED),
