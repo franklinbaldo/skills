@@ -50,6 +50,7 @@ class Converter:
         self.projection_positions: list[exp.Expression] = []
         self.projection_position_aliases: list[str | None] = []
         self.breakout_aliases: set[str] = set()
+        self.cross_stage_alias: str | None = None
         self._aggregation_name_counts: Counter[str] = Counter()
 
     def convert(self, sql: str) -> dict[str, Any]:
@@ -60,22 +61,83 @@ class Converter:
 
         if not isinstance(node, exp.Select):
             raise ConversionError("O conversor aceita apenas uma instrução SELECT por vez.")
-        if node.args.get("with_"):
-            raise ConversionError("CTEs ainda não são suportadas; materialize ou simplifique a consulta.")
+        return self._convert_select(node)
+
+    def _convert_select(self, node: exp.Select) -> dict[str, Any]:
+        with_ = node.args.get("with_")
+        if with_ is not None:
+            return self._convert_single_cte(node, with_)
         if any(node.find_all(exp.Window)):
             raise ConversionError("Window functions ainda não são suportadas.")
         if node.args.get("qualify"):
             raise ConversionError("QUALIFY ainda não é suportado.")
 
         from_ = node.args.get("from_")
-        if from_ is None or not isinstance(from_.this, exp.Table):
-            raise ConversionError("FROM deve apontar diretamente para uma tabela; subquery ainda não é suportada.")
+        if from_ is None:
+            raise ConversionError("SELECT sem FROM ainda não tem contrato portátil nesta skill.")
+        if isinstance(from_.this, exp.Subquery):
+            return self._convert_linear_subquery(node, from_.this)
+        if not isinstance(from_.this, exp.Table):
+            raise ConversionError("FROM deve apontar para tabela ou subquery SELECT linear.")
 
         self.source = self._register_table(from_.this)
         stage: dict[str, Any] = {
             "lib/type": "mbql.stage/mbql",
             "source-table": self.source.portable,
         }
+        return self._compile_stage(node, stage)
+
+    def _convert_single_cte(self, node: exp.Select, with_: exp.With) -> dict[str, Any]:
+        if bool(with_.args.get("recursive")):
+            raise ConversionError("WITH RECURSIVE ainda não é suportado.")
+        if len(with_.expressions) != 1:
+            raise ConversionError("Apenas um CTE linear é suportado; múltiplos CTEs permanecem fora do contrato.")
+        cte = with_.expressions[0]
+        if not isinstance(cte, exp.CTE) or not isinstance(cte.this, exp.Select):
+            raise ConversionError("CTE deve conter um SELECT simples.")
+        alias = cte.alias_or_name
+        from_ = node.args.get("from_")
+        if from_ is None or not isinstance(from_.this, exp.Table) or from_.this.name.lower() != alias.lower():
+            raise ConversionError("CTE suportado deve ser a fonte única da query externa.")
+        outer = node.copy()
+        outer.set("with_", None)
+        return self._convert_linear_source(outer, cte.this, alias)
+
+    def _convert_linear_subquery(self, node: exp.Select, subquery: exp.Subquery) -> dict[str, Any]:
+        if not isinstance(subquery.this, exp.Select):
+            raise ConversionError("Subquery em FROM deve conter SELECT.")
+        alias = subquery.alias_or_name
+        if not alias:
+            raise ConversionError("Subquery em FROM precisa de alias para refs cross-stage.")
+        return self._convert_linear_source(node, subquery.this, alias)
+
+    def _convert_linear_source(
+        self,
+        outer: exp.Select,
+        inner: exp.Select,
+        alias: str,
+    ) -> dict[str, Any]:
+        if outer.args.get("joins"):
+            raise ConversionError("JOIN sobre subquery/CTE linear ainda não é suportado.")
+        if any(self._is_aggregate(self._unwrap_alias(item)[0]) for item in inner.expressions):
+            raise ConversionError(
+                "Agregação na fonte derivada ainda não preserva aliases SQL como machine names MBQL; "
+                "há xfail específico para esse contrato."
+            )
+
+        inner_query = Converter(database=self.database, default_schema=self.default_schema).convert(
+            inner.sql(dialect="duckdb")
+        )
+        self.cross_stage_alias = alias
+        self.source = None
+        stage: dict[str, Any] = {"lib/type": "mbql.stage/mbql"}
+        compiled = self._compile_stage(outer, stage)
+        return {
+            "lib/type": "mbql/query",
+            "stages": [*inner_query["stages"], *compiled["stages"]],
+        }
+
+    def _compile_stage(self, node: exp.Select, stage: dict[str, Any]) -> dict[str, Any]:
         self._register_projection_metadata(node)
 
         joins = node.args.get("joins") or []
@@ -294,6 +356,12 @@ class Converter:
         raise ConversionError(f"Tipo de JOIN ainda não suportado: {side or kind}")
 
     def _field(self, column: exp.Column) -> list[Any]:
+        if self.cross_stage_alias is not None:
+            if column.table and column.table.lower() != self.cross_stage_alias.lower():
+                raise ConversionError(
+                    f"Alias desconhecido em ref cross-stage {column.sql()!r}; esperado {self.cross_stage_alias!r}."
+                )
+            return ["field", {}, column.name]
         if column.table:
             ref = self.tables.get(column.table.lower())
             if ref is None:
