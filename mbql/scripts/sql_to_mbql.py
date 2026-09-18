@@ -52,6 +52,7 @@ class Converter:
         self.breakout_aliases: set[str] = set()
         self.cross_stage_alias: str | None = None
         self.cross_stage_name_map: dict[str, str] = {}
+        self.derived_join_name_maps: dict[str, dict[str, str]] = {}
         self._aggregation_name_counts: Counter[str] = Counter()
 
     def convert(self, sql: str) -> dict[str, Any]:
@@ -340,9 +341,25 @@ class Converter:
         return ref
 
     def _join(self, join: exp.Join) -> dict[str, Any]:
-        if not isinstance(join.this, exp.Table):
-            raise ConversionError("JOIN em subquery ainda não é suportado.")
-        table = self._register_table(join.this, joined=True)
+        alias: str | None = None
+        stages: list[dict[str, Any]]
+
+        if isinstance(join.this, exp.Table):
+            table = self._register_table(join.this, joined=True)
+            alias = table.join_alias
+            stages = [{"lib/type": "mbql.stage/mbql", "source-table": table.portable}]
+        elif isinstance(join.this, exp.Subquery) and isinstance(join.this.this, exp.Select):
+            alias = join.this.alias_or_name
+            if not alias:
+                raise ConversionError("JOIN em subquery precisa de alias.")
+            self._validate_cross_stage_outputs(join.this.this)
+            inner_converter = Converter(database=self.database, default_schema=self.default_schema)
+            inner_query = inner_converter.convert(join.this.this.sql(dialect="duckdb"))
+            stages = inner_query["stages"]
+            self.derived_join_name_maps[alias.lower()] = dict(inner_converter.aggregation_alias_outputs)
+        else:
+            raise ConversionError("JOIN suporta tabela direta ou subquery SELECT linear.")
+
         on = join.args.get("on")
         if on is None:
             raise ConversionError("JOIN sem ON ainda não é suportado.")
@@ -351,9 +368,9 @@ class Converter:
         if any(not isinstance(clause, list) or not clause or clause[0] not in allowed for clause in conditions):
             raise ConversionError("JOIN ON suporta apenas comparações ligadas por AND.")
         return {
-            "alias": table.join_alias,
+            "alias": alias,
             "strategy": self._join_strategy(join),
-            "stages": [{"lib/type": "mbql.stage/mbql", "source-table": table.portable}],
+            "stages": stages,
             "conditions": conditions,
         }
 
@@ -372,6 +389,11 @@ class Converter:
         raise ConversionError(f"Tipo de JOIN ainda não suportado: {side or kind}")
 
     def _field(self, column: exp.Column) -> list[Any]:
+        if column.table:
+            derived_map = self.derived_join_name_maps.get(column.table.lower())
+            if derived_map is not None:
+                name = derived_map.get(column.name.lower(), column.name)
+                return ["field", {"join-alias": column.table}, name]
         if self.cross_stage_alias is not None:
             if column.table and column.table.lower() != self.cross_stage_alias.lower():
                 raise ConversionError(
@@ -386,7 +408,7 @@ class Converter:
         else:
             if self.source is None:
                 raise AssertionError("source not initialized")
-            if any(table.join_alias for table in self.tables.values()):
+            if self.derived_join_name_maps or any(table.join_alias for table in self.tables.values()):
                 raise ConversionError(
                     f"Coluna sem qualificação em query com JOIN é ambígua: {column.name!r}; "
                     "qualifique com o alias/tabela de origem."
