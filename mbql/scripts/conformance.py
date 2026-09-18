@@ -104,18 +104,36 @@ def _linear_subquery_source(node: exp.Select) -> bool:
 
 def _linear_cte_source(node: exp.Select) -> bool:
     with_ = node.args.get("with_")
-    if with_ is None or bool(with_.args.get("recursive")) or len(with_.expressions) != 1:
+    if with_ is None or bool(with_.args.get("recursive")) or not with_.expressions:
         return False
-    cte = with_.expressions[0]
-    if not isinstance(cte, exp.CTE) or not isinstance(cte.this, exp.Select) or not _inner_cross_stage_safe(cte.this):
-        return False
+
+    previous_alias: str | None = None
+    for index, cte in enumerate(with_.expressions):
+        if not isinstance(cte, exp.CTE) or not isinstance(cte.this, exp.Select):
+            return False
+        if not _inner_cross_stage_safe(cte.this):
+            return False
+        if index > 0:
+            from_ = cte.this.args.get("from_")
+            if (
+                from_ is None
+                or not isinstance(from_.this, exp.Table)
+                or previous_alias is None
+                or from_.this.name.lower() != previous_alias.lower()
+                or cte.this.args.get("joins")
+            ):
+                return False
+        previous_alias = cte.alias_or_name
+
     from_ = node.args.get("from_")
     return (
         from_ is not None
         and isinstance(from_.this, exp.Table)
-        and from_.this.name.lower() == cte.alias_or_name.lower()
+        and previous_alias is not None
+        and from_.this.name.lower() == previous_alias.lower()
         and not node.args.get("joins")
     )
+
 
 def classify(sql: str) -> list[FeatureResult]:
     node = parse_one(sql, read="duckdb")
