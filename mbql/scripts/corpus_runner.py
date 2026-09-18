@@ -141,17 +141,19 @@ def _run_sql(sql: str, *, source: str, index: int, database: str, schema: str | 
     status, features = _effective_status(sql)
     converted = False
     error: str | None = None
+    try:
+        convert_sql(sql, database=database, schema=schema)
+        converted = True
+    except ConversionError as exc:
+        error = str(exc)
+
     if status is Status.SUPPORTED:
-        try:
-            convert_sql(sql, database=database, schema=schema)
-            converted = True
-        except ConversionError as exc:
-            # This is a contract bug, not an ordinary unsupported query: the
-            # feature matrix said every feature was supported.
-            status_text = "contract_gap"
-            error = str(exc)
-        else:
-            status_text = status.value
+        status_text = status.value if converted else "contract_gap"
+    elif converted:
+        # The implementation has outrun the feature matrix. This is useful
+        # progress, but leaving the classifier stale would make coverage lie.
+        status_text = "classification_gap"
+        error = None
     else:
         status_text = status.value
 
@@ -201,6 +203,7 @@ def run_corpus(path: Path, *, database: str, schema: str | None = "main") -> dic
         "counts": counts,
         "feature_counts": dict(sorted(feature_counts.items())),
         "contract_gaps": sum(row.status == "contract_gap" for row in results),
+        "classification_gaps": sum(row.status == "classification_gap" for row in results),
         "parse_errors": sum(row.status == "parse_error" for row in results),
         "results": [asdict(row) for row in results],
     }
@@ -216,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
 
     payload = run_corpus(args.path, database=args.database, schema=args.schema or None)
     print(json.dumps(payload, ensure_ascii=False, indent=None if args.compact else 2))
-    return 1 if payload["contract_gaps"] else 0
+    return 1 if payload["contract_gaps"] or payload["classification_gaps"] else 0
 
 
 if __name__ == "__main__":
