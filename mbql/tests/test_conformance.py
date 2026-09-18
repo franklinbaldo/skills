@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#   "cyclopts>=3.0",
 #   "duckdb>=1.4",
 #   "hypothesis>=6.140",
 #   "pytest>=8.4",
