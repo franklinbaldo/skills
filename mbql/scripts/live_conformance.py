@@ -20,7 +20,7 @@ from typing import Any
 
 import httpx
 from sql_to_mbql import ConversionError, convert_sql
-from sqlglot import parse_one
+from sqlglot import exp, parse_one
 
 
 class LiveConformanceError(RuntimeError):
@@ -56,6 +56,92 @@ def _post(client: httpx.Client, path: str, payload: dict[str, Any]) -> dict[str,
     if not isinstance(body, dict):
         raise LiveConformanceError(f"Resposta inesperada de {path}: {body!r}")
     return body
+
+
+def _get(client: httpx.Client, path: str) -> dict[str, Any]:
+    response = client.get(path)
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise LiveConformanceError(
+            f"Metabase devolveu resposta não JSON em {path}: HTTP {response.status_code}"
+        ) from exc
+    if response.status_code >= 400:
+        raise LiveConformanceError(f"Metabase rejeitou {path}: HTTP {response.status_code}: {body}")
+    if not isinstance(body, dict):
+        raise LiveConformanceError(f"Resposta inesperada de {path}: {body!r}")
+    return body
+
+
+def fetch_database_features(client: httpx.Client, database_id: int) -> set[str]:
+    body = _get(client, f"/api/database/{database_id}")
+    features = body.get("features")
+    if not isinstance(features, list) or not all(isinstance(item, str) for item in features):
+        raise LiveConformanceError(
+            f"Database {database_id} não devolveu lista de features utilizável: {body}"
+        )
+    return set(features)
+
+
+def ensure_driver_features(required: set[str], available: set[str]) -> None:
+    missing = sorted(required - available)
+    if missing:
+        raise LiveConformanceError(
+            "Driver do database não suporta capabilities exigidas pela query: "
+            + ", ".join(missing)
+        )
+
+
+def required_driver_features(sql: str) -> set[str]:
+    node = parse_one(sql, read="duckdb")
+    required: set[str] = set()
+
+    if node.args.get("with_") or any(node.find_all(exp.Subquery)):
+        required.add("nested-queries")
+    if isinstance(node, exp.Select) and node.args.get("having"):
+        required.add("nested-queries")
+
+    for join in node.find_all(exp.Join):
+        side = (join.args.get("side") or "").upper()
+        kind = (join.args.get("kind") or "").upper()
+        if side == "LEFT":
+            required.add("left-join")
+        elif side == "RIGHT":
+            required.add("right-join")
+        elif side == "FULL":
+            required.add("full-join")
+        elif kind in {"", "INNER"}:
+            required.add("inner-join")
+        if isinstance(join.this, exp.Subquery):
+            required.add("nested-queries")
+
+    if any(node.find_all(exp.AggFunc)):
+        required.add("basic-aggregations")
+
+    expression_nodes = (
+        exp.Lower,
+        exp.Upper,
+        exp.Coalesce,
+        exp.Abs,
+        exp.Concat,
+        exp.Substring,
+        exp.Replace,
+        exp.Trim,
+        exp.Length,
+        exp.If,
+        exp.Case,
+        exp.Extract,
+        exp.Cast,
+        exp.Add,
+        exp.Sub,
+        exp.Mul,
+        exp.Div,
+        exp.Mod,
+    )
+    if any(isinstance(item, expression_nodes) for item in node.walk()):
+        required.add("expressions")
+
+    return required
 
 
 def normalize_rows(rows: list[list[Any]] | list[tuple[Any, ...]]) -> list[list[Any]]:
@@ -124,9 +210,19 @@ def run_live(
     database_id: int | None = None,
 ) -> dict[str, Any]:
     mbql = convert_sql(sql, database=database, schema=schema)
+    required_features = required_driver_features(sql)
     with httpx.Client(base_url=url.rstrip("/"), headers=_headers(api_key), timeout=60.0) as client:
+        result: dict[str, Any] = {
+            "sql": sql,
+            "mbql": mbql,
+            "required_driver_features": sorted(required_features),
+        }
+        if database_id is not None:
+            available_features = fetch_database_features(client, database_id)
+            ensure_driver_features(required_features, available_features)
+            result["driver_features_checked"] = True
         opaque = construct(client, mbql)
-        result: dict[str, Any] = {"sql": sql, "mbql": mbql, "construct": "ok"}
+        result["construct"] = "ok"
         if execute or compare_native:
             mbql_result = execute_mbql(client, opaque)
             result["mbql_execution"] = {
