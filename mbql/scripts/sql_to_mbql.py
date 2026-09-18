@@ -311,6 +311,31 @@ class Converter:
             return ["coalesce", {}, *[self._expr(item) for item in args if item is not None]]
         if isinstance(node, exp.Abs):
             return ["abs", {}, self._expr(node.this)]
+        if isinstance(node, exp.Concat):
+            return ["concat", {}, *[self._expr(item) for item in node.expressions]]
+        if isinstance(node, exp.Substring):
+            args = ["substring", {}, self._expr(node.this)]
+            start = node.args.get("start")
+            length = node.args.get("length")
+            if start is not None:
+                args.append(self._expr(start))
+            if length is not None:
+                args.append(self._expr(length))
+            return args
+        if isinstance(node, exp.Replace):
+            return [
+                "replace",
+                {},
+                self._expr(node.this),
+                self._expr(node.expression),
+                self._expr(node.args.get("replacement")),
+            ]
+        if isinstance(node, exp.Trim):
+            if node.expression is not None or node.args.get("position") is not None:
+                raise ConversionError("TRIM com caracteres/direção explícitos ainda não tem contrato MBQL nesta skill.")
+            return ["trim", {}, self._expr(node.this)]
+        if isinstance(node, exp.Length):
+            return ["length", {}, self._expr(node.this)]
         if isinstance(node, exp.TryCast):
             raise ConversionError("TRY_CAST não tem contrato equivalente no subconjunto MBQL suportado.")
         if isinstance(node, exp.Cast):
