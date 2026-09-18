@@ -1,18 +1,18 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["sqlglot>=27,<29"]
+# dependencies = ["cyclopts>=3.0", "sqlglot>=27,<29"]
 # ///
 """Classify DuckDB SQL features against the MBQL converter contract."""
 
 from __future__ import annotations
 
-import argparse
 import json
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Iterable
 
+import cyclopts
 from sqlglot import exp, parse_one
 
 
@@ -373,15 +373,16 @@ def report(rows: Iterable[FeatureResult] = FEATURE_MATRIX) -> dict[str, object]:
     }
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("sql", nargs="?", help="optional DuckDB SQL to classify")
-    parser.add_argument("--compact", action="store_true")
-    args = parser.parse_args()
-    payload: object = report() if not args.sql else [asdict(row) for row in classify(args.sql)]
-    print(json.dumps(payload, ensure_ascii=False, indent=None if args.compact else 2))
+app = cyclopts.App(name="mbql-conformance", help=__doc__)
+
+
+@app.default
+def main(sql: str | None = None, *, compact: bool = False) -> int:
+    """Print the feature matrix or classify one DuckDB SQL query."""
+    payload: object = report() if not sql else [asdict(row) for row in classify(sql)]
+    print(json.dumps(payload, ensure_ascii=False, indent=None if compact else 2))
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(app())
