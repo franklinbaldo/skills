@@ -289,7 +289,7 @@ def classify(sql: str) -> list[FeatureResult]:
     if isinstance(node, (exp.Union, exp.Intersect, exp.Except)):
         add("set_operations")
 
-    normalized = node.sql(dialect="duckdb").upper()
+    normalized = sql.upper()
     if "UNNEST(" in normalized:
         add("unnest")
     if "PIVOT" in normalized:
