@@ -26,8 +26,7 @@ jobs:
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
-      - name: Diagnose formatting
-        run: |
-          uv run scripts/check_markdown_format.py --fix --files toe-arena-tiering/SKILL.md
-          git diff -- toe-arena-tiering/SKILL.md
-          exit 1
+      - name: Check formatting
+        # No --base flag: the script reads GITHUB_ACTIONS/GITHUB_BASE_REF
+        # itself and picks the right diff base for pull_request vs push.
+        run: uv run scripts/check_markdown_format.py
