@@ -19,6 +19,28 @@ biological connectome: sensory information should enter through plausible channe
 reinforcement through plausible teaching/modulatory pathways, internal state through
 plausible state variables, and actions through plausible descending/motor circuits.
 
+## Multiscale rule
+
+Do not assume one domain problem has only one feedback loop. Before mapping a concept, identify
+the relevant **level(s) of organization** and allow several to operate concurrently.
+
+Typical levels:
+
+- `micro`: one immediate interaction, action, observation, or local decision;
+- `episode`: one case/task/encounter unfolding over time;
+- `peer_context`: related concurrent or recent cases/events that change expectations;
+- `institutional`: precedent, policy, organizational rules, norms, repeated-agent behavior;
+- `population`: aggregate frequencies, reputation, social learning, ecological statistics;
+- `long_horizon`: structural adaptation across many episodes.
+
+A signal from another level is not automatically a reward. Classify it first as observation,
+context, prediction update, social evidence, value signal, cost, constraint, or
+reinforcement. The same external event may have different roles at different levels.
+
+In Drosophila terms, multiscale context can correspond to combinations of sensory input,
+memory, neuromodulatory state, internal drive, social-history state, and recurrent circuit
+state rather than a single scalar channel.
+
 ## Core operation
 
 Given a domain concept:
