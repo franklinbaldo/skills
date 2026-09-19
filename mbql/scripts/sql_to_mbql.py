@@ -36,6 +36,14 @@ class TableRef:
         return [self.database, self.schema, self.table]
 
 
+def _safe_sql(node: exp.Expression) -> str:
+    """Render an expression for diagnostics without letting sqlglot generator bugs escape."""
+    try:
+        return node.sql(dialect="duckdb")
+    except Exception:
+        return f"<{type(node).__name__}>"
+
+
 class Converter:
     def __init__(self, *, database: str, default_schema: str | None = "main") -> None:
         self.database = database
@@ -357,7 +365,7 @@ class Converter:
             if group_exprs:
                 if not self._matches_any(expression, group_exprs):
                     raise ConversionError(
-                        f"Projeção não agregada fora do GROUP BY: {expression.sql(dialect='duckdb')}"
+                        f"Projeção não agregada fora do GROUP BY: {_safe_sql(expression)}"
                     )
                 if alias:
                     self.breakout_aliases.add(alias.lower())
@@ -478,7 +486,7 @@ class Converter:
         if self.cross_stage_alias is not None:
             if column.table and column.table.lower() != self.cross_stage_alias.lower():
                 raise ConversionError(
-                    f"Alias desconhecido em ref cross-stage {column.sql()!r}; esperado {self.cross_stage_alias!r}."
+                    f"Alias desconhecido em ref cross-stage {_safe_sql(column)!r}; esperado {self.cross_stage_alias!r}."
                 )
             name = self.cross_stage_name_map.get(column.name.lower(), column.name)
             return ["field", {}, name]
@@ -640,7 +648,7 @@ class Converter:
             if isinstance(node, cls):
                 return [operator, {}, self._expr(node.this), self._expr(node.expression)]
         raise ConversionError(
-            f"Expressão DuckDB ainda não suportada: {node.sql(dialect='duckdb')} ({type(node).__name__})"
+            f"Expressão DuckDB ainda não suportada: {_safe_sql(node)} ({type(node).__name__})"
         )
 
     def _like(self, node: exp.Expression, *, case_sensitive: bool) -> list[Any]:
