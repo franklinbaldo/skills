@@ -44,3 +44,25 @@ pathway and changes behavior/learning. Anatomical connectivity alone supports a 
 ## Legal-process translation
 
 The legal map is intentionally a computational analogy. It does not claim that litigation has a biological homolog. Experiment-driving use should ground reward/punishment/social-reliability mechanisms in Drosophila evidence from the RL/game-theory maps and treat legal stages as the external environment/state machine.
+
+
+## Mechanosensation, audition, thermosensation and wearables
+
+- Eberl et al. review of Johnston's organ development and active mechanics; JO is a major
+  Drosophila auditory/mechanosensory organ sensitive to near-field courtship sound:
+  https://pmc.ncbi.nlm.nih.gov/articles/PMC3417114/
+- Review of the Drosophila auditory system; Johnston's organ projects into the antennal
+  mechanosensory and motor center and supports hearing, gravity and wind sensing:
+  https://pmc.ncbi.nlm.nih.gov/articles/PMC4007284/
+- Tuthill & Wilson review of insect mechanosensation and adaptive motor control, including
+  chordotonal proprioception and Drosophila Johnston's organ:
+  https://pmc.ncbi.nlm.nih.gov/articles/PMC5120761/
+- Review of Drosophila thermosensation and temperature preference; peripheral hot and cool
+  cells project through dedicated thermal pathways:
+  https://pmc.ncbi.nlm.nih.gov/articles/PMC10741703/
+- Carta, Vestergaard & Poulet review of thermal encoding across mammals and insects,
+  including Drosophila thermosensory circuits:
+  https://www.nature.com/articles/s41583-025-01001-5
+
+Human wearable locations and actuator modalities are engineered choices. These references
+support the fly-side sensory mapping, not claims about human haptic safety thresholds.
