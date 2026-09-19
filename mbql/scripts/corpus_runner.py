@@ -111,8 +111,9 @@ def _expressions_from_file(path: Path) -> tuple[list[str], str | None]:
         for sql in statements:
             try:
                 normalized.append(parse_one(sql, read="duckdb").sql(dialect="duckdb"))
-            except ParseError:
-                # Preserve the original query so it appears as a parse_error row.
+            except Exception:
+                # Corpus fuzzing must preserve parser-internal failures as
+                # parse_error rows rather than aborting the whole audit.
                 normalized.append(sql)
         return normalized, None
 
@@ -128,7 +129,7 @@ def _run_sql(sql: str, *, source: str, index: int, database: str, schema: str | 
         # Parse once here so SQLLogicTest extraction failures are visible rather
         # than becoming misleading `unclassified` results.
         parse_one(sql, read="duckdb")
-    except ParseError as exc:
+    except Exception as exc:
         return CorpusResult(
             source=source,
             index=index,
