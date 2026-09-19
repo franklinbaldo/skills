@@ -118,6 +118,7 @@ Load the closest file:
 - `references/control-and-optimization.md`
 - `references/operations-and-production.md`
 - `references/law-and-litigation.md`
+- `references/haptics-and-wearables.md`
 
 If the domain is absent, start from the nearest map, create a provisional mapping, and mark
 it `evidence_needed`. Do not silently treat a nearby discipline as equivalent.
