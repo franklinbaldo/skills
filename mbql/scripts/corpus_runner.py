@@ -147,8 +147,8 @@ def _run_sql(sql: str, *, source: str, index: int, database: str, schema: str | 
     try:
         convert_sql(sql, database=database, schema=schema)
         converted = True
-    except ConversionError as exc:
-        error = str(exc)
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
 
     if status is Status.SUPPORTED:
         status_text = status.value if converted else "contract_gap"
