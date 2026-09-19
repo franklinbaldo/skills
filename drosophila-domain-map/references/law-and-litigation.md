@@ -156,3 +156,75 @@ O reward terminal pode representar resultado líquido, mas os sinais intermediá
 separados em valência, informação, custo e confiabilidade social. O teste interessante é se o
 MaleCNS consegue aprender uma política robusta sob esses loops melhor ou com menos dados/compute
 que controles pareados.
+
+
+## Multilevel legal feedback
+
+A single lawsuit is embedded in other active feedback loops. The legal state available to a
+party or lawyer is not only the local record of that case.
+
+### Levels that can operate simultaneously
+
+| Level | Example legal signal | Computational role | Fly-side analogy |
+|---|---|---|---|
+| local act | a contestação exposes a factual inconsistency | immediate observation / negative prediction update | aversive or corrective teaching signal plus new sensory evidence |
+| case trajectory | repeated favorable interlocutory decisions | evolving episode value | recurrent value/context state accumulated over one behavioral episode |
+| peer cases | similar cases are won or lost elsewhere | external evidence about transition/reward probabilities | social/environmental observation that updates policy without being direct reward |
+| precedent | STF/STJ decides a materially similar issue | institutional state change constraining future actions | learned environmental regularity / strong contextual memory |
+| pending leading case | tema repetitivo/repercussão geral may soon be decided | uncertainty over future regime | latent environmental state / hazard that changes policy before resolution |
+| jurisprudential trend | several courts converge or diverge | population-level statistical evidence | social/population evidence accumulated over repeated encounters |
+| reputation | lawyer/court/opponent has a known reliability pattern | meta-belief about signal source | learned trust/reliability of another agent or cue |
+| legislative change | governing rule changes | transition-model change | environment dynamics changed; previous policy may need reacquisition |
+
+### Important distinction: external evidence versus reinforcement
+
+Suppose a party's own case has not changed, but ten similar cases were just decided against
+the same thesis. That information may sharply lower expected value. It is usually better
+modeled first as **external evidence about the environment**, not as ten direct punishments
+to the focal agent.
+
+Only when that information changes the focal agent's own experienced outcome should it count
+as direct reinforcement. Before that, it is closer to:
+
+- social learning;
+- observational learning;
+- model update;
+- context modulation;
+- reliability-weighted evidence.
+
+This matters experimentally because broadcasting every neighboring-case result as reward would
+leak privileged global information into the agent. A biologically grounded translation should
+decide which signals the agent can actually observe and through which sensory/social-memory
+channel they arrive.
+
+### Coupled loops
+
+A useful legal simulation can therefore maintain several coupled state variables:
+
+```text
+local_case_state
+peer_case_context
+precedent_state
+institutional_regime
+source_reliability
+agent_expectation
+action_policy
+```
+
+The action policy for the focal case is updated by all of them, but through different
+mechanisms. This is closer to a fly whose current behavior depends simultaneously on present
+sensory input, learned associations, internal motivational state, recent social outcomes and
+longer-term memory.
+
+### Experimental implication
+
+When translating a legal task to MaleCNS, define for every nonlocal signal:
+
+1. who can observe it;
+2. when it becomes observable;
+3. whether it is direct reward, contextual evidence, social evidence, or institutional state;
+4. what memory timescale it should affect;
+5. whether the same information is available to the matched control.
+
+This prevents an unrealistic omniscient legal agent and makes cross-case information part of
+the biological interface rather than hidden simulator privilege.
