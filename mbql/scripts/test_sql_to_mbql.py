@@ -559,10 +559,10 @@ class SqlToMbqlTests(unittest.TestCase):
         )
         self.assertEqual(query["stages"][1]["fields"], [["field", {}, "s"]])
 
-    def test_subquery_still_fails_explicitly(self) -> None:
-        with self.assertRaisesRegex(ConversionError, "subquery|Subquery|FROM"):
+    def test_in_subquery_still_fails_explicitly(self) -> None:
+        with self.assertRaisesRegex(ConversionError, "subquery|Subquery"):
             convert_sql(
-                "SELECT id FROM (SELECT id FROM orders) q",
+                "SELECT id FROM orders WHERE id IN (SELECT id FROM customers)",
                 database="Analytics",
             )
 
