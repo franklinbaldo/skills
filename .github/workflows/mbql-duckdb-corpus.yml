@@ -2,6 +2,10 @@ name: MBQL DuckDB corpus audit
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "mbql/**"
+      - ".github/workflows/mbql-duckdb-corpus.yml"
   schedule:
     - cron: "17 7 * * 1"
 
