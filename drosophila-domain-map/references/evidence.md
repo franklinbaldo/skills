@@ -39,3 +39,8 @@ when extending a mapping.
 
 For an experiment-driving mapping, prefer evidence that manipulates the relevant neurons or
 pathway and changes behavior/learning. Anatomical connectivity alone supports a weaker claim.
+
+
+## Legal-process translation
+
+The legal map is intentionally a computational analogy. It does not claim that litigation has a biological homolog. Experiment-driving use should ground reward/punishment/social-reliability mechanisms in Drosophila evidence from the RL/game-theory maps and treat legal stages as the external environment/state machine.
