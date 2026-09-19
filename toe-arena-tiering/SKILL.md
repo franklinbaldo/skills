@@ -58,16 +58,16 @@ Everything”. Do not punish a framework merely for being new.
 
 Evaluate qualitatively, citing concrete evidence:
 
-1. **Scope** — gravity + Standard Model? cosmology? quantum foundations? merely one sector?
-2. **Internal coherence** — mathematical definition, anomaly/control issues, well-posedness.
-3. **Recovery** — ability to reproduce established low-energy/large-scale physics.
-4. **Explanatory compression** — whether assumptions actually replace rather than rename
-   unexplained structure.
-5. **Novel predictions** — predictions not inserted after the fact.
-6. **Empirical contact** — existing tests, constraints, observations, simulations.
-7. **Falsifiability / discrimination** — what result would move the theory down?
-8. **Technical maturity** — solved toy models, calculations, numerical machinery, literature.
-9. **Independent scrutiny** — meaningful work by people other than the originator.
+01. **Scope** — gravity + Standard Model? cosmology? quantum foundations? merely one sector?
+02. **Internal coherence** — mathematical definition, anomaly/control issues, well-posedness.
+03. **Recovery** — ability to reproduce established low-energy/large-scale physics.
+04. **Explanatory compression** — whether assumptions actually replace rather than rename
+    unexplained structure.
+05. **Novel predictions** — predictions not inserted after the fact.
+06. **Empirical contact** — existing tests, constraints, observations, simulations.
+07. **Falsifiability / discrimination** — what result would move the theory down?
+08. **Technical maturity** — solved toy models, calculations, numerical machinery, literature.
+09. **Independent scrutiny** — meaningful work by people other than the originator.
 10. **Open problems** — unresolved issues severe enough to block the programme's central claim.
 
 Do not turn these into a fake-precision numerical average unless an Arena schema explicitly
