@@ -1,0 +1,881 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["cyclopts>=3.0", "sqlglot>=27,<29"]
+# ///
+"""Convert a practical subset of DuckDB SQL to portable Metabase MBQL 5."""
+
+from __future__ import annotations
+
+import json
+import sys
+from collections import Counter
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import cyclopts
+from sqlglot import exp, parse_one
+from sqlglot.errors import ParseError
+
+
+class ConversionError(ValueError):
+    """Raised when SQL cannot be translated without guessing semantics."""
+
+
+@dataclass(frozen=True)
+class TableRef:
+    database: str
+    schema: str | None
+    table: str
+    alias: str
+    join_alias: str | None = None
+
+    @property
+    def portable(self) -> list[str | None]:
+        return [self.database, self.schema, self.table]
+
+
+def _safe_sql(node: exp.Expression) -> str:
+    """Render an expression for diagnostics without letting sqlglot generator bugs escape."""
+    try:
+        return node.sql(dialect="duckdb")
+    except Exception:
+        return f"<{type(node).__name__}>"
+
+
+class Converter:
+    def __init__(self, *, database: str, default_schema: str | None = "main") -> None:
+        self.database = database
+        self.default_schema = default_schema
+        self.tables: dict[str, TableRef] = {}
+        self.source: TableRef | None = None
+        self.aggregation_aliases: dict[str, int] = {}
+        self.aggregation_alias_outputs: dict[str, str] = {}
+        self.aggregation_expression_outputs: dict[str, str] = {}
+        self.aggregation_expression_indices: dict[str, int] = {}
+        self.projection_aliases: dict[str, exp.Expression] = {}
+        self.projection_positions: list[exp.Expression] = []
+        self.projection_position_aliases: list[str | None] = []
+        self.breakout_aliases: set[str] = set()
+        self.cross_stage_alias: str | None = None
+        self.cross_stage_name_map: dict[str, str] = {}
+        self.derived_join_name_maps: dict[str, dict[str, str]] = {}
+        self._aggregation_name_counts: Counter[str] = Counter()
+
+    def convert(self, sql: str) -> dict[str, Any]:
+        try:
+            node = parse_one(sql, read="duckdb")
+        except ParseError as exc:
+            raise ConversionError(f"DuckDB SQL inválido: {exc}") from exc
+
+        if not isinstance(node, exp.Select):
+            raise ConversionError("O conversor aceita apenas uma instrução SELECT por vez.")
+        return self._convert_select(node)
+
+    def _convert_select(self, node: exp.Select) -> dict[str, Any]:
+        with_ = node.args.get("with_")
+        if with_ is not None:
+            return self._convert_cte_chain(node, with_)
+        if any(node.find_all(exp.Window)):
+            raise ConversionError("Window functions ainda não são suportadas.")
+        if node.args.get("qualify"):
+            raise ConversionError("QUALIFY ainda não é suportado.")
+
+        from_ = node.args.get("from_")
+        if from_ is None:
+            raise ConversionError("SELECT sem FROM ainda não tem contrato portátil nesta skill.")
+        if isinstance(from_.this, exp.Subquery):
+            return self._convert_linear_subquery(node, from_.this)
+        if not isinstance(from_.this, exp.Table):
+            raise ConversionError("FROM deve apontar para tabela ou subquery SELECT linear.")
+
+        self.source = self._register_table(from_.this)
+        stage: dict[str, Any] = {
+            "lib/type": "mbql.stage/mbql",
+            "source-table": self.source.portable,
+        }
+        return self._compile_stage(node, stage)
+
+    def _convert_cte_chain(self, node: exp.Select, with_: exp.With) -> dict[str, Any]:
+        if bool(with_.args.get("recursive")):
+            raise ConversionError("WITH RECURSIVE ainda não é suportado.")
+        if not with_.expressions:
+            raise ConversionError("WITH sem CTE não é suportado.")
+
+        stages: list[dict[str, Any]] = []
+        previous_alias: str | None = None
+        previous_name_map: dict[str, str] = {}
+
+        for index, raw_cte in enumerate(with_.expressions):
+            if not isinstance(raw_cte, exp.CTE) or not isinstance(raw_cte.this, exp.Select):
+                raise ConversionError("Cada CTE da cadeia deve conter um SELECT.")
+            alias = raw_cte.alias_or_name
+            if not alias:
+                raise ConversionError("Cada CTE da cadeia precisa de alias.")
+
+            select = raw_cte.this
+            self._validate_cross_stage_outputs(select)
+
+            if index == 0:
+                compiler = Converter(database=self.database, default_schema=self.default_schema)
+                compiled = compiler.convert(select.sql(dialect="duckdb"))
+                stages.extend(compiled["stages"])
+            else:
+                from_ = select.args.get("from_")
+                if (
+                    from_ is None
+                    or not isinstance(from_.this, exp.Table)
+                    or previous_alias is None
+                    or from_.this.name.lower() != previous_alias.lower()
+                    or select.args.get("joins")
+                ):
+                    raise ConversionError(
+                        "Múltiplos CTEs só são suportados quando formam uma cadeia linear, "
+                        "cada um consumindo exclusivamente o CTE anterior."
+                    )
+                compiler = Converter(database=self.database, default_schema=self.default_schema)
+                compiler.cross_stage_alias = previous_alias
+                compiler.cross_stage_name_map = dict(previous_name_map)
+                compiled = compiler._compile_stage(select, {"lib/type": "mbql.stage/mbql"})
+                stages.extend(compiled["stages"])
+
+            previous_alias = alias
+            previous_name_map = self._output_name_map(select, compiler)
+
+        outer = node.copy()
+        outer.set("with_", None)
+        from_ = outer.args.get("from_")
+        if (
+            from_ is None
+            or not isinstance(from_.this, exp.Table)
+            or previous_alias is None
+            or from_.this.name.lower() != previous_alias.lower()
+            or outer.args.get("joins")
+        ):
+            raise ConversionError(
+                "A query externa deve consumir exclusivamente o último CTE da cadeia linear."
+            )
+
+        self.cross_stage_alias = previous_alias
+        self.cross_stage_name_map = dict(previous_name_map)
+        self.source = None
+        compiled_outer = self._compile_stage(outer, {"lib/type": "mbql.stage/mbql"})
+        return {
+            "lib/type": "mbql/query",
+            "stages": [*stages, *compiled_outer["stages"]],
+        }
+
+    def _convert_linear_subquery(self, node: exp.Select, subquery: exp.Subquery) -> dict[str, Any]:
+        if not isinstance(subquery.this, exp.Select):
+            raise ConversionError("Subquery em FROM deve conter SELECT.")
+        alias = subquery.alias_or_name
+        if not alias:
+            raise ConversionError("Subquery em FROM precisa de alias para refs cross-stage.")
+        return self._convert_linear_source(node, subquery.this, alias)
+
+    def _convert_linear_source(
+        self,
+        outer: exp.Select,
+        inner: exp.Select,
+        alias: str,
+    ) -> dict[str, Any]:
+        if outer.args.get("joins"):
+            raise ConversionError("JOIN sobre subquery/CTE linear ainda não é suportado.")
+        self._validate_cross_stage_outputs(inner)
+
+        inner_converter = Converter(database=self.database, default_schema=self.default_schema)
+        inner_query = inner_converter.convert(inner.sql(dialect="duckdb"))
+        self.cross_stage_alias = alias
+        self.cross_stage_name_map = self._output_name_map(inner, inner_converter)
+        self.source = None
+        stage: dict[str, Any] = {"lib/type": "mbql.stage/mbql"}
+        compiled = self._compile_stage(outer, stage)
+        return {
+            "lib/type": "mbql/query",
+            "stages": [*inner_query["stages"], *compiled["stages"]],
+        }
+
+    def _output_name_map(self, select: exp.Select, compiler: "Converter") -> dict[str, str]:
+        mapping: dict[str, str] = {}
+        grouped = select.args.get("group") is not None
+        for projection in select.expressions:
+            expression, alias = self._unwrap_alias(projection)
+            if isinstance(expression, exp.Star):
+                continue
+            if self._is_aggregate(expression):
+                if alias:
+                    machine = compiler.aggregation_alias_outputs.get(alias.lower())
+                    if machine is not None:
+                        mapping[alias.lower()] = machine
+                continue
+            if alias:
+                if grouped and isinstance(expression, exp.Column):
+                    mapping[alias.lower()] = expression.name
+                else:
+                    mapping[alias.lower()] = alias
+                continue
+            if isinstance(expression, exp.Column):
+                actual = (
+                    compiler.cross_stage_name_map.get(expression.name.lower(), expression.name)
+                    if compiler.cross_stage_alias is not None
+                    else expression.name
+                )
+                mapping[expression.name.lower()] = actual
+        return mapping
+
+    def _validate_cross_stage_outputs(self, inner: exp.Select) -> None:
+        grouped = inner.args.get("group") is not None
+        for projection in inner.expressions:
+            expression, alias = self._unwrap_alias(projection)
+            if self._is_aggregate(expression):
+                if not alias:
+                    raise ConversionError(
+                        "Agregação em fonte derivada precisa de alias SQL explícito para resolver o machine name MBQL."
+                    )
+                continue
+            if grouped and not isinstance(expression, exp.Column):
+                raise ConversionError(
+                    "Breakout por expressão dentro de fonte derivada ainda não tem machine name cross-stage estável."
+                )
+            if not grouped and not isinstance(expression, (exp.Column, exp.Star)) and not alias:
+                raise ConversionError(
+                    "Expressão sem alias em fonte derivada não tem machine name cross-stage estável."
+                )
+
+    def _compile_stage(self, node: exp.Select, stage: dict[str, Any]) -> dict[str, Any]:
+        self._register_projection_metadata(node)
+
+        joins = node.args.get("joins") or []
+        if joins:
+            stage["joins"] = [self._join(join) for join in joins]
+
+        where = node.args.get("where")
+        if where is not None:
+            stage["filters"] = [self._expr(where.this)]
+
+        group = node.args.get("group")
+        group_exprs = self._resolve_group_exprs(group)
+        if group_exprs:
+            stage["breakout"] = [self._expr(item) for item in group_exprs]
+
+        distinct = bool(node.args.get("distinct"))
+        simple_distinct = (
+            distinct
+            and bool(node.expressions)
+            and all(isinstance(item, exp.Column) for item in node.expressions)
+            and not group_exprs
+            and node.args.get("having") is None
+        )
+        if distinct and not simple_distinct:
+            raise ConversionError(
+                "SELECT DISTINCT só tem contrato seguro para uma coluna direta; "
+                "expressões/aliases/formas compostas permanecem ambíguas."
+            )
+
+        if simple_distinct:
+            stage["breakout"] = [self._expr(item) for item in node.expressions]
+        else:
+            self._project(node, stage, group_exprs)
+
+        order = node.args.get("order")
+        if order is not None:
+            stage["order-by"] = [self._order(item) for item in order.expressions]
+
+        self._apply_limit_offset(node, stage)
+
+        stages = [stage]
+        having = node.args.get("having")
+        if having is not None:
+            stages.append(
+                {
+                    "lib/type": "mbql.stage/mbql",
+                    "filters": [self._post_aggregation_expr(having.this)],
+                }
+            )
+        return {"lib/type": "mbql/query", "stages": stages}
+
+    def _register_projection_metadata(self, node: exp.Select) -> None:
+        self.projection_positions = []
+        self.projection_position_aliases = []
+        for projection in node.expressions:
+            expression, alias = self._unwrap_alias(projection)
+            self.projection_positions.append(expression)
+            self.projection_position_aliases.append(alias)
+            if alias:
+                key = alias.lower()
+                existing = self.projection_aliases.get(key)
+                if existing is not None and existing != expression:
+                    raise ConversionError(f"Alias de projeção ambíguo: {alias!r}.")
+                self.projection_aliases[key] = expression
+
+    def _projection_at(self, ordinal: exp.Expression, *, label: str) -> tuple[exp.Expression, str | None]:
+        if not isinstance(ordinal, exp.Literal) or ordinal.is_string:
+            raise ConversionError(f"{label} ordinal deve ser inteiro literal.")
+        try:
+            position = int(ordinal.this)
+        except ValueError as exc:
+            raise ConversionError(f"{label} ordinal deve ser inteiro literal.") from exc
+        if position < 1 or position > len(self.projection_positions):
+            raise ConversionError(
+                f"{label} ordinal fora do SELECT: {position}; há {len(self.projection_positions)} projeções."
+            )
+        index = position - 1
+        return self.projection_positions[index], self.projection_position_aliases[index]
+
+    def _resolve_group_exprs(self, group: exp.Group | None) -> list[exp.Expression]:
+        if group is None:
+            return []
+        resolved: list[exp.Expression] = []
+        for item in group.expressions:
+            expression = item
+            if isinstance(item, exp.Literal) and not item.is_string:
+                expression, _ = self._projection_at(item, label="GROUP BY")
+            elif isinstance(item, exp.Column) and not item.table:
+                expression = self.projection_aliases.get(item.name.lower(), item)
+            if self._is_aggregate(expression):
+                raise ConversionError("GROUP BY não pode resolver para uma agregação.")
+            resolved.append(expression)
+        return resolved
+
+    def _project(self, node: exp.Select, stage: dict[str, Any], group_exprs: list[exp.Expression]) -> None:
+        aggregations: list[Any] = []
+        fields: list[Any] = []
+        expressions: dict[str, Any] = {}
+        has_aggregate = False
+
+        for projection in node.expressions:
+            expression, alias = self._unwrap_alias(projection)
+            if isinstance(expression, exp.Star):
+                if len(node.expressions) != 1 or group_exprs:
+                    raise ConversionError("SELECT * só é suportado como projeção única sem GROUP BY.")
+                continue
+
+            if self._is_aggregate(expression):
+                has_aggregate = True
+                idx = len(aggregations)
+                aggregations.append(self._aggregate(expression))
+                self.aggregation_expression_indices[self._expression_key(expression)] = idx
+                output_name = self._register_aggregation_output(expression)
+                if alias:
+                    self.aggregation_aliases[alias.lower()] = idx
+                    self.aggregation_alias_outputs[alias.lower()] = output_name
+                continue
+
+            if group_exprs:
+                if not self._matches_any(expression, group_exprs):
+                    raise ConversionError(
+                        f"Projeção não agregada fora do GROUP BY: {_safe_sql(expression)}"
+                    )
+                if alias:
+                    self.breakout_aliases.add(alias.lower())
+                continue
+
+            if alias:
+                expressions[alias] = self._expr(expression)
+                fields.append(["expression", {}, alias])
+            else:
+                fields.append(self._expr(expression))
+
+        if aggregations:
+            stage["aggregation"] = aggregations
+        if fields and not has_aggregate:
+            stage["fields"] = fields
+        if expressions:
+            stage["expressions"] = expressions
+
+    def _apply_limit_offset(self, node: exp.Select, stage: dict[str, Any]) -> None:
+        limit = node.args.get("limit")
+        offset = node.args.get("offset")
+        if offset is None:
+            if limit is not None:
+                stage["limit"] = self._integer_literal(limit.expression, "LIMIT")
+            return
+        if limit is None:
+            raise ConversionError("OFFSET sem LIMIT não tem mapeamento MBQL exato para page/items.")
+        items = self._integer_literal(limit.expression, "LIMIT")
+        offset_value = self._integer_literal(offset.expression, "OFFSET")
+        if items == 0:
+            raise ConversionError("LIMIT 0 com OFFSET não pode ser representado como page/items.")
+        if offset_value % items:
+            raise ConversionError(
+                "OFFSET não alinhado ao LIMIT não é representável exatamente por MBQL page/items; "
+                f"OFFSET={offset_value}, LIMIT={items}."
+            )
+        stage["page"] = {"page": offset_value // items + 1, "items": items}
+
+    def _register_table(self, table: exp.Table, *, joined: bool = False) -> TableRef:
+        if table.catalog:
+            raise ConversionError(
+                "Referência DuckDB catalog.schema.table não é traduzida automaticamente; "
+                "passe o database do Metabase em --database e use schema.table."
+            )
+        schema = table.db or self.default_schema
+        name = table.name
+        alias = table.alias_or_name
+        if not name:
+            raise ConversionError("Tabela sem nome não é suportada.")
+        ref = TableRef(
+            database=self.database,
+            schema=schema,
+            table=name,
+            alias=alias,
+            join_alias=alias if joined else None,
+        )
+        for key in {alias.lower(), name.lower()}:
+            existing = self.tables.get(key)
+            if existing is not None and existing != ref:
+                raise ConversionError(f"Alias de tabela ambíguo: {key}")
+            self.tables[key] = ref
+        return ref
+
+    def _join(self, join: exp.Join) -> dict[str, Any]:
+        alias: str | None = None
+        stages: list[dict[str, Any]]
+
+        if isinstance(join.this, exp.Table):
+            table = self._register_table(join.this, joined=True)
+            alias = table.join_alias
+            stages = [{"lib/type": "mbql.stage/mbql", "source-table": table.portable}]
+        elif isinstance(join.this, exp.Subquery) and isinstance(join.this.this, exp.Select):
+            alias = join.this.alias_or_name
+            if not alias:
+                raise ConversionError("JOIN em subquery precisa de alias.")
+            self._validate_cross_stage_outputs(join.this.this)
+            inner_converter = Converter(database=self.database, default_schema=self.default_schema)
+            inner_query = inner_converter.convert(join.this.this.sql(dialect="duckdb"))
+            stages = inner_query["stages"]
+            self.derived_join_name_maps[alias.lower()] = self._output_name_map(join.this.this, inner_converter)
+        else:
+            raise ConversionError("JOIN suporta tabela direta ou subquery SELECT linear.")
+
+        on = join.args.get("on")
+        if on is None:
+            raise ConversionError("JOIN sem ON ainda não é suportado.")
+        conditions = [self._expr(part) for part in self._flatten_and(on)]
+        allowed = {"=", "!=", "<", "<=", ">", ">="}
+        if any(not isinstance(clause, list) or not clause or clause[0] not in allowed for clause in conditions):
+            raise ConversionError("JOIN ON suporta apenas comparações ligadas por AND.")
+        return {
+            "alias": alias,
+            "strategy": self._join_strategy(join),
+            "stages": stages,
+            "conditions": conditions,
+        }
+
+    @staticmethod
+    def _join_strategy(join: exp.Join) -> str:
+        side = (join.args.get("side") or "").upper()
+        kind = (join.args.get("kind") or "").upper()
+        if side == "LEFT":
+            return "left-join"
+        if side == "RIGHT":
+            return "right-join"
+        if side == "FULL":
+            return "full-join"
+        if kind in {"INNER", ""}:
+            return "inner-join"
+        raise ConversionError(f"Tipo de JOIN ainda não suportado: {side or kind}")
+
+    def _field(self, column: exp.Column) -> list[Any]:
+        if column.table:
+            derived_map = self.derived_join_name_maps.get(column.table.lower())
+            if derived_map is not None:
+                name = derived_map.get(column.name.lower(), column.name)
+                return ["field", {"join-alias": column.table}, name]
+        if self.cross_stage_alias is not None:
+            if column.table and column.table.lower() != self.cross_stage_alias.lower():
+                raise ConversionError(
+                    f"Alias desconhecido em ref cross-stage {_safe_sql(column)!r}; esperado {self.cross_stage_alias!r}."
+                )
+            name = self.cross_stage_name_map.get(column.name.lower(), column.name)
+            return ["field", {}, name]
+        if column.table:
+            ref = self.tables.get(column.table.lower())
+            if ref is None:
+                raise ConversionError(f"Tabela/alias desconhecido no campo {column.sql()!r}.")
+        else:
+            if self.source is None:
+                raise AssertionError("source not initialized")
+            if self.derived_join_name_maps or any(table.join_alias for table in self.tables.values()):
+                raise ConversionError(
+                    f"Coluna sem qualificação em query com JOIN é ambígua: {column.name!r}; "
+                    "qualifique com o alias/tabela de origem."
+                )
+            ref = self.source
+        options: dict[str, Any] = {}
+        if ref.join_alias:
+            options["join-alias"] = ref.join_alias
+        return ["field", options, [ref.database, ref.schema, ref.table, column.name]]
+
+    def _expr(self, node: exp.Expression) -> Any:
+        if isinstance(node, exp.Paren):
+            return self._expr(node.this)
+        if isinstance(node, exp.Column):
+            return self._field(node)
+        if isinstance(node, exp.Literal):
+            if node.is_string:
+                return node.this
+            try:
+                return int(node.this)
+            except ValueError:
+                try:
+                    return float(node.this)
+                except ValueError as exc:
+                    raise ConversionError(f"Literal numérico inválido: {node.this}") from exc
+        if isinstance(node, exp.Null):
+            return None
+        if isinstance(node, exp.Boolean):
+            return bool(node.this)
+        if isinstance(node, exp.Neg):
+            value = self._expr(node.this)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return -value
+            return ["-", {}, 0, value]
+        if isinstance(node, exp.Not):
+            if isinstance(node.this, exp.Is) and isinstance(node.this.expression, exp.Null):
+                return ["not-null", {}, self._expr(node.this.this)]
+            return ["not", {}, self._expr(node.this)]
+        if isinstance(node, exp.Is):
+            if isinstance(node.expression, exp.Null):
+                return ["is-null", {}, self._expr(node.this)]
+            raise ConversionError("IS só é suportado para NULL.")
+        if isinstance(node, exp.Between):
+            return ["between", {}, self._expr(node.this), self._expr(node.args["low"]), self._expr(node.args["high"])]
+        if isinstance(node, exp.In):
+            if node.args.get("query") is not None:
+                raise ConversionError("IN (subquery) ainda não é suportado.")
+            return ["in", {}, self._expr(node.this), *[self._expr(item) for item in node.expressions]]
+        if isinstance(node, exp.ILike):
+            return self._like(node, case_sensitive=False)
+        if isinstance(node, exp.Like):
+            return self._like(node, case_sensitive=True)
+        if isinstance(node, exp.Lower):
+            return ["lower", {}, self._expr(node.this)]
+        if isinstance(node, exp.Upper):
+            return ["upper", {}, self._expr(node.this)]
+        if isinstance(node, exp.Coalesce):
+            args = [node.this, *node.expressions]
+            return ["coalesce", {}, *[self._expr(item) for item in args if item is not None]]
+        if isinstance(node, exp.Abs):
+            return ["abs", {}, self._expr(node.this)]
+        if isinstance(node, exp.Concat):
+            return ["concat", {}, *[self._expr(item) for item in node.expressions]]
+        if isinstance(node, exp.Substring):
+            args = ["substring", {}, self._expr(node.this)]
+            start = node.args.get("start")
+            length = node.args.get("length")
+            if start is not None:
+                args.append(self._expr(start))
+            if length is not None:
+                args.append(self._expr(length))
+            return args
+        if isinstance(node, exp.Replace):
+            return [
+                "replace",
+                {},
+                self._expr(node.this),
+                self._expr(node.expression),
+                self._expr(node.args.get("replacement")),
+            ]
+        if isinstance(node, exp.Trim):
+            if node.expression is not None or node.args.get("position") is not None:
+                raise ConversionError("TRIM com caracteres/direção explícitos ainda não tem contrato MBQL nesta skill.")
+            return ["trim", {}, self._expr(node.this)]
+        if isinstance(node, exp.Length):
+            return ["length", {}, self._expr(node.this)]
+        if isinstance(node, exp.If):
+            clause: list[Any] = ["case", {}, [[self._expr(node.this), self._expr(node.args["true"])]]]
+            fallback = node.args.get("false")
+            if fallback is not None:
+                clause.append(self._expr(fallback))
+            return clause
+        if isinstance(node, exp.Case):
+            base = node.this
+            cases: list[list[Any]] = []
+            for branch in node.args.get("ifs") or []:
+                condition = branch.this
+                if base is not None:
+                    condition = exp.EQ(this=base.copy(), expression=condition.copy())
+                cases.append([self._expr(condition), self._expr(branch.args["true"])])
+            if not cases:
+                raise ConversionError("CASE sem braços WHEN não é suportado.")
+            clause: list[Any] = ["case", {}, cases]
+            default = node.args.get("default")
+            if default is not None:
+                clause.append(self._expr(default))
+            return clause
+        if isinstance(node, exp.Extract):
+            unit = node.this.sql(dialect="duckdb").strip("'\"").lower()
+            operators = {
+                "year": "get-year",
+                "month": "get-month",
+                "day": "get-day",
+                "hour": "get-hour",
+                "minute": "get-minute",
+                "second": "get-second",
+                "quarter": "get-quarter",
+            }
+            operator = operators.get(unit)
+            if operator is None:
+                raise ConversionError(
+                    f"EXTRACT com unidade {unit!r} ainda não tem contrato MBQL explícito nesta skill."
+                )
+            return [operator, {}, self._expr(node.expression)]
+        if isinstance(node, exp.TryCast):
+            raise ConversionError("TRY_CAST não tem contrato equivalente no subconjunto MBQL suportado.")
+        if isinstance(node, exp.Cast):
+            target = node.to.sql(dialect="duckdb").upper()
+            if target in {"VARCHAR", "TEXT"}:
+                return ["text", {}, self._expr(node.this)]
+            if target in {"TINYINT", "SMALLINT", "INTEGER", "INT", "BIGINT", "HUGEINT"}:
+                return ["integer", {}, self._expr(node.this)]
+            if target in {"REAL", "FLOAT", "DOUBLE"}:
+                return ["float", {}, self._expr(node.this)]
+            raise ConversionError(
+                f"CAST para {target} ainda não tem equivalência MBQL explícita; "
+                "não será aproximado por outra conversão."
+            )
+        if isinstance(node, exp.Alias):
+            return self._expr(node.this)
+
+        binary_ops: tuple[tuple[type[exp.Expression], str], ...] = (
+            (exp.And, "and"), (exp.Or, "or"), (exp.EQ, "="), (exp.NEQ, "!="),
+            (exp.GT, ">"), (exp.GTE, ">="), (exp.LT, "<"), (exp.LTE, "<="),
+            (exp.Add, "+"), (exp.Sub, "-"), (exp.Mul, "*"), (exp.Div, "/"), (exp.Mod, "mod"),
+        )
+        for cls, operator in binary_ops:
+            if isinstance(node, cls):
+                return [operator, {}, self._expr(node.this), self._expr(node.expression)]
+        raise ConversionError(
+            f"Expressão DuckDB ainda não suportada: {_safe_sql(node)} ({type(node).__name__})"
+        )
+
+    def _like(self, node: exp.Expression, *, case_sensitive: bool) -> list[Any]:
+        pattern = self._expr(node.expression)
+        if not isinstance(pattern, str):
+            raise ConversionError("LIKE/ILIKE exige padrão literal.")
+        options: dict[str, Any] = {"case-sensitive": case_sensitive}
+        if "%" not in pattern and "_" not in pattern:
+            return ["=", options, self._expr(node.this), pattern]
+        if "_" in pattern or pattern.count("%") > 2 or "%" in pattern[1:-1]:
+            raise ConversionError("LIKE/ILIKE complexo (wildcards internos ou _) ainda não é suportado.")
+        if pattern.startswith("%") and pattern.endswith("%"):
+            return ["contains", options, self._expr(node.this), pattern[1:-1]]
+        if pattern.endswith("%"):
+            return ["starts-with", options, self._expr(node.this), pattern[:-1]]
+        if pattern.startswith("%"):
+            return ["ends-with", options, self._expr(node.this), pattern[1:]]
+        raise ConversionError("LIKE/ILIKE não pôde ser normalizado com segurança.")
+
+    def _aggregate(self, node: exp.Expression) -> list[Any]:
+        expression, _ = self._unwrap_alias(node)
+        if isinstance(expression, exp.Count):
+            arg = expression.this
+            if isinstance(arg, exp.Distinct):
+                if len(arg.expressions) != 1:
+                    raise ConversionError("COUNT(DISTINCT ...) com múltiplos campos ainda não é suportado.")
+                return ["distinct", {}, self._expr(arg.expressions[0])]
+            if expression.args.get("distinct"):
+                if arg is None:
+                    raise ConversionError("COUNT(DISTINCT ...) sem campo não é suportado.")
+                return ["distinct", {}, self._expr(arg)]
+            if arg is None or isinstance(arg, exp.Star):
+                return ["count", {}]
+            return ["count", {}, self._expr(arg)]
+        mapping: tuple[tuple[type[exp.Expression], str], ...] = (
+            (exp.Sum, "sum"), (exp.Avg, "avg"), (exp.Min, "min"),
+            (exp.Max, "max"), (exp.Median, "median"),
+            (exp.StddevPop, "stddev"), (exp.VariancePop, "var"),
+        )
+        for cls, operator in mapping:
+            if isinstance(expression, cls):
+                return [operator, {}, self._expr(expression.this)]
+        raise ConversionError(f"Agregação não suportada: {expression.sql(dialect='duckdb')}")
+
+    @staticmethod
+    def _is_aggregate(node: exp.Expression) -> bool:
+        return isinstance(
+            node,
+            (exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max, exp.Median, exp.StddevPop, exp.VariancePop),
+        )
+
+    @staticmethod
+    def _aggregate_machine_base(node: exp.Expression) -> str:
+        if isinstance(node, exp.Count):
+            if isinstance(node.this, exp.Distinct) or node.args.get("distinct"):
+                return "distinct"
+            return "count"
+        for cls, name in (
+            (exp.Sum, "sum"), (exp.Avg, "avg"), (exp.Min, "min"), (exp.Max, "max"),
+            (exp.Median, "median"), (exp.StddevPop, "stddev"), (exp.VariancePop, "var"),
+        ):
+            if isinstance(node, cls):
+                return name
+        raise ConversionError(f"Agregação sem machine name conhecido: {node.sql(dialect='duckdb')}")
+
+    def _register_aggregation_output(self, node: exp.Expression) -> str:
+        base = self._aggregate_machine_base(node)
+        self._aggregation_name_counts[base] += 1
+        occurrence = self._aggregation_name_counts[base]
+        output = base if occurrence == 1 else f"{base}_{occurrence}"
+        self.aggregation_expression_outputs[self._expression_key(node)] = output
+        return output
+
+    @staticmethod
+    def _expression_key(node: exp.Expression) -> str:
+        return node.sql(dialect="duckdb", normalize=True).lower()
+
+    def _post_aggregation_expr(self, node: exp.Expression) -> Any:
+        if isinstance(node, exp.Paren):
+            return self._post_aggregation_expr(node.this)
+        if self._is_aggregate(node):
+            name = self.aggregation_expression_outputs.get(self._expression_key(node))
+            if name is None:
+                raise ConversionError(
+                    "HAVING referencia uma agregação que não está projetada; "
+                    "a inserção implícita dessa agregação ainda não tem contrato."
+                )
+            return ["field", {}, name]
+        if isinstance(node, exp.Column):
+            if not node.table:
+                alias = self.aggregation_alias_outputs.get(node.name.lower())
+                if alias is not None:
+                    return ["field", {}, alias]
+            return ["field", {}, node.name]
+        if isinstance(node, (exp.Literal, exp.Null, exp.Boolean)):
+            return self._expr(node)
+        if isinstance(node, exp.Not):
+            return ["not", {}, self._post_aggregation_expr(node.this)]
+        if isinstance(node, exp.Is) and isinstance(node.expression, exp.Null):
+            return ["is-null", {}, self._post_aggregation_expr(node.this)]
+        if isinstance(node, exp.Between):
+            return [
+                "between", {}, self._post_aggregation_expr(node.this),
+                self._post_aggregation_expr(node.args["low"]), self._post_aggregation_expr(node.args["high"]),
+            ]
+        if isinstance(node, exp.In):
+            if node.args.get("query") is not None:
+                raise ConversionError("HAVING IN (subquery) ainda não é suportado.")
+            return ["in", {}, self._post_aggregation_expr(node.this), *[self._post_aggregation_expr(item) for item in node.expressions]]
+
+        comparisons: tuple[tuple[type[exp.Expression], str], ...] = (
+            (exp.And, "and"), (exp.Or, "or"), (exp.EQ, "="), (exp.NEQ, "!="),
+            (exp.GT, ">"), (exp.GTE, ">="), (exp.LT, "<"), (exp.LTE, "<="),
+        )
+        for cls, operator in comparisons:
+            if isinstance(node, cls):
+                return [operator, {}, self._post_aggregation_expr(node.this), self._post_aggregation_expr(node.expression)]
+        if isinstance(node, (exp.Add, exp.Sub, exp.Mul, exp.Div, exp.Mod)):
+            raise ConversionError(
+                "HAVING com aritmética entre agregações permanece ambíguo; "
+                "há um xfail executável cobrindo esse caso."
+            )
+        raise ConversionError(
+            f"HAVING ainda não suportado para: {node.sql(dialect='duckdb')} ({type(node).__name__})"
+        )
+
+    def _order(self, ordered: exp.Expression) -> list[Any]:
+        node = ordered.this if isinstance(ordered, exp.Ordered) else ordered
+        direction = "desc" if isinstance(ordered, exp.Ordered) and bool(ordered.args.get("desc")) else "asc"
+        ordinal_alias: str | None = None
+        if isinstance(node, exp.Literal) and not node.is_string:
+            node, ordinal_alias = self._projection_at(node, label="ORDER BY")
+
+        if isinstance(node, exp.Column) and not node.table:
+            alias_key = node.name.lower()
+            idx = self.aggregation_aliases.get(alias_key)
+            if idx is not None:
+                return [direction, {}, ["aggregation", {}, idx]]
+            projection = self.projection_aliases.get(alias_key)
+            if projection is not None:
+                if alias_key in self.breakout_aliases:
+                    return [direction, {}, self._expr(projection)]
+                return [direction, {}, ["expression", {}, node.name]]
+
+        if self._is_aggregate(node):
+            idx = self.aggregation_expression_indices.get(self._expression_key(node))
+            if idx is not None:
+                return [direction, {}, ["aggregation", {}, idx]]
+            return [direction, {}, self._aggregate(node)]
+
+        if ordinal_alias and ordinal_alias.lower() not in self.breakout_aliases:
+            return [direction, {}, ["expression", {}, ordinal_alias]]
+        return [direction, {}, self._expr(node)]
+
+    @staticmethod
+    def _unwrap_alias(node: exp.Expression) -> tuple[exp.Expression, str | None]:
+        if isinstance(node, exp.Alias):
+            return node.this, node.alias
+        return node, None
+
+    @staticmethod
+    def _matches_any(node: exp.Expression, candidates: list[exp.Expression]) -> bool:
+        return any(node == candidate for candidate in candidates)
+
+    @staticmethod
+    def _flatten_and(node: exp.Expression) -> list[exp.Expression]:
+        if isinstance(node, exp.And):
+            return Converter._flatten_and(node.this) + Converter._flatten_and(node.expression)
+        return [node]
+
+    @staticmethod
+    def _integer_literal(node: exp.Expression | None, label: str) -> int:
+        if not isinstance(node, exp.Literal) or node.is_string:
+            raise ConversionError(f"{label} deve ser inteiro literal.")
+        try:
+            value = int(node.this)
+        except ValueError as exc:
+            raise ConversionError(f"{label} deve ser inteiro literal.") from exc
+        if value < 0:
+            raise ConversionError(f"{label} não pode ser negativo.")
+        return value
+
+
+def convert_sql(sql: str, *, database: str, schema: str | None = "main") -> dict[str, Any]:
+    """Convert one DuckDB SELECT into portable MBQL 5."""
+    return Converter(database=database, default_schema=schema).convert(sql)
+
+
+def _read_sql(value: str | None, file: Path | None) -> str:
+    if value and file:
+        raise ConversionError("Use SQL posicional ou --file, não os dois.")
+    if file:
+        return file.read_text(encoding="utf-8")
+    if value:
+        return value
+    if not sys.stdin.isatty():
+        return sys.stdin.read()
+    raise ConversionError("Informe o SQL como argumento, --file, ou stdin.")
+
+
+app = cyclopts.App(name="sql-to-mbql", help=__doc__)
+
+
+@app.default
+def main(
+    sql: str | None = None,
+    *,
+    database: str,
+    file: Path | None = None,
+    schema: str = "main",
+    compact: bool = False,
+) -> int:
+    """Convert one DuckDB SELECT to portable MBQL 5."""
+    try:
+        source = _read_sql(sql, file)
+        query = convert_sql(source, database=database, schema=schema or None)
+    except (ConversionError, OSError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    print(
+        json.dumps(query, ensure_ascii=False, separators=(",", ":"))
+        if compact
+        else json.dumps(query, ensure_ascii=False, indent=2)
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(app())

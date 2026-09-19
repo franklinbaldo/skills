@@ -1,6 +1,7 @@
 name: Skill helper tests
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches: [main]
@@ -28,3 +29,9 @@ jobs:
           uv run --quiet convert-to-pdfa/scripts/test_convert_to_pdfa.py
           uv run --quiet convert-to-pdfa/scripts/test_subprocess_decoding.py
           uv run --quiet pdf-to-markdown/scripts/test_convert_pdf.py
+          uv run --quiet mbql/scripts/test_sql_to_mbql.py
+      - name: Run MBQL conformance harness
+        run: |
+          uv run --quiet mbql/tests/test_conformance.py
+          uv run --quiet mbql/tests/test_live_conformance.py
+          uv run --quiet mbql/tests/test_corpus_runner.py
