@@ -90,6 +90,22 @@ def test_corpus_reports_driver_capability_requirements(tmp_path: Path) -> None:
     assert payload["driver_feature_counts"]["nested-queries"] == 1
 
 
+def test_parser_internal_error_becomes_parse_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    corpus = tmp_path / "parser-bug.sql"
+    corpus.write_text("SELECT id FROM orders;", encoding="utf-8")
+
+    def broken_parse(*args, **kwargs):
+        raise AttributeError("parser internal bug")
+
+    monkeypatch.setattr(corpus_runner, "parse_one", broken_parse)
+    payload = corpus_runner.run_corpus(corpus, database="Analytics")
+
+    assert payload["statements"] == 1
+    assert payload["counts"] == {"parse_error": 1}
+    assert payload["parse_errors"] == 1
+    assert "parser internal bug" in payload["results"][0]["error"]
+
+
 def test_directory_corpus_is_recursive(tmp_path: Path) -> None:
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
