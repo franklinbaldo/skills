@@ -25,24 +25,49 @@ The discovery score answers only:
 It does **not** answer whether a person's claims are true, whether their project is literal,
 or whether the person has any medical or psychiatric condition.
 
+## Canonical source and executable
+
+The canonical skill source is:
+
+```text
+https://github.com/franklinbaldo/skills/blob/main/ai-epistemic-discovery/SKILL.md
+```
+
+The canonical executable script is:
+
+```text
+https://raw.githubusercontent.com/franklinbaldo/skills/main/ai-epistemic-discovery/scripts/find_candidates.py
+```
+
+Prefer running the script directly from its HTTPS GitHub URL with `uv run`; cloning the skills
+repository is not required for ordinary discovery. The script carries its own PEP 723 dependency
+metadata, so `uv` creates the isolated environment and installs Cyclopts, HTTPX, and Rich
+automatically.
+
+Keep instruction and execution on the **same Git ref**. If this skill was read from a pinned
+commit instead of `main`, replace `main` in the raw script URL with that same commit SHA before
+running it. This prevents a newer script from being executed under older instructions.
+
 ## Golden path
 
-1. Generate a broad candidate queue with the bundled script.
-2. Read the strongest candidates directly on GitHub.
-3. Reconstruct each candidate longitudinally against their own earlier public baseline.
-4. Try to falsify the classification with ordinary alternatives: software project, fiction,
+1. Read the canonical skill URL above, preferably from the same ref that will be executed.
+2. Generate a broad candidate queue by running the canonical raw GitHub script URL with
+   `uv run`.
+3. Read the strongest candidates directly on GitHub.
+4. Reconstruct each candidate longitudinally against their own earlier public baseline.
+5. Try to falsify the classification with ordinary alternatives: software project, fiction,
    art, roleplay, speculative philosophy, ordinary AI research, prompt collection, or satire.
-5. Only after that review, create or update an `ai-epistemic-world` OKF record in the blog.
-6. Keep intervention/convergence provenance separate and obey the blog's current gates before
+6. Only after that review, create or update an `ai-epistemic-world` OKF record in the blog.
+7. Keep intervention/convergence provenance separate and obey the blog's current gates before
    contacting any repository.
 
 ## Candidate generation
 
-Run:
+Default run from the canonical GitHub URL:
 
 ```bash
 GITHUB_TOKEN="$GITHUB_TOKEN" \
-  uv run <skill-dir>/scripts/find_candidates.py \
+  uv run https://raw.githubusercontent.com/franklinbaldo/skills/main/ai-epistemic-discovery/scripts/find_candidates.py \
   --output-format markdown \
   --min-score 5 \
   --max-owners 30 \
@@ -52,9 +77,21 @@ GITHUB_TOKEN="$GITHUB_TOKEN" \
 For a machine-readable queue:
 
 ```bash
-uv run <skill-dir>/scripts/find_candidates.py \
+uv run https://raw.githubusercontent.com/franklinbaldo/skills/main/ai-epistemic-discovery/scripts/find_candidates.py \
   --output-format json \
   --output candidates.json
+```
+
+For reproducible execution against a specific skill revision, pin both URLs to the same SHA:
+
+```bash
+SKILLS_REF="<commit-sha>"
+SCRIPT_URL="https://raw.githubusercontent.com/franklinbaldo/skills/$SKILLS_REF/ai-epistemic-discovery/scripts/find_candidates.py"
+
+GITHUB_TOKEN="$GITHUB_TOKEN" \
+  uv run "$SCRIPT_URL" \
+  --output-format markdown \
+  --output candidates.md
 ```
 
 A token is strongly recommended because public unauthenticated GitHub API limits make a useful
