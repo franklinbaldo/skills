@@ -144,11 +144,15 @@ class GitHub:
             raise RuntimeError(f"GitHub API {response.status_code}: {response.text[:300]}")
         return response.json()
 
-    def repo_search(self, query: str, per_page: int) -> list[dict]:
-        data = self.get(
-            "/search/repositories",
-            {"q": f"{query} in:readme", "sort": "updated", "order": "desc", "per_page": per_page},
-        )
+    def repo_search(self, query: str, per_page: int, *, pushed: str | None = None) -> list[dict]:
+        # Deliberately unsorted. Sorting by `updated desc` selects the queue on the
+        # very variable an observatory wants to measure: every candidate returned had
+        # necessarily pushed that day, so recency stopped discriminating and the queue
+        # changed between runs. Relevance order keeps the sample reproducible.
+        query = f"{query} in:readme"
+        if pushed:
+            query = f"{query} pushed:{pushed}"
+        data = self.get("/search/repositories", {"q": query, "per_page": per_page})
         return list(data.get("items", []))
 
     def code_search(self, query: str, per_page: int) -> list[dict]:
@@ -190,11 +194,17 @@ def span_days(start: str | None, end: str | None) -> int | None:
     return max(0, (b - a).days) if a and b else None
 
 
-def scan(github: GitHub, per_query: int, max_queries: int, code_search: bool) -> dict[str, Seed]:
+def scan(
+    github: GitHub,
+    per_query: int,
+    max_queries: int,
+    code_search: bool,
+    pushed: str | None = None,
+) -> dict[str, Seed]:
     seeds: dict[str, Seed] = {}
     for probe in PROBES[:max_queries]:
         try:
-            repo_hits = github.repo_search(probe.query, per_query)
+            repo_hits = github.repo_search(probe.query, per_query, pushed=pushed)
         except RuntimeError as exc:
             err.print(f"[yellow]Search skipped:[/] {probe.query}: {exc}")
             continue
@@ -433,10 +443,16 @@ def main(
     inspect_repos: int = 100,
     readmes_per_owner: int = 5,
     include_code_search: bool = True,
+    pushed: str | None = None,
     token_env: str = "GITHUB_TOKEN",
     timeout: float = 20.0,
 ) -> int:
-    """Generate an explainable public-GitHub candidate queue for manual review."""
+    """Generate an explainable public-GitHub candidate queue for manual review.
+
+    Pass `--pushed` a GitHub date qualifier such as `2025-01-01..2025-03-31` to
+    sample one window at a time. Sweeping several windows gives a queue whose
+    recency varies, instead of one made only of repositories touched today.
+    """
     token = os.environ.get(token_env) or os.environ.get("GH_TOKEN")
     if not token:
         err.print(
@@ -454,6 +470,7 @@ def main(
             max(1, min(results_per_query, 100)),
             max(1, min(max_queries, len(PROBES))),
             include_code_search,
+            pushed,
         )
         shortlist = sorted(
             seeds.values(), key=lambda seed: (seed.score, len(seed.repos)), reverse=True

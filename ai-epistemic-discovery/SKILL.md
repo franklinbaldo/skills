@@ -97,6 +97,57 @@ GITHUB_TOKEN="$GITHUB_TOKEN" \
 A token is strongly recommended because public unauthenticated GitHub API limits make a useful
 cross-user scan very small. The script never writes the token to output.
 
+## Sampling: why the queue is not ordered by recency
+
+The repository search used to request `sort=updated&order=desc`. Measured against a
+real run, that made the queue useless for anything time-related and not reproducible:
+
+- 23 of 24 returned candidates had pushed **that same day**, and the 24th was 3 days
+  old. Recency could not discriminate, because activity was the selection rule rather
+  than a measurement.
+- Two runs 20 minutes apart returned different queues — 6 of 21 candidates changed —
+  because the window slides continuously. A longitudinal observatory cannot say "this
+  candidate appeared in March and was gone by September" when that variation belongs
+  to the scanner.
+
+The search is now unsorted, so results come back by relevance. Pass `--pushed` a
+GitHub date qualifier to sample one window at a time and sweep several:
+
+```bash
+for window in 2025-01-01..2025-03-31 2025-04-01..2025-06-30 2025-07-01..2025-09-30; do
+  uv run "$SCRIPT_URL" --pushed "$window" --output-format json --output "queue-$window.json"
+done
+```
+
+Never add activity volume, commit counts, repository counts or streaks to the score.
+Recency may be *reported* as an objective public metric; it is not evidence, and on a
+subject population it is exactly the signal that tries to masquerade as diagnosis.
+
+## Unbiased sampling from GH Archive
+
+`scripts/sample_gharchive.py` reads GH Archive hours instead of the search API. An
+hour is the complete public event stream for that hour, so the sample is not ordered
+by anything and the same hours always produce the same queue.
+
+```bash
+uv run https://raw.githubusercontent.com/franklinbaldo/skills/main/ai-epistemic-discovery/scripts/sample_gharchive.py \
+  --dates 2026-03-15 --dates 2026-06-15 --dates 2026-09-15 \
+  --min-repos 2 --output-format markdown --output archive-queue.md
+```
+
+Two limits were measured against the archive rather than assumed. Between 2025-06 and
+2025-12 the public event stream stopped carrying `CreateEvent` with `ref_type` of
+`repository` (8,128/hour → 0) or `tag`, and stopped carrying `commits`, `size` and
+`distinct_size` inside `PushEvent`. So for recent windows there is **no repository
+creation event and no commit message**; for earlier windows both are available and the
+archive is a strong source for reconstructing when a cluster first appeared.
+
+What remains in every event is `repo.name` plus a stable `actor.id` and `login`. Names
+are a weaker signal than a README, so this path produces owners to read, never a
+classification. The actor id is also monotonic, which estimates account age without a
+request. No email or other contact data is collected: `login` and `id` are sufficient
+to follow a public trajectory.
+
 ## What the script looks for
 
 The script searches public repositories using several independent query families, then groups
