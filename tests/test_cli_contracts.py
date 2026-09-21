@@ -34,7 +34,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # module name -> directory holding it
 CLI_MODULES = {
     "datajud": "datajud/scripts",
-    "find_candidates": "ai-epistemic-world-discovery/scripts",
+    "find_candidates": "ai-epistemic-discovery/scripts",
     "juris": "juris-tjro/scripts",
     "opf_annotate": "opf-finetune/scripts",
     "anonimizar": "anonimizacao-documentos/scripts",
