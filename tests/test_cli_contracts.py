@@ -36,6 +36,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CLI_MODULES = {
     "datajud": "datajud/scripts",
     "find_candidates": "ai-epistemic-discovery/scripts",
+    "queue": "solo-builder-triage/scripts",
     "sample_gharchive": "ai-epistemic-discovery/scripts",
     "juris": "juris-tjro/scripts",
     "opf_annotate": "opf-finetune/scripts",
