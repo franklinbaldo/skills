@@ -16,6 +16,7 @@ assessment, or a medical/psychiatric inference. Activity volume never adds point
 from __future__ import annotations
 
 import base64
+import io
 import json
 import os
 import re
@@ -82,20 +83,20 @@ class Probe:
 PROBES = (
     Probe("consciousness_identity", '"Claude" consciousness', 2),
     Probe("consciousness_identity", '"ChatGPT" consciousness', 2),
-    Probe("consciousness_identity", '"Gemini" consciousness', 2),
     Probe("identity_continuity", '"identity continuity" AI', 2),
     Probe("identity_continuity", '"memory seed" AI', 2),
     Probe("ontology_epistemology", '"AI" ontology epistemology', 2),
-    Probe("ontology_epistemology", '"LLM" epistemology', 2),
     Probe("cosmology_metaphysics", '"AI" cosmology metaphysics', 2),
     Probe("spirituality_soul", '"AI" soul memory', 2),
     Probe("agency_meaning", '"AI" agency meaning', 1),
     Probe("explicit_ai_role", '"Claude" "thinking partner"', 3),
-    Probe("explicit_ai_role", '"ChatGPT" collaborator identity', 3),
     Probe("explicit_ai_role", '"co-authored-by" Claude', 3),
-    Probe("explicit_ai_role", '"co-created" AI consciousness', 3),
     Probe("recursive_ai", '"Claude" reflection memory identity', 2),
     Probe("recursive_ai", '"ChatGPT" continuity memory self', 2),
+    Probe("consciousness_identity", '"Gemini" consciousness', 2),
+    Probe("ontology_epistemology", '"LLM" epistemology', 2),
+    Probe("explicit_ai_role", '"ChatGPT" collaborator identity', 3),
+    Probe("explicit_ai_role", '"co-created" AI consciousness', 3),
 )
 
 
@@ -379,7 +380,8 @@ def as_json(candidates: list[dict], measured_at: str) -> str:
 
 
 def as_table(candidates: list[dict], measured_at: str) -> str:
-    console = Console(record=True, force_terminal=False, width=160)
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, width=160)
     table = Table(title=f"AI epistemic-world discovery queue — {measured_at}")
     for name, justify in (
         ("#", "right"),
@@ -407,7 +409,7 @@ def as_table(candidates: list[dict], measured_at: str) -> str:
     console.print(
         "[dim]Manual-review priority only. Activity volume and clinical vocabulary add zero points.[/dim]"
     )
-    return console.export_text()
+    return buffer.getvalue()
 
 
 def emit(content: str, output: Path | None) -> None:
