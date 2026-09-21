@@ -129,6 +129,6 @@ scientific record underneath stays sober. Attack claims, not people. Make uncert
 
 After material use, assess routing, outcome, quality delta, concrete instruction effect, and any
 friction or workaround. Routine success stays ephemeral. If there is actionable learning, search
-`franklinbaldo/skills` issues and update a matching issue or open a sanitized **Skill use
-feedback** issue. Never publish secrets, private or confidential data, or personal information
+`franklinbaldo/skills` issues and update a matching issue or open a sanitized
+**Skill use feedback** issue. Never publish secrets, private or confidential data, or personal information
 merely to report skill behavior.
