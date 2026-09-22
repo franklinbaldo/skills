@@ -1,0 +1,388 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["cyclopts>=3.0", "sqlglot>=27,<29"]
+# ///
+"""Classify DuckDB SQL features against the MBQL converter contract."""
+
+from __future__ import annotations
+
+import json
+from dataclasses import asdict, dataclass
+from enum import StrEnum
+from typing import Iterable
+
+import cyclopts
+from sqlglot import exp, parse_one
+
+
+class Status(StrEnum):
+    SUPPORTED = "supported"
+    AMBIGUOUS = "ambiguous"
+    UNSUPPORTED = "unsupported"
+
+
+@dataclass(frozen=True)
+class FeatureResult:
+    feature: str
+    status: Status
+    reason: str
+
+
+FEATURE_MATRIX: tuple[FeatureResult, ...] = (
+    FeatureResult("select", Status.SUPPORTED, "single SELECT over a direct table"),
+    FeatureResult("where", Status.SUPPORTED, "boolean filters and common comparisons"),
+    FeatureResult("scalar_functions_common", Status.SUPPORTED, "LOWER/UPPER/COALESCE/ABS map to MBQL expressions"),
+    FeatureResult("string_functions_common", Status.SUPPORTED, "CONCAT/SUBSTRING/REPLACE/TRIM/LENGTH map to MBQL expressions"),
+    FeatureResult("case_expression", Status.SUPPORTED, "searched/simple CASE map to MBQL case clauses"),
+    FeatureResult("if_expression", Status.SUPPORTED, "DuckDB IF maps to a single-branch MBQL case"),
+    FeatureResult("dpipe_overloaded", Status.AMBIGUOUS, "DuckDB || can concatenate strings or nested/list values without type metadata"),
+    FeatureResult("temporal_extract_basic", Status.SUPPORTED, "YEAR/MONTH/DAY/HOUR/MINUTE/SECOND/QUARTER map to MBQL getters"),
+    FeatureResult("temporal_extract_calendar", Status.UNSUPPORTED, "calendar-sensitive EXTRACT units need explicit conventions"),
+    FeatureResult("cast_basic", Status.SUPPORTED, "VARCHAR/integer/FLOAT-DOUBLE casts map to MBQL text/integer/float"),
+    FeatureResult("cast_unsupported", Status.UNSUPPORTED, "DECIMAL, temporal and TRY_CAST semantics are not approximated"),
+    FeatureResult("group_by", Status.SUPPORTED, "breakout in first MBQL stage"),
+    FeatureResult("having_simple", Status.SUPPORTED, "second-stage filter over projected aggregate"),
+    FeatureResult("having_expression", Status.AMBIGUOUS, "aggregate-expression output naming across stages is unresolved"),
+    FeatureResult("order_by", Status.SUPPORTED, "field and aggregation ordering"),
+    FeatureResult("limit", Status.SUPPORTED, "direct stage limit"),
+    FeatureResult("offset_aligned", Status.SUPPORTED, "LIMIT N OFFSET k*N maps exactly to MBQL page/items"),
+    FeatureResult("offset_unaligned", Status.AMBIGUOUS, "arbitrary OFFSET cannot be represented exactly by page/items"),
+    FeatureResult("offset_without_limit", Status.UNSUPPORTED, "MBQL page requires a finite items/page size"),
+    FeatureResult("select_distinct_simple", Status.SUPPORTED, "single direct column maps to breakout distinct-values semantics"),
+    FeatureResult("select_distinct_complex", Status.AMBIGUOUS, "DISTINCT expressions/aliases/composite forms need explicit contracts"),
+    FeatureResult("count_distinct", Status.SUPPORTED, "single-field COUNT DISTINCT maps to distinct aggregation"),
+    FeatureResult("median", Status.SUPPORTED, "DuckDB MEDIAN maps to MBQL median and requires percentile-aggregations"),
+    FeatureResult("stddev_population", Status.SUPPORTED, "STDDEV_POP maps exactly to MBQL stddev (population semantics)"),
+    FeatureResult("stddev_sample", Status.UNSUPPORTED, "DuckDB STDDEV/STDDEV_SAMP are sample statistics; MBQL stddev is population"),
+    FeatureResult("variance_population", Status.SUPPORTED, "VAR_POP maps exactly to MBQL var (population semantics)"),
+    FeatureResult("variance_sample", Status.UNSUPPORTED, "DuckDB VARIANCE/VAR_SAMP are sample statistics; MBQL var is population"),
+    FeatureResult("aggregation_unsupported", Status.UNSUPPORTED, "aggregate function has no explicit DuckDB-to-MBQL contract"),
+    FeatureResult("joins", Status.SUPPORTED, "inner/left/right/full joins with conjunctive comparisons"),
+    FeatureResult("join_subquery_linear", Status.SUPPORTED, "derived SELECT join sources map to nested join stages"),
+    FeatureResult("join_subquery_complex", Status.UNSUPPORTED, "derived join source has unstable cross-stage outputs or non-linear semantics"),
+    FeatureResult("join_unqualified_column", Status.AMBIGUOUS, "without schema metadata, unqualified columns in joins cannot be attributed safely"),
+    FeatureResult("subquery_linear", Status.SUPPORTED, "single derived SELECT source maps to the preceding MBQL stage"),
+    FeatureResult("subquery_complex", Status.UNSUPPORTED, "grouped expressions or non-linear derived sources need stronger cross-stage contracts"),
+    FeatureResult("cte_linear", Status.SUPPORTED, "non-recursive CTEs in a strict linear chain map to successive stages"),
+    FeatureResult("cte_complex", Status.UNSUPPORTED, "multiple/recursive/non-linear CTEs are outside the current stage contract"),
+    FeatureResult("window", Status.AMBIGUOUS, "requires explicit cross-stage/window semantics"),
+    FeatureResult("qualify", Status.UNSUPPORTED, "depends on window output semantics"),
+    FeatureResult("set_operations", Status.UNSUPPORTED, "UNION/INTERSECT/EXCEPT are outside current MBQL stage contract"),
+    FeatureResult("unnest", Status.UNSUPPORTED, "DuckDB nested expansion has no converter contract"),
+    FeatureResult("pivot", Status.UNSUPPORTED, "DuckDB PIVOT has no converter contract"),
+    FeatureResult("asof_join", Status.UNSUPPORTED, "ASOF join has no MBQL mapping"),
+)
+
+
+def _literal_int(node: exp.Expression | None) -> int | None:
+    if not isinstance(node, exp.Literal) or node.is_string:
+        return None
+    try:
+        return int(node.this)
+    except (TypeError, ValueError):
+        return None
+
+
+
+def _inner_cross_stage_safe(select: exp.Select) -> bool:
+    grouped = select.args.get("group") is not None
+    for projection in select.expressions:
+        expression = projection.this if isinstance(projection, exp.Alias) else projection
+        alias = projection.alias if isinstance(projection, exp.Alias) else None
+        if isinstance(expression, exp.AggFunc):
+            if not alias:
+                return False
+            continue
+        if grouped and not isinstance(expression, exp.Column):
+            return False
+    return True
+
+
+def _linear_subquery_source(node: exp.Select) -> bool:
+    from_ = node.args.get("from_")
+    if from_ is None or not isinstance(from_.this, exp.Subquery) or not isinstance(from_.this.this, exp.Select):
+        return False
+    return not node.args.get("joins") and _inner_cross_stage_safe(from_.this.this)
+
+
+def _linear_cte_source(node: exp.Select) -> bool:
+    with_ = node.args.get("with_")
+    if with_ is None or bool(with_.args.get("recursive")) or not with_.expressions:
+        return False
+
+    previous_alias: str | None = None
+    for index, cte in enumerate(with_.expressions):
+        if not isinstance(cte, exp.CTE) or not isinstance(cte.this, exp.Select):
+            return False
+        if not _inner_cross_stage_safe(cte.this):
+            return False
+        if index > 0:
+            from_ = cte.this.args.get("from_")
+            if (
+                from_ is None
+                or not isinstance(from_.this, exp.Table)
+                or previous_alias is None
+                or from_.this.name.lower() != previous_alias.lower()
+                or cte.this.args.get("joins")
+            ):
+                return False
+        previous_alias = cte.alias_or_name
+
+    from_ = node.args.get("from_")
+    return (
+        from_ is not None
+        and isinstance(from_.this, exp.Table)
+        and previous_alias is not None
+        and from_.this.name.lower() == previous_alias.lower()
+        and not node.args.get("joins")
+    )
+
+
+def classify(sql: str) -> list[FeatureResult]:
+    node = parse_one(sql, read="duckdb")
+    found: list[FeatureResult] = []
+    by_name = {item.feature: item for item in FEATURE_MATRIX}
+
+    def add(name: str) -> None:
+        item = by_name[name]
+        if item not in found:
+            found.append(item)
+
+    if isinstance(node, exp.Select):
+        add("select")
+        if node.args.get("with_"):
+            add("cte_linear" if _linear_cte_source(node) else "cte_complex")
+        if node.args.get("where"):
+            add("where")
+        if node.args.get("group"):
+            add("group_by")
+        if node.args.get("having"):
+            having = node.args["having"].this
+            aggregate_nodes = tuple(having.find_all(exp.AggFunc))
+            has_arithmetic = any(isinstance(x, (exp.Add, exp.Sub, exp.Mul, exp.Div, exp.Mod)) for x in having.walk())
+            add("having_expression" if aggregate_nodes and has_arithmetic else "having_simple")
+        if node.args.get("order"):
+            add("order_by")
+
+        limit = node.args.get("limit")
+        offset = node.args.get("offset")
+        if limit:
+            add("limit")
+        if offset:
+            if not limit:
+                add("offset_without_limit")
+            else:
+                items = _literal_int(limit.expression)
+                offset_value = _literal_int(offset.expression)
+                if items and offset_value is not None and offset_value % items == 0:
+                    add("offset_aligned")
+                else:
+                    add("offset_unaligned")
+
+        if node.args.get("distinct"):
+            simple = (
+                bool(node.expressions)
+                and all(isinstance(item, exp.Column) for item in node.expressions)
+                and not node.args.get("group")
+                and not node.args.get("having")
+            )
+            add("select_distinct_simple" if simple else "select_distinct_complex")
+        if node.args.get("joins"):
+            add("joins")
+            subquery_joins = [
+                join.this
+                for join in node.args.get("joins") or []
+                if isinstance(join.this, exp.Subquery)
+            ]
+            for subquery in subquery_joins:
+                if (
+                    isinstance(subquery.this, exp.Select)
+                    and bool(subquery.alias_or_name)
+                    and _inner_cross_stage_safe(subquery.this)
+                ):
+                    add("join_subquery_linear")
+                else:
+                    add("join_subquery_complex")
+            scoped_nodes = [*node.expressions]
+            if node.args.get("where"):
+                scoped_nodes.append(node.args["where"].this)
+            if node.args.get("group"):
+                scoped_nodes.extend(node.args["group"].expressions)
+            if any(
+                isinstance(column, exp.Column) and not column.table
+                for scoped in scoped_nodes
+                for column in scoped.find_all(exp.Column)
+            ):
+                add("join_unqualified_column")
+        if node.args.get("qualify"):
+            add("qualify")
+
+    if any(isinstance(item, (exp.Lower, exp.Upper, exp.Coalesce, exp.Abs)) for item in node.walk()):
+        add("scalar_functions_common")
+    if any(isinstance(item, (exp.Concat, exp.Substring, exp.Replace, exp.Trim, exp.Length)) for item in node.walk()):
+        add("string_functions_common")
+    if any(isinstance(item, exp.Case) for item in node.walk()):
+        add("case_expression")
+    if any(isinstance(item, exp.If) for item in node.walk()):
+        add("if_expression")
+    if any(isinstance(item, exp.DPipe) for item in node.walk()):
+        add("dpipe_overloaded")
+    for item in node.find_all(exp.Extract):
+        unit = item.this.sql(dialect="duckdb").strip("'\"").lower()
+        if unit in {"year", "month", "day", "hour", "minute", "second", "quarter"}:
+            add("temporal_extract_basic")
+        else:
+            add("temporal_extract_calendar")
+    safe_cast_targets = {"VARCHAR", "TEXT", "TINYINT", "SMALLINT", "INTEGER", "INT", "BIGINT", "HUGEINT", "REAL", "FLOAT", "DOUBLE"}
+    for item in node.walk():
+        if isinstance(item, exp.TryCast):
+            add("cast_unsupported")
+        elif isinstance(item, exp.Cast):
+            target = item.to.sql(dialect="duckdb").upper()
+            add("cast_basic" if target in safe_cast_targets else "cast_unsupported")
+    if any(node.find_all(exp.Window)):
+        add("window")
+    from_ = node.args.get("from_") if isinstance(node, exp.Select) else None
+    top_subquery = from_.this if from_ is not None and isinstance(from_.this, exp.Subquery) else None
+    join_subqueries = {
+        id(join.this)
+        for join in (node.args.get("joins") or [])
+        if isinstance(join.this, exp.Subquery)
+    } if isinstance(node, exp.Select) else set()
+    if top_subquery is not None:
+        add("subquery_linear" if _linear_subquery_source(node) else "subquery_complex")
+    for subquery in node.find_all(exp.Subquery):
+        if subquery is top_subquery or id(subquery) in join_subqueries:
+            continue
+        add("subquery_complex")
+    if any(isinstance(x, exp.Count) and isinstance(x.this, exp.Distinct) for x in node.walk()):
+        add("count_distinct")
+    if any(isinstance(x, exp.Median) for x in node.walk()):
+        add("median")
+    if any(isinstance(x, exp.StddevPop) for x in node.walk()):
+        add("stddev_population")
+    if any(isinstance(x, (exp.Stddev, exp.StddevSamp)) for x in node.walk()):
+        add("stddev_sample")
+    if any(isinstance(x, exp.VariancePop) for x in node.walk()):
+        add("variance_population")
+    if any(isinstance(x, exp.Variance) for x in node.walk()):
+        add("variance_sample")
+
+    supported_aggregates = (
+        exp.Count,
+        exp.Sum,
+        exp.Avg,
+        exp.Min,
+        exp.Max,
+        exp.Median,
+        exp.StddevPop,
+        exp.VariancePop,
+    )
+    if any(
+        isinstance(item, exp.AggFunc)
+        and not isinstance(item, supported_aggregates)
+        and not isinstance(item, (exp.Stddev, exp.StddevSamp, exp.Variance))
+        for item in node.walk()
+    ):
+        add("aggregation_unsupported")
+    if isinstance(node, (exp.Union, exp.Intersect, exp.Except)):
+        add("set_operations")
+
+    normalized = sql.upper()
+    if "UNNEST(" in normalized:
+        add("unnest")
+    if "PIVOT" in normalized:
+        add("pivot")
+    if "ASOF JOIN" in normalized:
+        add("asof_join")
+
+    return found
+
+
+def required_driver_features(sql: str) -> set[str]:
+    """Return Metabase driver capabilities needed to execute the generated MBQL."""
+    node = parse_one(sql, read="duckdb")
+    required: set[str] = set()
+
+    if node.args.get("with_") or any(node.find_all(exp.Subquery)):
+        required.add("nested-queries")
+    if isinstance(node, exp.Select) and node.args.get("having"):
+        required.add("nested-queries")
+
+    for join in node.find_all(exp.Join):
+        side = (join.args.get("side") or "").upper()
+        kind = (join.args.get("kind") or "").upper()
+        if side == "LEFT":
+            required.add("left-join")
+        elif side == "RIGHT":
+            required.add("right-join")
+        elif side == "FULL":
+            required.add("full-join")
+        elif kind in {"", "INNER"}:
+            required.add("inner-join")
+        if isinstance(join.this, exp.Subquery):
+            required.add("nested-queries")
+
+    if any(
+        isinstance(item, (exp.Count, exp.Sum, exp.Avg, exp.Min, exp.Max))
+        for item in node.walk()
+    ):
+        required.add("basic-aggregations")
+    if any(isinstance(item, exp.Median) for item in node.walk()):
+        required.add("percentile-aggregations")
+    if any(
+        isinstance(item, (exp.Stddev, exp.StddevSamp, exp.StddevPop, exp.Variance, exp.VariancePop))
+        for item in node.walk()
+    ):
+        required.add("standard-deviation-aggregations")
+
+    expression_nodes = (
+        exp.Lower,
+        exp.Upper,
+        exp.Coalesce,
+        exp.Abs,
+        exp.Concat,
+        exp.Substring,
+        exp.Replace,
+        exp.Trim,
+        exp.Length,
+        exp.If,
+        exp.Case,
+        exp.Extract,
+        exp.Cast,
+        exp.Add,
+        exp.Sub,
+        exp.Mul,
+        exp.Div,
+        exp.Mod,
+    )
+    if any(isinstance(item, expression_nodes) for item in node.walk()):
+        required.add("expressions")
+
+    return required
+
+
+def report(rows: Iterable[FeatureResult] = FEATURE_MATRIX) -> dict[str, object]:
+    rows = tuple(rows)
+    counts = {status.value: sum(row.status == status for row in rows) for status in Status}
+    return {
+        "features": [asdict(row) for row in rows],
+        "counts": counts,
+        "semantic_mismatch_allowed": 0,
+    }
+
+
+app = cyclopts.App(name="mbql-conformance", help=__doc__)
+
+
+@app.default
+def main(sql: str | None = None, *, compact: bool = False) -> int:
+    """Print the feature matrix or classify one DuckDB SQL query."""
+    payload: object = report() if not sql else [asdict(row) for row in classify(sql)]
+    print(json.dumps(payload, ensure_ascii=False, indent=None if compact else 2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(app())
