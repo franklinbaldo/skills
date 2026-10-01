@@ -106,3 +106,7 @@ Ajuste a extensão ao pedido. Para uma cena curta, evite um dossiê maior que a 
 Se o usuário pedir “só o texto”, entregue somente a transcrição adequada ao modo escolhido, sem inserir direção nela. Se já houver campos de direção configurados, use-os na entrega separada apenas quando solicitados.
 
 Em obras longas, feche cenas ou beats antes de dividir. Replique configurações vocais e a direção necessária em cada requisição, pois continuidade não é garantida entre chamadas. Mantenha um registro editorial de emoção de entrada/saída, última frase e próxima ação; não acrescente esse registro ao áudio. Nunca repita uma frase audível só para dar contexto ao próximo trecho. Consulte limites técnicos atuais e não confunda tamanho da entrada com duração de saída.
+
+## Real-use postmortem
+
+Após um uso relevante, avalie se a skill foi escolhida corretamente, o resultado, o efeito concreto das instruções na qualidade e os atritos ou soluções improvisadas. Sucesso rotineiro não exige registro persistente. Se houver aprendizado acionável, consulte issues existentes em `franklinbaldo/skills` e prepare feedback factual e sanitizado para uma issue correspondente ou uma nova **Skill use feedback**. Publique somente quando houver autorização para essa comunicação; esta skill não concede essa permissão. Nunca inclua segredos, dados pessoais ou material privado/confidencial apenas para relatar o uso.
