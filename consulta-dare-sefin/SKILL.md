@@ -64,13 +64,18 @@ ______________________________________________________________________
 
 ## 3. Uso do Script
 
+> [!WARNING]
+> Nunca use guia real em exemplo, issue, PR ou documentação: quem tem o código de barras obtém
+> do endpoint o nome, o CPF e o endereço do contribuinte. CSV, JSON e HTML de saída carregam os
+> mesmos dados e vão sempre para `.cache/`, fora do controle de versão.
+
 ### A. Consulta Direta de Guia Individual (Zero Configuração)
 
 Basta passar o código de barras (48 dígitos) diretamente na URL do GitHub:
 
 ```bash
 uv run .agents/skills/consulta-dare-sefin/scripts/consultar_dare.py \
-  --codigo "856600000124046500227247305300138966452150725722"
+  --codigo "<codigo-de-barras-48-digitos-da-guia-1>"
 ```
 
 ### B. Consulta de Lote via JSON
@@ -80,14 +85,14 @@ Prepare um arquivo `guias.json` no formato:
 ```json
 [
   {
-    "parcela": "83",
-    "vencimento": "31/10/2024",
-    "codigo": "856600000124046500227247305300138966452150725722"
+    "parcela": "1",
+    "vencimento": "31/01/2026",
+    "codigo": "<codigo-de-barras-48-digitos-da-guia-1>"
   },
   {
-    "parcela": "84",
-    "vencimento": "29/11/2024",
-    "codigo": "856800000122046500227247334580138967452150725722"
+    "parcela": "2",
+    "vencimento": "27/02/2026",
+    "codigo": "<codigo-de-barras-48-digitos-da-guia-2>"
   }
 ]
 ```
@@ -98,7 +103,7 @@ Execute a conferência em lote salvando o CSV consolidado e os comprovantes HTML
 uv run .agents/skills/consulta-dare-sefin/scripts/consultar_dare.py \
   --arquivo guias.json \
   --output-dir .cache/comprovantes-dare/ \
-  --csv resultado_dares.csv
+  --csv .cache/comprovantes-dare/resultado.csv
 ```
 
 ### C. Consulta de Lote via CSV
@@ -107,8 +112,8 @@ Também aceita arquivo `.csv` delimitado por ponto e vírgula contendo no mínim
 
 ```csv
 parcela;vencimento;codigo
-83;31/10/2024;856600000124046500227247305300138966452150725722
-84;29/11/2024;856800000122046500227247334580138967452150725722
+1;31/01/2026;<codigo-de-barras-48-digitos-da-guia-1>
+2;27/02/2026;<codigo-de-barras-48-digitos-da-guia-2>
 ```
 
 Execute:
@@ -117,7 +122,7 @@ Execute:
 uv run .agents/skills/consulta-dare-sefin/scripts/consultar_dare.py \
   --arquivo guias.csv \
   --output-dir .cache/comprovantes-dare/ \
-  --csv resultado_dares.csv
+  --csv .cache/comprovantes-dare/resultado.csv
 ```
 
 ### D. Onde ficam os comprovantes
@@ -146,10 +151,10 @@ O script realiza a extração exaustiva de **todos os blocos e campos** da certi
 1. **Painel Visual no Terminal (Guia Única):**
    Renderiza caixas e tabelas formatadas com `rich` divididas em *Contribuinte*, *Arrecadação & Autenticação* e *Detalhamento Financeiro*.
 
-2. **Relatório Consolidado CSV (`--csv resultado.csv`):**
+2. **Relatório Consolidado CSV (`--csv .cache/comprovantes-dare/resultado.csv`):**
    Gera planilha delimitada por ponto e vírgula com **todas as 34 colunas** descritas acima.
 
-3. **Objeto JSON Completo (`--json resultado.json`):**
+3. **Objeto JSON Completo (`--json .cache/comprovantes-dare/resultado.json`):**
    Gera JSON estruturado completo contendo a lista de todos os registros com tipagem textual estrita.
 
 4. **Comprovantes Oficiais HTML (`.cache/comprovantes-dare/comprovante_<codigo>.html`):**

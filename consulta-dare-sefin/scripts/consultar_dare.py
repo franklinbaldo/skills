@@ -343,7 +343,7 @@ def main(
     """Consulta e extrai todos os dados de comprovantes de pagamento de DARE na SEFIN/RO.
 
     Exemplos:
-        consultar_dare 856600000124046500227247305300138966452150725722
+        consultar_dare <codigo-de-barras-48-digitos>
         consultar_dare --arquivo guias.json --csv resultado_completo.csv --json resultado.json
     """
     dare_session = session or os.environ.get("SEFIN_DARE_SESSION")
@@ -515,6 +515,11 @@ def main(
         json_out.write_text(json.dumps(dados_json, ensure_ascii=False, indent=2), encoding="utf-8")
         console.print(f"[green]JSON estruturado completo salvo em:[/green] {json_out.resolve()}")
 
+    # Sem nenhuma guia verificada (SEFIN fora do ar, timeout, só HTTP de erro), sair com
+    # zero diria a quem automatiza que a conferência foi feita.
+    if not resultados or all(r.situacao == "erro" for r in resultados):
+        console.print("[red]Nenhuma guia foi verificada.[/red]")
+        return 1
     return 0
 
 
