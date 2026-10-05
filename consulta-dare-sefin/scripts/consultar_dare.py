@@ -23,7 +23,7 @@ import json
 import os
 import re
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Annotated
 
@@ -191,6 +191,13 @@ def extrair_dados_comprovante(
         arquivo_comprovante=caminho_salvo,
         observacao=obs,
     )
+
+
+def _resultado_erro(parcela: str, vencimento: str, codigo: str, motivo: str) -> ResultadoDare:
+    """Resultado de guia não verificada: só a identificação e o motivo, o resto vazio."""
+    vazios = {f.name: "" for f in fields(ResultadoDare)}
+    vazios.update(parcela=parcela, vencimento=vencimento, codigo=codigo, situacao="erro", observacao=motivo)
+    return ResultadoDare(**vazios)
 
 
 def consultar_guia(
@@ -402,6 +409,9 @@ def main(
             venc = str(g.get("vencimento", "")).strip()
 
             if not cod:
+                # Linha sem código não some do lote: vira erro, e o lote sai com 1.
+                console.print(f"[{idx}/{len(guias_a_consultar)}] [red]Linha sem código de barras.[/red]")
+                resultados.append(_resultado_erro(parc, venc, "", "linha sem código de barras"))
                 continue
 
             console.print(f"[{idx}/{len(guias_a_consultar)}] Consultando guia {parc or cod[:10]}...", end=" ")
@@ -424,45 +434,7 @@ def main(
                     console.print(f"[yellow]{res.situacao.upper()}[/yellow]")
             except Exception as e:
                 console.print(f"[red]FALHA:[/red] {e}")
-                resultados.append(
-                    ResultadoDare(
-                        parcela=parc,
-                        vencimento=venc,
-                        codigo=cod,
-                        situacao="erro",
-                        valor_total="",
-                        valor_principal="",
-                        valor_multa="",
-                        valor_juros="",
-                        outros_acrescimos="",
-                        data_pagamento="",
-                        contribuinte="",
-                        cpf_cnpj="",
-                        telefone="",
-                        endereco="",
-                        municipio="",
-                        cep="",
-                        uf="",
-                        numero_documento="",
-                        numero_processo="",
-                        numero_parcela="",
-                        codigo_receita="",
-                        tipo_dare="",
-                        sequencial="",
-                        mes_ano_referencia="",
-                        complemento="",
-                        unidade_gestora="",
-                        gestao="",
-                        nome_servidor="",
-                        cpf_servidor="",
-                        restituicao="",
-                        valor_restituido="",
-                        codigo_barras_formatado="",
-                        versao_sefin="",
-                        arquivo_comprovante="",
-                        observacao=str(e),
-                    )
-                )
+                resultados.append(_resultado_erro(parc, venc, cod, str(e)))
 
             time.sleep(0.3)
 
