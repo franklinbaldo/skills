@@ -46,22 +46,36 @@ Para consultas automatizadas diretas (individuais ou em lote sem captcha):
 
 ---
 
-## 3. Uso do Script PEP 723
+## 3. Origem Canônica e Execução Direta via URL
 
-O script associado está localizado em:
-`scripts/consultar_dare.py`
+A fonte canônica da skill é:
+```text
+https://github.com/franklinbaldo/skills/blob/main/consulta-dare-sefin/SKILL.md
+```
 
-Executa com dependências isoladas gerenciadas automaticamente pelo `uv`.
+A URL canônica do script executável é:
+```text
+https://raw.githubusercontent.com/franklinbaldo/skills/main/consulta-dare-sefin/scripts/consultar_dare.py
+```
 
-### A. Consulta de Guia Individual
+**Prefira rodar o script diretamente da sua URL HTTPS no GitHub com `uv run`**. Não é necessário clonar o repositório de skills para utilizá-lo. O script declara suas próprias dependências via PEP 723, de modo que o `uv` cria o ambiente isolado e instala `httpx`, `cyclopts`, `beautifulsoup4` e `rich` automaticamente na primeira execução.
+
+> [!TIP]
+> Se esta skill foi lida de um commit específico (ref pinada) em vez da `main`, substitua `main` na URL do script raw pelo mesmo SHA do commit antes de executar, garantindo alinhamento de versão.
+
+---
+
+## 4. Uso do Script
+
+### A. Consulta Direta de Guia Individual (via URL)
 
 ```bash
-uv run --script .claude/skills/consulta-dare-sefin/scripts/consultar_dare.py \
+uv run https://raw.githubusercontent.com/franklinbaldo/skills/main/consulta-dare-sefin/scripts/consultar_dare.py \
   --codigo "856600000124046500227247305300138966452150725722" \
   --session "<valor_do_cookie>"
 ```
 
-### B. Consulta de Lote via JSON
+### B. Consulta de Lote via JSON (via URL)
 
 Prepare um arquivo `guias.json` no formato:
 ```json
@@ -81,14 +95,21 @@ Prepare um arquivo `guias.json` no formato:
 
 Execute a conferência em lote salvando o CSV consolidado e os HTMLs:
 ```bash
-uv run --script .claude/skills/consulta-dare-sefin/scripts/consultar_dare.py \
+uv run https://raw.githubusercontent.com/franklinbaldo/skills/main/consulta-dare-sefin/scripts/consultar_dare.py \
   --arquivo guias.json \
   --session "<valor_do_cookie>" \
   --output-dir comprovantes/ \
   --csv resultado_dares.csv
 ```
 
-### C. Consulta de Lote via CSV
+### C. Execução Local (quando o repositório estiver clonado)
+
+Caso esteja dentro do repositório de skills ou de um projeto que possua a pasta `.claude/skills/`:
+```bash
+uv run --script consulta-dare-sefin/scripts/consultar_dare.py --codigo "<codigo>" --session "<cookie>"
+```
+
+### D. Consulta de Lote via CSV
 
 Também aceita arquivo `.csv` delimitado por ponto e vírgula contendo no mínimo a coluna `codigo` (e opcionalmente `parcela` e `vencimento`):
 ```csv
