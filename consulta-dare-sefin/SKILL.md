@@ -124,9 +124,12 @@ O script realiza a extração exaustiva de **todos os blocos e campos** da certi
 
 * **Identificação:** `parcela`, `vencimento`, `codigo`, `situacao` (*pago / nao_encontrado / erro*);
 * **Detalhamento Financeiro:** `valor_principal`, `valor_multa`, `valor_juros`, `outros_acrescimos`, `valor_total`, `data_pagamento`;
-* **Dados do Contribuinte:** `contribuinte` (nome completo), `cpf_cnpj` (formatado/mascarado), `endereco`, `municipio`, `cep`, `uf`, `telefone`;
+* **Dados do Contribuinte:** `contribuinte` (nome completo), `cpf_cnpj` (extraído *verbatim* como retornado pela SEFIN, sem mascaramento introduzido pelo script), `endereco`, `municipio`, `cep`, `uf`, `telefone`;
 * **Dados da Arrecadação & Autenticação:** `numero_documento` (autenticação oficial SEFIN), `codigo_receita` (ex.: 7257), `numero_parcela`, `numero_processo`, `tipo_dare`, `sequencial`, `mes_ano_referencia`, `complemento`, `unidade_gestora`, `gestao`, `nome_servidor`, `cpf_servidor`, `restituicao`, `valor_restituido`;
 * **Metadados de Rastreabilidade:** `codigo_barras_formatado` (linha digitável com espaçamento oficial), `versao_sefin` (versão e build do sistema fazendário), `arquivo_comprovante` (caminho local do HTML), `observacao`.
+
+> [!NOTE]
+> **Preservação Fidedigna dos Dados (Sem Mascaramento Próprio):** O script não aplica nenhuma função de mascaramento, truncamento ou ofuscação. Todos os campos (CPF/CNPJ, nome, endereço, valores) são capturados exatamente (*verbatim*) como constam na resposta do servidor da SEFIN/RO. Se a SEFIN exibir caracteres de ocultação (ex.: `***.896.452-**`), isso reflete a política de privacidade pública do próprio portal fazendário na emissão daquela via.
 
 ### Formatos de Exportação
 
