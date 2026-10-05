@@ -2,9 +2,9 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "httpx>=0.27.0",
-#     "cyclopts>=3.0",
 #     "beautifulsoup4>=4.12.0",
+#     "cyclopts>=3.0",
+#     "httpx>=0.27.0",
 #     "rich>=13.0.0",
 # ]
 # ///
@@ -12,7 +12,7 @@
 
 Permite consultar guias individuais ou em lote no portal da SEFIN/RO,
 extraindo a situação, data de pagamento, valor arrecadado, autenticação e
-salvando os comprovantes oficiais.
+salvando os comprovantes oficiais. O endpoint é público e dispensa autenticação.
 """
 
 from __future__ import annotations
@@ -21,21 +21,20 @@ import csv
 import json
 import os
 import re
-import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
-import cyclopts
 import httpx
 from bs4 import BeautifulSoup
+from cyclopts import App, Parameter
 from rich.console import Console
 from rich.table import Table
 
-app = cyclopts.App(
-    name="consultar_dare",
-    help="Consulta e extração de comprovantes de pagamento de DARE no portal SEFIN/RO.",
+app = App(
+    name="consultar-dare",
+    help=__doc__,
 )
 console = Console()
 
@@ -163,9 +162,9 @@ def consultar_guia(
     codigo: str,
     parcela: str = "00",
     vencimento: str = "",
-    pasta_destino: Optional[Path] = None,
+    pasta_destino: Path | None = None,
 ) -> ResultadoDare:
-    """Efetua requisição ao endpoint de impressão da SEFIN com a sessão ativa."""
+    """Efetua requisição ao endpoint de impressão da SEFIN."""
     params = {
         "numero_guia_cbarras": codigo.strip(),
         "numero_parcela": "00",
@@ -196,47 +195,53 @@ def consultar_guia(
 @app.default
 def main(
     codigo: Annotated[
-        Optional[str],
-        cyclopts.Parameter(
-            name=["--codigo", "-c"],
-            help="Código de barras ou linha digitável da guia (48 dígitos).",
+        str | None,
+        Parameter(
+            name=["CODIGO", "--codigo", "-c"],
+            help="Código de barras ou linha digitável da guia (48 dígitos). Aceito como argumento posicional ou flag.",
         ),
     ] = None,
+    *,
     arquivo: Annotated[
-        Optional[Path],
-        cyclopts.Parameter(
+        Path | None,
+        Parameter(
             name=["--arquivo", "-a"],
             help="Arquivo JSON ou CSV contendo lote de guias a consultar.",
         ),
     ] = None,
-    session: Annotated[
-        Optional[str],
-        cyclopts.Parameter(
-            name=["--session", "-s"],
-            help="Valor do cookie _dare_session (opcional; o endpoint da SEFIN é público e funciona sem cookies).",
-        ),
-    ] = None,
     output_dir: Annotated[
         Path,
-        cyclopts.Parameter(
+        Parameter(
             name=["--output-dir", "-o"],
             help="Diretório onde salvar os arquivos HTML de comprovante.",
         ),
     ] = Path("comprovantes_dares"),
     csv_out: Annotated[
-        Optional[Path],
-        cyclopts.Parameter(
+        Path | None,
+        Parameter(
             name=["--csv"],
             help="Caminho do arquivo CSV de saída consolidado.",
         ),
     ] = None,
-):
-    """Consulta comprovantes de pagamento de DARE na SEFIN/RO."""
+    session: Annotated[
+        str | None,
+        Parameter(
+            name=["--session", "-s"],
+            help="Valor do cookie _dare_session (opcional; o endpoint da SEFIN é público).",
+        ),
+    ] = None,
+) -> int:
+    """Consulta comprovantes de pagamento de DARE na SEFIN/RO.
+
+    Exemplos:
+        consultar_dare 856600000124046500227247305300138966452150725722
+        consultar_dare --codigo 856600000124...
+        consultar_dare --arquivo guias.json --csv resultado.csv
+    """
     dare_session = session or os.environ.get("SEFIN_DARE_SESSION")
 
     cookies = {}
     if dare_session:
-        # Limpeza básica do cookie caso venha no formato '_dare_session=...'
         if dare_session.startswith("_dare_session="):
             dare_session = dare_session.split("=", 1)[1]
         cookies["_dare_session"] = dare_session
@@ -256,7 +261,7 @@ def main(
     if arquivo:
         if not arquivo.exists():
             console.print(f"[bold red]Erro:[/bold red] Arquivo não encontrado: {arquivo}")
-            sys.exit(1)
+            return 1
 
         if arquivo.suffix.lower() == ".json":
             dados = json.loads(arquivo.read_text(encoding="utf-8"))
@@ -264,7 +269,7 @@ def main(
                 guias_a_consultar.extend(dados)
             else:
                 console.print("[bold red]Erro:[/bold red] O JSON deve conter uma lista de guias.")
-                sys.exit(1)
+                return 1
         elif arquivo.suffix.lower() == ".csv":
             with arquivo.open(mode="r", encoding="utf-8") as f:
                 reader = csv.DictReader(f, delimiter=";")
@@ -272,11 +277,11 @@ def main(
                     guias_a_consultar.append(row)
         else:
             console.print("[bold red]Erro:[/bold red] Formato não suportado. Use .json ou .csv.")
-            sys.exit(1)
+            return 1
 
     if not guias_a_consultar:
-        console.print("[bold red]Erro:[/bold red] Nenhuma guia informada. Use --codigo ou --arquivo.")
-        sys.exit(1)
+        console.print("[bold red]Erro:[/bold red] Nenhuma guia informada. Passe CODIGO ou use --arquivo.")
+        return 1
 
     console.print(f"[bold cyan]SEFIN DARE[/bold cyan] — Iniciando consulta de {len(guias_a_consultar)} guia(s)...")
 
@@ -376,6 +381,8 @@ def main(
             for r in resultados:
                 writer.writerow(asdict(r))
         console.print(f"[green]CSV consolidado salvo com sucesso em:[/green] {csv_out.resolve()}")
+
+    return 0
 
 
 if __name__ == "__main__":
