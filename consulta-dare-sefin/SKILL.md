@@ -13,40 +13,28 @@ Guia operacional e automação para verificação de quitação e extração de 
 O portal da SEFIN disponibiliza a verificação pública de DARE em:
 `https://dare.sefin.ro.gov.br/situacao-dare`
 
-### O Endpoint de Impressão Direta
+### O Endpoint de Impressão Direta (Sem Captcha e Sem Autenticação)
 
-Ao realizar uma consulta pública com sucesso, o portal gera o comprovante oficial através da rota de impressão:
+A aplicação do portal da SEFIN expõe a seguinte rota pública de impressão de comprovante:
 ```http
 GET /situacao-dare/imprimir?numero_guia_cbarras=<CODIGO_BARRAS>&numero_parcela=00
 Host: dare.sefin.ro.gov.br
 ```
 
-Quando invocado com um cookie de sessão válido (`_dare_session`), esse endpoint **não exige resolução de captcha** e retorna imediatamente a página HTML do comprovante oficial, contendo:
-* **Situação:** Confirmação explícita de "COMPROVANTE DE PAGAMENTO DE DARE" (*pago*);
-* **Data do Pagamento:** Data exata da liquidação bancária/Pix (`dd/mm/aaaa`);
-* **Valor Total:** Montante arrecadado (valor principal, juros, multa e acréscimos);
-* **Dados do Contribuinte:** Nome e CPF/CNPJ;
-* **Código da Receita:** Ex.: `7257` (*Ressarcimento ao Erário — IPERON*);
-* **Autenticação:** Número do documento emitido pela SEFIN.
+Esse endpoint é **totalmente público**:
+* **Não exige captcha:** Não passa pelo fluxo de desafio com imagem do formulário inicial;
+* **Não exige autenticação nem cookies:** Pode ser consumido diretamente via GET puro por qualquer cliente HTTP (`curl`, `httpx`, navegador);
+* Retorna imediatamente o documento HTML oficial do comprovante de pagamento contendo:
+  * **Situação:** Identificação de "COMPROVANTE DE PAGAMENTO DE DARE" (*pago*);
+  * **Data do Pagamento:** Data exata da liquidação bancária/Pix (`dd/mm/aaaa`);
+  * **Valor Total:** Montante arrecadado (principal, juros, multa e acréscimos);
+  * **Dados do Contribuinte:** Nome e CPF/CNPJ;
+  * **Código da Receita:** Ex.: `7257` (*Ressarcimento ao Erário — IPERON*);
+  * **Autenticação SEFIN:** Número do documento gerado pelo sistema fazendário.
 
 ---
 
-## 2. Como Obter a Sessão (`_dare_session`)
-
-Para consultas automatizadas diretas (individuais ou em lote sem captcha):
-
-1. Abra qualquer navegador e acerte a URL: `https://dare.sefin.ro.gov.br/situacao-dare`
-2. Abra as Ferramentas do Desenvolvedor (**F12** ou Ctrl+Shift+I);
-3. Na aba **Rede / Network** (ou em **Application / Armazenamento -> Cookies -> dare.sefin.ro.gov.br**), localize o cookie nomeado `_dare_session`;
-4. Copie o valor completo do cookie (string iniciada tipicamente por `eQds...` ou caracteres alfanuméricos com percent-encoding);
-5. Utilize-o via parâmetro `--session` ou exporte como variável de ambiente:
-   ```powershell
-   $env:SEFIN_DARE_SESSION = "<valor_do_cookie>"
-   ```
-
----
-
-## 3. Origem Canônica e Execução Direta via URL
+## 2. Origem Canônica e Execução Direta via URL
 
 A fonte canônica da skill é:
 ```text
@@ -58,24 +46,25 @@ A URL canônica do script executável é:
 https://raw.githubusercontent.com/franklinbaldo/skills/main/consulta-dare-sefin/scripts/consultar_dare.py
 ```
 
-**Prefira rodar o script diretamente da sua URL HTTPS no GitHub com `uv run`**. Não é necessário clonar o repositório de skills para utilizá-lo. O script declara suas próprias dependências via PEP 723, de modo que o `uv` cria o ambiente isolado e instala `httpx`, `cyclopts`, `beautifulsoup4` e `rich` automaticamente na primeira execução.
+**Prefira rodar o script diretamente da sua URL HTTPS no GitHub com `uv run`**. Não é necessário clonar o repositório de skills nem instalar nada previamente. O script declara suas próprias dependências via PEP 723, de modo que o `uv` cria o ambiente isolado e instala `httpx`, `cyclopts`, `beautifulsoup4` e `rich` automaticamente na primeira execução.
 
 > [!TIP]
 > Se esta skill foi lida de um commit específico (ref pinada) em vez da `main`, substitua `main` na URL do script raw pelo mesmo SHA do commit antes de executar, garantindo alinhamento de versão.
 
 ---
 
-## 4. Uso do Script
+## 3. Uso do Script
 
-### A. Consulta Direta de Guia Individual (via URL)
+### A. Consulta Direta de Guia Individual (Zero Configuração)
+
+Basta passar o código de barras (48 dígitos) diretamente na URL do GitHub:
 
 ```bash
 uv run https://raw.githubusercontent.com/franklinbaldo/skills/main/consulta-dare-sefin/scripts/consultar_dare.py \
-  --codigo "856600000124046500227247305300138966452150725722" \
-  --session "<valor_do_cookie>"
+  --codigo "856600000124046500227247305300138966452150725722"
 ```
 
-### B. Consulta de Lote via JSON (via URL)
+### B. Consulta de Lote via JSON
 
 Prepare um arquivo `guias.json` no formato:
 ```json
@@ -93,29 +82,36 @@ Prepare um arquivo `guias.json` no formato:
 ]
 ```
 
-Execute a conferência em lote salvando o CSV consolidado e os HTMLs:
+Execute a conferência em lote salvando o CSV consolidado e os comprovantes HTML:
 ```bash
 uv run https://raw.githubusercontent.com/franklinbaldo/skills/main/consulta-dare-sefin/scripts/consultar_dare.py \
   --arquivo guias.json \
-  --session "<valor_do_cookie>" \
   --output-dir comprovantes/ \
   --csv resultado_dares.csv
 ```
 
-### C. Execução Local (quando o repositório estiver clonado)
-
-Caso esteja dentro do repositório de skills ou de um projeto que possua a pasta `.claude/skills/`:
-```bash
-uv run --script consulta-dare-sefin/scripts/consultar_dare.py --codigo "<codigo>" --session "<cookie>"
-```
-
-### D. Consulta de Lote via CSV
+### C. Consulta de Lote via CSV
 
 Também aceita arquivo `.csv` delimitado por ponto e vírgula contendo no mínimo a coluna `codigo` (e opcionalmente `parcela` e `vencimento`):
 ```csv
 parcela;vencimento;codigo
 83;31/10/2024;856600000124046500227247305300138966452150725722
 84;29/11/2024;856800000122046500227247334580138967452150725722
+```
+
+Execute:
+```bash
+uv run https://raw.githubusercontent.com/franklinbaldo/skills/main/consulta-dare-sefin/scripts/consultar_dare.py \
+  --arquivo guias.csv \
+  --output-dir comprovantes/ \
+  --csv resultado_dares.csv
+```
+
+### D. Execução Local (quando o repositório estiver clonado)
+
+Caso esteja dentro do repositório de skills ou de um projeto que possua a pasta `.claude/skills/`:
+```bash
+uv run --script consulta-dare-sefin/scripts/consultar_dare.py --codigo "<codigo>"
 ```
 
 ---

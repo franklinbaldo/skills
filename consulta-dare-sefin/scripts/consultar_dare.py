@@ -213,7 +213,7 @@ def main(
         Optional[str],
         cyclopts.Parameter(
             name=["--session", "-s"],
-            help="Valor do cookie _dare_session (ou definido em SEFIN_DARE_SESSION).",
+            help="Valor do cookie _dare_session (opcional; o endpoint da SEFIN é público e funciona sem cookies).",
         ),
     ] = None,
     output_dir: Annotated[
@@ -234,19 +234,13 @@ def main(
     """Consulta comprovantes de pagamento de DARE na SEFIN/RO."""
     dare_session = session or os.environ.get("SEFIN_DARE_SESSION")
 
-    if not dare_session:
-        console.print(
-            "[bold red]Erro:[/bold red] O cookie de sessão do SEFIN é obrigatório para consulta direta.\n"
-            "Informe via [yellow]--session <valor>[/yellow] ou defina a variável [yellow]SEFIN_DARE_SESSION[/yellow].\n\n"
-            "[dim]Dica: Abra dare.sefin.ro.gov.br no navegador, abra DevTools (F12) -> Application -> Cookies e copie o valor de '_dare_session'.[/dim]"
-        )
-        sys.exit(1)
+    cookies = {}
+    if dare_session:
+        # Limpeza básica do cookie caso venha no formato '_dare_session=...'
+        if dare_session.startswith("_dare_session="):
+            dare_session = dare_session.split("=", 1)[1]
+        cookies["_dare_session"] = dare_session
 
-    # Limpeza básica do cookie caso venha no formato '_dare_session=...'
-    if dare_session.startswith("_dare_session="):
-        dare_session = dare_session.split("=", 1)[1]
-
-    cookies = {"_dare_session": dare_session}
     headers = {
         "User-Agent": DEFAULT_USER_AGENT,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
