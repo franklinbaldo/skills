@@ -11,8 +11,9 @@
 """Consulta e extração de comprovantes de pagamento de DARE na SEFIN/RO.
 
 Permite consultar guias individuais ou em lote no portal da SEFIN/RO,
-extraindo a situação, data de pagamento, valor arrecadado, autenticação e
-salvando os comprovantes oficiais. O endpoint é público e dispensa autenticação.
+extraindo todos os campos da certidão de arrecadação: contribuinte, endereço,
+detalhamento financeiro, código de receita, número do documento e autenticação.
+O endpoint de impressão oficial é público e dispensa autenticação ou captcha.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ import httpx
 from bs4 import BeautifulSoup
 from cyclopts import App, Parameter
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 app = App(
@@ -47,18 +49,55 @@ DEFAULT_USER_AGENT = (
 
 @dataclass
 class ResultadoDare:
+    # Identificação da Consulta
     parcela: str
     vencimento: str
     codigo: str
     situacao: str
+
+    # Dados Financeiros / Valores
+    valor_total: str
+    valor_principal: str
+    valor_multa: str
+    valor_juros: str
+    outros_acrescimos: str
     data_pagamento: str
-    valor: str
+
+    # Dados do Contribuinte
     contribuinte: str
     cpf_cnpj: str
-    codigo_receita: str
+    telefone: str
+    endereco: str
+    municipio: str
+    cep: str
+    uf: str
+
+    # Dados da Arrecadação
     numero_documento: str
+    numero_processo: str
+    numero_parcela: str
+    codigo_receita: str
+    tipo_dare: str
+    sequencial: str
+    mes_ano_referencia: str
+    complemento: str
+    unidade_gestora: str
+    gestao: str
+    nome_servidor: str
+    cpf_servidor: str
+    restituicao: str
+    valor_restituido: str
+
+    # Código de barras e metadados
+    codigo_barras_formatado: str
+    versao_sefin: str
     arquivo_comprovante: str
     observacao: str
+
+
+def _extrair_campo_regex(padrao: str, texto: str, default: str = "") -> str:
+    m = re.search(padrao, texto, re.I)
+    return m.group(1).strip() if m else default
 
 
 def extrair_dados_comprovante(
@@ -68,90 +107,87 @@ def extrair_dados_comprovante(
     vencimento: str = "",
     caminho_salvo: str = "",
 ) -> ResultadoDare:
-    """Extrai campos estruturados do HTML do comprovante da SEFIN."""
+    """Extrai exaustivamente todos os campos estruturados do HTML do comprovante da SEFIN."""
     soup = BeautifulSoup(html, "html.parser")
 
-    data_pagamento = ""
-    valor_total = ""
-    contribuinte = ""
-    cpf_cnpj = ""
-    codigo_receita = ""
-    numero_doc = ""
-    situacao = "nao_encontrado"
-    obs = ""
-
-    # Verifica se há título de comprovante
-    titulo = soup.find(class_=re.compile(r"legacy-title", re.I))
     texto_geral = soup.get_text()
+    titulo_el = soup.find(class_=re.compile(r"legacy-title", re.I))
 
-    if titulo or "COMPROVANTE DE PAGAMENTO DE DARE" in texto_geral:
-        situacao = "pago"
+    situacao = "pago" if (titulo_el or "COMPROVANTE DE PAGAMENTO DE DARE" in texto_geral) else "nao_encontrado"
 
-    # Busca em legacy-arrec-row ou divs de chave-valor
-    for row in soup.find_all(class_=re.compile(r"legacy-arrec-row|legacy-item", re.I)):
-        txt = row.get_text(separator=" ", strip=True)
-        if "Data Pagamento:" in txt:
-            span = row.find("span")
-            if span:
-                data_pagamento = span.get_text(strip=True)
-        if "Cod. Receita:" in txt or "Código da Receita:" in txt:
-            span = row.find("span")
-            if span:
-                codigo_receita = span.get_text(strip=True)
-        if "Nº do Documento:" in txt:
-            span = row.find("span")
-            if span:
-                numero_doc = span.get_text(strip=True)
-        if "Nome / Contribuinte:" in txt:
-            contribuinte = txt.replace("Nome / Contribuinte:", "").strip()
-        if "Inscricao Estadual / CPF / CNPJ:" in txt:
-            cpf_cnpj = txt.replace("Inscricao Estadual / CPF / CNPJ:", "").strip()
+    # 1. Dados do Contribuinte
+    contribuinte = _extrair_campo_regex(r"Nome\s*/\s*Contribuinte:</b>\s*([^<]+)", html)
+    cpf_cnpj = _extrair_campo_regex(r"Inscricao Estadual\s*/\s*CPF\s*/\s*CNPJ:</b>\s*([^<]+)", html)
+    telefone = _extrair_campo_regex(r"DDD\s*/\s*TELEFONE:</b>\s*([^<]*)", html)
+    endereco = _extrair_campo_regex(r"Endereço:</b>\s*([^<]+)", html)
+    municipio = _extrair_campo_regex(r"Municipio/Distrito:</b>\s*([^<]+)", html)
+    cep = _extrair_campo_regex(r"CEP:</b>\s*([^<]+)", html)
+    uf = _extrair_campo_regex(r"UF:</b>\s*([^<]+)", html)
 
-    # Busca valor total na tabela financeira
-    val_total_el = soup.find(string=re.compile(r"Valor Total", re.I))
-    if val_total_el:
-        parent_td = val_total_el.find_parent("td")
-        if parent_td:
-            span_val = parent_td.find("span")
-            if span_val:
-                valor_total = span_val.get_text(strip=True)
+    # 2. Dados da Arrecadação
+    numero_processo = _extrair_campo_regex(r"Nº\s*Processo:</b>\s*<span>([^<]*)</span>", html)
+    numero_doc = _extrair_campo_regex(r"Nº\s*do\s*Documento:</b>\s*<span>([^<]*)</span>", html)
+    numero_parcela = _extrair_campo_regex(r"Nº\s*da\s*Parcela:</b>\s*<span>([^<]*)</span>", html)
+    complemento = _extrair_campo_regex(r"Complemento:</b>\s*<span>([^<]*)</span>", html)
+    mes_ano_ref = _extrair_campo_regex(r"Mes\s*/\s*Ano\s*referência:</b>\s*<span>([^<]*)</span>", html)
+    nome_servidor = _extrair_campo_regex(r"Nome\s*do\s*Servidor:</b>\s*<span>([^<]*)</span>", html)
+    cpf_servidor = _extrair_campo_regex(r"CPF\s*do\s*Servidor:</b>\s*<span>([^<]*)</span>", html)
+    tipo_dare = _extrair_campo_regex(r"Tipo\s*de\s*Dare:</b>\s*<span>([^<]*)</span>", html)
+    sequencial = _extrair_campo_regex(r"Sequencial:</b>\s*<span>([^<]*)</span>", html)
+    codigo_receita = _extrair_campo_regex(r"Cod\.\s*Receita:</b>\s*<span>([^<]*)</span>", html)
+    data_pagamento = _extrair_campo_regex(r"Data\s*Pagamento:</b>\s*<span>([^<]*)</span>", html)
+    unidade_gestora = _extrair_campo_regex(r"Unidade\s*Gestora:</b>\s*<span>([^<]*)</span>", html)
+    gestao = _extrair_campo_regex(r"Gestão:</b>\s*<span>([^<]*)</span>", html)
+    restituicao = _extrair_campo_regex(r"Restituição:</b>\s*<span>([^<]*)</span>", html)
+    valor_restituido = _extrair_campo_regex(r"Valor\s*Restituído:</b>\s*<span>([^<]*)</span>", html)
 
-    # Fallbacks por regex caso a estrutura varie
-    if not data_pagamento:
-        m = re.search(r"Data Pagamento:</b>\s*<span>([^<]+)</span>", html, re.I)
-        if m:
-            data_pagamento = m.group(1).strip()
-            situacao = "pago"
+    # 3. Valores da Arrecadação
+    valor_principal = _extrair_campo_regex(r"Valor\s*Principal</b>\s*<span[^>]*>\s*([^<]+)</span>", html)
+    valor_multa = _extrair_campo_regex(r"Valor\s*da\s*Multa</b>\s*<span[^>]*>\s*([^<]+)</span>", html)
+    valor_juros = _extrair_campo_regex(r"Valor\s*dos\s*Juros</b>\s*<span[^>]*>\s*([^<]+)</span>", html)
+    outros_acrescimos = _extrair_campo_regex(r"Outros\s*Acréscimos</b>\s*<span[^>]*>\s*([^<]+)</span>", html)
+    valor_total = _extrair_campo_regex(r"Valor\s*Total</b>\s*<span[^>]*>\s*([^<]+)</span>", html)
 
-    if not valor_total:
-        m = re.search(r"Valor Total</b>\s*<span[^>]*>\s*([^<]+)</span>", html, re.I)
-        if m:
-            valor_total = m.group(1).strip()
+    # 4. Código de barras formatado e versão
+    codigo_barras_formatado = _extrair_campo_regex(r'<div class="legacy-barcode">([^<]+)</div>', html)
+    versao_sefin = _extrair_campo_regex(r"Versão\s*([^<\n]+)", html)
 
-    if not numero_doc:
-        m = re.search(r"Nº do Documento:</b>\s*<span>([^<]+)</span>", html, re.I)
-        if m:
-            numero_doc = m.group(1).strip()
-
-    if not contribuinte:
-        m = re.search(r"Nome\s*/\s*Contribuinte:</b>\s*([^<]+)</div>", html, re.I)
-        if m:
-            contribuinte = m.group(1).strip()
-
-    if situacao == "pago" and not obs:
-        obs = f"Doc: {numero_doc}" if numero_doc else "Quitado"
+    obs = f"Doc: {numero_doc}" if numero_doc else ("Quitado" if situacao == "pago" else "")
 
     return ResultadoDare(
         parcela=parcela,
         vencimento=vencimento,
         codigo=codigo,
         situacao=situacao,
+        valor_total=valor_total,
+        valor_principal=valor_principal,
+        valor_multa=valor_multa,
+        valor_juros=valor_juros,
+        outros_acrescimos=outros_acrescimos,
         data_pagamento=data_pagamento,
-        valor=valor_total,
         contribuinte=contribuinte,
         cpf_cnpj=cpf_cnpj,
-        codigo_receita=codigo_receita,
+        telefone=telefone,
+        endereco=endereco,
+        municipio=municipio,
+        cep=cep,
+        uf=uf,
         numero_documento=numero_doc,
+        numero_processo=numero_processo,
+        numero_parcela=numero_parcela,
+        codigo_receita=codigo_receita,
+        tipo_dare=tipo_dare,
+        sequencial=sequencial,
+        mes_ano_referencia=mes_ano_ref,
+        complemento=complemento,
+        unidade_gestora=unidade_gestora,
+        gestao=gestao,
+        nome_servidor=nome_servidor,
+        cpf_servidor=cpf_servidor,
+        restituicao=restituicao,
+        valor_restituido=valor_restituido,
+        codigo_barras_formatado=codigo_barras_formatado,
+        versao_sefin=versao_sefin,
         arquivo_comprovante=caminho_salvo,
         observacao=obs,
     )
@@ -192,6 +228,65 @@ def consultar_guia(
     )
 
 
+def exibir_painel_detalhado(res: ResultadoDare) -> None:
+    """Renderiza todas as informações extraídas do comprovante em painel formatado."""
+    grid = Table.grid(expand=True)
+    grid.add_column(ratio=1)
+    grid.add_column(ratio=1)
+
+    t_contrib = Table(title="Contribuinte", box=None, padding=(0, 1))
+    t_contrib.add_column("Campo", style="bold cyan")
+    t_contrib.add_column("Valor")
+    t_contrib.add_row("Nome", res.contribuinte or "-")
+    t_contrib.add_row("CPF / CNPJ", res.cpf_cnpj or "-")
+    t_contrib.add_row("Endereço", res.endereco or "-")
+    t_contrib.add_row("Município / UF", f"{res.municipio} / {res.uf}" if res.municipio else "-")
+    t_contrib.add_row("CEP", res.cep or "-")
+    if res.telefone:
+        t_contrib.add_row("Telefone", res.telefone)
+
+    t_arrec = Table(title="Arrecadação & Autenticação", box=None, padding=(0, 1))
+    t_arrec.add_column("Campo", style="bold cyan")
+    t_arrec.add_column("Valor")
+    t_arrec.add_row("Nº Documento", res.numero_documento or "-")
+    t_arrec.add_row("Código Receita", res.codigo_receita or "-")
+    t_arrec.add_row("Data Pagamento", f"[green]{res.data_pagamento}[/green]" if res.data_pagamento else "-")
+    t_arrec.add_row("Nº Parcela", res.numero_parcela or "-")
+    t_arrec.add_row("Tipo de DARE", res.tipo_dare or "-")
+    t_arrec.add_row("Processo", res.numero_processo or "-")
+    t_arrec.add_row("Restituição", f"{res.restituicao} (R$ {res.valor_restituido})")
+
+    grid.add_row(t_contrib, t_arrec)
+
+    t_valores = Table(title="Detalhamento Financeiro (R$)", expand=True)
+    t_valores.add_column("Principal", justify="right")
+    t_valores.add_column("Multa", justify="right")
+    t_valores.add_column("Juros", justify="right")
+    t_valores.add_column("Acréscimos", justify="right")
+    t_valores.add_column("VALOR TOTAL", justify="right", style="bold green")
+    t_valores.add_row(
+        res.valor_principal or "0,00",
+        res.valor_multa or "0,00",
+        res.valor_juros or "0,00",
+        res.outros_acrescimos or "0,00",
+        res.valor_total or "0,00",
+    )
+
+    p_content = Table.grid(expand=True)
+    p_content.add_row(grid)
+    p_content.add_row("")
+    p_content.add_row(t_valores)
+    if res.codigo_barras_formatado:
+        p_content.add_row("")
+        p_content.add_row(f"[dim]Código de Barras:[/dim] [yellow]{res.codigo_barras_formatado}[/yellow]")
+    if res.versao_sefin:
+        p_content.add_row(f"[dim]Sistema SEFIN:[/dim] {res.versao_sefin}")
+
+    cor = "green" if res.situacao == "pago" else "yellow"
+    titulo = f"COMPROVANTE DE PAGAMENTO DE DARE — [{cor}]{res.situacao.upper()}[/{cor}]"
+    console.print(Panel(p_content, title=titulo, border_style=cor))
+
+
 @app.default
 def main(
     codigo: Annotated[
@@ -220,7 +315,14 @@ def main(
         Path | None,
         Parameter(
             name=["--csv"],
-            help="Caminho do arquivo CSV de saída consolidado.",
+            help="Caminho do arquivo CSV de saída consolidado com todas as colunas.",
+        ),
+    ] = None,
+    json_out: Annotated[
+        Path | None,
+        Parameter(
+            name=["--json"],
+            help="Caminho do arquivo JSON de saída consolidado com todos os campos.",
         ),
     ] = None,
     session: Annotated[
@@ -231,12 +333,11 @@ def main(
         ),
     ] = None,
 ) -> int:
-    """Consulta comprovantes de pagamento de DARE na SEFIN/RO.
+    """Consulta e extrai todos os dados de comprovantes de pagamento de DARE na SEFIN/RO.
 
     Exemplos:
         consultar_dare 856600000124046500227247305300138966452150725722
-        consultar_dare --codigo 856600000124...
-        consultar_dare --arquivo guias.json --csv resultado.csv
+        consultar_dare --arquivo guias.json --csv resultado_completo.csv --json resultado.json
     """
     dare_session = session or os.environ.get("SEFIN_DARE_SESSION")
 
@@ -309,7 +410,9 @@ def main(
                 resultados.append(res)
 
                 if res.situacao == "pago":
-                    console.print(f"[green]PAGO[/green] em {res.data_pagamento} (R$ {res.valor}) [{res.observacao}]")
+                    console.print(
+                        f"[green]PAGO[/green] em {res.data_pagamento} (R$ {res.valor_total}) [{res.observacao}]"
+                    )
                 else:
                     console.print(f"[yellow]{res.situacao.upper()}[/yellow]")
             except Exception as e:
@@ -320,12 +423,35 @@ def main(
                         vencimento=venc,
                         codigo=cod,
                         situacao="erro",
+                        valor_total="",
+                        valor_principal="",
+                        valor_multa="",
+                        valor_juros="",
+                        outros_acrescimos="",
                         data_pagamento="",
-                        valor="",
                         contribuinte="",
                         cpf_cnpj="",
-                        codigo_receita="",
+                        telefone="",
+                        endereco="",
+                        municipio="",
+                        cep="",
+                        uf="",
                         numero_documento="",
+                        numero_processo="",
+                        numero_parcela="",
+                        codigo_receita="",
+                        tipo_dare="",
+                        sequencial="",
+                        mes_ano_referencia="",
+                        complemento="",
+                        unidade_gestora="",
+                        gestao="",
+                        nome_servidor="",
+                        cpf_servidor="",
+                        restituicao="",
+                        valor_restituido="",
+                        codigo_barras_formatado="",
+                        versao_sefin="",
                         arquivo_comprovante="",
                         observacao=str(e),
                     )
@@ -333,54 +459,54 @@ def main(
 
             time.sleep(0.3)
 
-    # Exibe tabela resumo
-    table = Table(title="Resultado da Conferência de DAREs")
-    table.add_column("Parcela", justify="center")
-    table.add_column("Vencimento", justify="center")
-    table.add_column("Situação", justify="center")
-    table.add_column("Data Pagto", justify="center")
-    table.add_column("Valor (R$)", justify="right")
-    table.add_column("Documento", justify="center")
-    table.add_column("Observação")
-
-    for r in resultados:
-        sit_color = "green" if r.situacao == "pago" else "yellow"
-        table.add_row(
-            r.parcela or "-",
-            r.vencimento or "-",
-            f"[{sit_color}]{r.situacao}[/{sit_color}]",
-            r.data_pagamento or "-",
-            r.valor or "-",
-            r.numero_documento or "-",
-            r.observacao or "-",
-        )
-
+    # Exibição
     console.print("")
-    console.print(table)
+    if len(resultados) == 1:
+        exibir_painel_detalhado(resultados[0])
+    else:
+        table = Table(title="Resultado da Conferência de DAREs")
+        table.add_column("Parcela", justify="center")
+        table.add_column("Vencimento", justify="center")
+        table.add_column("Situação", justify="center")
+        table.add_column("Data Pagto", justify="center")
+        table.add_column("Valor Total (R$)", justify="right")
+        table.add_column("Contribuinte")
+        table.add_column("Documento", justify="center")
+        table.add_column("Receita", justify="center")
 
-    # Salva CSV se solicitado
+        for r in resultados:
+            sit_color = "green" if r.situacao == "pago" else "yellow"
+            table.add_row(
+                r.parcela or "-",
+                r.vencimento or "-",
+                f"[{sit_color}]{r.situacao}[/{sit_color}]",
+                r.data_pagamento or "-",
+                r.valor_total or "-",
+                r.contribuinte or "-",
+                r.numero_documento or "-",
+                r.codigo_receita or "-",
+            )
+
+        console.print(table)
+
+    # Salva CSV com TODAS as colunas
     if csv_out:
         csv_out.parent.mkdir(parents=True, exist_ok=True)
         with csv_out.open("w", encoding="utf-8", newline="") as f:
-            fieldnames = [
-                "parcela",
-                "vencimento",
-                "codigo",
-                "situacao",
-                "data_pagamento",
-                "valor",
-                "contribuinte",
-                "cpf_cnpj",
-                "codigo_receita",
-                "numero_documento",
-                "arquivo_comprovante",
-                "observacao",
-            ]
-            writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";")
-            writer.writeheader()
-            for r in resultados:
-                writer.writerow(asdict(r))
-        console.print(f"[green]CSV consolidado salvo com sucesso em:[/green] {csv_out.resolve()}")
+            if resultados:
+                fieldnames = list(asdict(resultados[0]).keys())
+                writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=";")
+                writer.writeheader()
+                for r in resultados:
+                    writer.writerow(asdict(r))
+        console.print(f"[green]CSV consolidado com todos os campos salvo em:[/green] {csv_out.resolve()}")
+
+    # Salva JSON com todos os dados
+    if json_out:
+        json_out.parent.mkdir(parents=True, exist_ok=True)
+        dados_json = [asdict(r) for r in resultados]
+        json_out.write_text(json.dumps(dados_json, ensure_ascii=False, indent=2), encoding="utf-8")
+        console.print(f"[green]JSON estruturado completo salvo em:[/green] {json_out.resolve()}")
 
     return 0
 

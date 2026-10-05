@@ -116,16 +116,31 @@ uv run --script consulta-dare-sefin/scripts/consultar_dare.py --codigo "<codigo>
 
 ---
 
-## 4. Estrutura dos Arquivos de Saída
+## 4. Estrutura dos Arquivos de Saída e Dados Extraídos
 
-1. **Relatório CSV (`resultado_dares.csv`):**
-   * Colunas: `parcela`, `vencimento`, `codigo`, `situacao`, `data_pagamento`, `valor`, `contribuinte`, `cpf_cnpj`, `codigo_receita`, `numero_documento`, `arquivo_comprovante`, `observacao`.
-   * Permite integração direta com tabelas de petições jurídicas em Markdown.
+O script realiza a extração exaustiva de **todos os blocos e campos** da certidão de pagamento da SEFIN:
 
-2. **Comprovantes Oficiais HTML (`comprovantes/comprovante_*.html`):**
-   * Arquivo HTML standalone com layout oficial do Governo de Rondônia / SEFIN.
-   * Contém formatação de impressão pronta (`@media print`).
-   * Pode ser aberto diretamente no navegador ou convertido em PDF para juntada aos autos do PJe.
+### Campos Estruturados Extraídos (CSV e JSON)
+
+* **Identificação:** `parcela`, `vencimento`, `codigo`, `situacao` (*pago / nao_encontrado / erro*);
+* **Detalhamento Financeiro:** `valor_principal`, `valor_multa`, `valor_juros`, `outros_acrescimos`, `valor_total`, `data_pagamento`;
+* **Dados do Contribuinte:** `contribuinte` (nome completo), `cpf_cnpj` (formatado/mascarado), `endereco`, `municipio`, `cep`, `uf`, `telefone`;
+* **Dados da Arrecadação & Autenticação:** `numero_documento` (autenticação oficial SEFIN), `codigo_receita` (ex.: 7257), `numero_parcela`, `numero_processo`, `tipo_dare`, `sequencial`, `mes_ano_referencia`, `complemento`, `unidade_gestora`, `gestao`, `nome_servidor`, `cpf_servidor`, `restituicao`, `valor_restituido`;
+* **Metadados de Rastreabilidade:** `codigo_barras_formatado` (linha digitável com espaçamento oficial), `versao_sefin` (versão e build do sistema fazendário), `arquivo_comprovante` (caminho local do HTML), `observacao`.
+
+### Formatos de Exportação
+
+1. **Painel Visual no Terminal (Guia Única):**
+   Renderiza caixas e tabelas formatadas com `rich` divididas em *Contribuinte*, *Arrecadação & Autenticação* e *Detalhamento Financeiro*.
+
+2. **Relatório Consolidado CSV (`--csv resultado.csv`):**
+   Gera planilha delimitada por ponto e vírgula com **todas as 34 colunas** descritas acima.
+
+3. **Objeto JSON Completo (`--json resultado.json`):**
+   Gera JSON estruturado completo contendo a lista de todos os registros com tipagem textual estrita.
+
+4. **Comprovantes Oficiais HTML (`comprovantes/comprovante_*.html`):**
+   Arquivo HTML standalone com layout oficial do Governo de Rondônia / SEFIN, pronto para impressão ou conversão em PDF.
 
 ---
 
