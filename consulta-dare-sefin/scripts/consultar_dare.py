@@ -193,6 +193,52 @@ def extrair_dados_comprovante(
     )
 
 
+def _dv_mod10(numero: str) -> int:
+    total = 0
+    for i, ch in enumerate(reversed(numero)):
+        d = int(ch) * (2 if i % 2 == 0 else 1)
+        total += d // 10 + d % 10
+    return (10 - total % 10) % 10
+
+
+def _dv_mod11(numero: str) -> int:
+    total, peso = 0, 2
+    for ch in reversed(numero):
+        total += int(ch) * peso
+        peso = 2 if peso == 9 else peso + 1
+    resto = total % 11
+    return 0 if resto in (0, 1) else 11 - resto
+
+
+def codigo_invalido(codigo: str) -> str | None:
+    """Motivo pelo qual o código não pode ser consultado, ou None se é válido.
+
+    Código truncado ou com dígito trocado, mandado à SEFIN, volta como página
+    sem comprovante e seria lido como "não pago". A validação vem antes da
+    consulta: linha digitável de arrecadação (48 dígitos, quatro blocos com
+    dígito verificador) ou código de barras (44 dígitos, verificador geral na
+    4ª posição). O terceiro dígito escolhe o módulo: 6 ou 7, módulo 10; 8 ou 9,
+    módulo 11.
+    """
+    if any(ch not in "0123456789 .-" for ch in codigo):
+        return "código com caractere que não é dígito"
+    digitos = "".join(ch for ch in codigo if ch.isdigit())
+    if len(digitos) not in (44, 48):
+        return f"código com {len(digitos)} dígitos (esperado 48 ou 44)"
+    if digitos[0] != "8" or digitos[2] not in "6789":
+        return "código não é de guia de arrecadação"
+    dv = _dv_mod10 if digitos[2] in "67" else _dv_mod11
+    if len(digitos) == 48:
+        for i in range(4):
+            bloco = digitos[i * 12 : i * 12 + 11]
+            if dv(bloco) != int(digitos[i * 12 + 11]):
+                return f"dígito verificador do bloco {i + 1} não confere"
+        return None
+    if dv(digitos[:3] + digitos[4:]) != int(digitos[3]):
+        return "dígito verificador geral não confere"
+    return None
+
+
 def _resultado_erro(parcela: str, vencimento: str, codigo: str, motivo: str) -> ResultadoDare:
     """Resultado de guia não verificada: só a identificação e o motivo, o resto vazio."""
     vazios = {f.name: "" for f in fields(ResultadoDare)}
@@ -412,6 +458,12 @@ def main(
                 # Linha sem código não some do lote: vira erro, e o lote sai com 1.
                 console.print(f"[{idx}/{len(guias_a_consultar)}] [red]Linha sem código de barras.[/red]")
                 resultados.append(_resultado_erro(parc, venc, "", "linha sem código de barras"))
+                continue
+
+            motivo = codigo_invalido(cod)
+            if motivo:
+                console.print(f"[{idx}/{len(guias_a_consultar)}] [red]Código inválido:[/red] {motivo}")
+                resultados.append(_resultado_erro(parc, venc, cod, f"código inválido: {motivo}"))
                 continue
 
             console.print(f"[{idx}/{len(guias_a_consultar)}] Consultando guia {parc or cod[:10]}...", end=" ")
