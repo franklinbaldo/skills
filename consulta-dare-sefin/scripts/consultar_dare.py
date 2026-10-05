@@ -515,10 +515,11 @@ def main(
         json_out.write_text(json.dumps(dados_json, ensure_ascii=False, indent=2), encoding="utf-8")
         console.print(f"[green]JSON estruturado completo salvo em:[/green] {json_out.resolve()}")
 
-    # Sem nenhuma guia verificada (SEFIN fora do ar, timeout, só HTTP de erro), sair com
-    # zero diria a quem automatiza que a conferência foi feita.
-    if not resultados or all(r.situacao == "erro" for r in resultados):
-        console.print("[red]Nenhuma guia foi verificada.[/red]")
+    # Lote com qualquer guia não verificada (SEFIN fora do ar, timeout, HTTP de erro) não é
+    # conferência concluída: sair com zero diria a quem automatiza que foi.
+    erros = sum(r.situacao == "erro" for r in resultados)
+    if not resultados or erros:
+        console.print(f"[red]{erros or 'Nenhuma'} guia(s) não verificada(s).[/red]")
         return 1
     return 0
 
