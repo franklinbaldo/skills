@@ -34,6 +34,9 @@ Esse endpoint é **totalmente público**:
   - **Código da Receita:** Ex.: `7257` (*Ressarcimento ao Erário — IPERON*);
   - **Autenticação SEFIN:** Número do documento gerado pelo sistema fazendário.
 
+> [!IMPORTANT]
+> O endpoint responde HTTP 200 com o título "COMPROVANTE DE PAGAMENTO DE DARE" **até para guia inexistente**: o comprovante vem vazio (Data Pagamento "Não informado", Cod. Receita "0000", Valor Total "0,00"). O script só classifica como `pago` com data de pagamento e valor total positivo; o modelo vazio é `nao_encontrado`, e qualquer outra página é `erro`.
+
 ______________________________________________________________________
 
 ## 2. Origem Canônica e Execução Direta via URL

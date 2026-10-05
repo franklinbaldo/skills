@@ -100,6 +100,34 @@ def _extrair_campo_regex(padrao: str, texto: str, default: str = "") -> str:
     return m.group(1).strip() if m else default
 
 
+def _valor_positivo(valor: str) -> bool:
+    try:
+        return float(valor.replace(".", "").replace(",", ".")) > 0
+    except ValueError:
+        return False
+
+
+def _situacao(tem_titulo: bool, data_pagamento: str, valor_total: str, codigo_receita: str) -> str:
+    """Pago, não encontrado ou erro, cada um por marcador explícito.
+
+    Medido em 2026-10-05: a SEFIN responde HTTP 200 com o título "COMPROVANTE
+    DE PAGAMENTO DE DARE" até para guia inexistente; nesse caso o comprovante
+    vem vazio (Data Pagamento "Não informado", Cod. Receita "0000", Valor Total
+    "0,00"). O título sozinho, portanto, não prova pagamento, e a ausência dele
+    não prova ausência: página de manutenção ou layout novo vira erro.
+    """
+    if not tem_titulo:
+        return "erro"
+    if re.fullmatch(r"\d{2}/\d{2}/\d{4}", data_pagamento.strip()) and _valor_positivo(valor_total):
+        return "pago"
+    vazio = (
+        data_pagamento.strip().lower().startswith("não informado")
+        and not _valor_positivo(valor_total)
+        and codigo_receita.strip() in ("", "0000")
+    )
+    return "nao_encontrado" if vazio else "erro"
+
+
 def extrair_dados_comprovante(
     html: str,
     codigo: str,
@@ -110,10 +138,8 @@ def extrair_dados_comprovante(
     """Extrai exaustivamente todos os campos estruturados do HTML do comprovante da SEFIN."""
     soup = BeautifulSoup(html, "html.parser")
 
-    texto_geral = soup.get_text()
     titulo_el = soup.find(class_=re.compile(r"legacy-title", re.I))
-
-    situacao = "pago" if (titulo_el or "COMPROVANTE DE PAGAMENTO DE DARE" in texto_geral) else "nao_encontrado"
+    tem_titulo = bool(titulo_el and "COMPROVANTE DE PAGAMENTO DE DARE" in titulo_el.get_text(" ", strip=True).upper())
 
     # 1. Dados do Contribuinte
     contribuinte = _extrair_campo_regex(r"Nome\s*/\s*Contribuinte:</b>\s*([^<]+)", html)
@@ -152,6 +178,7 @@ def extrair_dados_comprovante(
     codigo_barras_formatado = _extrair_campo_regex(r'<div class="legacy-barcode">([^<]+)</div>', html)
     versao_sefin = _extrair_campo_regex(r"Versão\s*([^<\n]+)", html)
 
+    situacao = _situacao(tem_titulo, data_pagamento, valor_total, codigo_receita)
     obs = f"Doc: {numero_doc}" if numero_doc else ("Quitado" if situacao == "pago" else "")
 
     return ResultadoDare(
