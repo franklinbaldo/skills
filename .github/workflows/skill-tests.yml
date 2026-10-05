@@ -2,8 +2,24 @@ name: Skill helper tests
 
 on:
   pull_request:
+    paths:
+      - "**/*.py"
+      - "*/SKILL.md"
+      - "tests/**"
+      - "okf-agent-skills/**"
+      - ".github/workflows/skill-tests.yml"
   push:
     branches: [main]
+    paths:
+      - "**/*.py"
+      - "*/SKILL.md"
+      - "tests/**"
+      - "okf-agent-skills/**"
+      - ".github/workflows/skill-tests.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -13,7 +29,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
       - name: Run okf-agent-skills tests
         run: |
           for test in okf-agent-skills/tests/test_*.py; do

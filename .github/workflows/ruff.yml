@@ -2,8 +2,24 @@ name: Ruff
 
 on:
   pull_request:
+    paths:
+      - "**/*.py"
+      - "pyproject.toml"
+      - "ruff.toml"
+      - ".ruff.toml"
+      - ".github/workflows/ruff.yml"
   push:
     branches: [main]
+    paths:
+      - "**/*.py"
+      - "pyproject.toml"
+      - "ruff.toml"
+      - ".ruff.toml"
+      - ".github/workflows/ruff.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

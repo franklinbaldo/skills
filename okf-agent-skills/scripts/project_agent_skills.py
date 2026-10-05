@@ -15,7 +15,7 @@ replacement for the source skills.
 from __future__ import annotations
 
 import hashlib
-import os
+import posixpath
 import re
 import shutil
 from dataclasses import dataclass
@@ -235,7 +235,7 @@ def _relation_label(relation: Relation) -> str:
 
 def _relative_derived_target(source: str, target: str) -> str:
     source_parent = PurePosixPath(source).parent.as_posix()
-    return PurePosixPath(os.path.relpath(target, start=source_parent)).as_posix()
+    return posixpath.relpath(target, start=source_parent)
 
 
 def _write_skill_concept(output: Path, skill: Skill, relations: list[Relation]) -> None:

@@ -114,14 +114,14 @@ whether an old entry earned its place or came from a filter since abandoned.
 
 Current admission band, per sampled day:
 
-| Filter | Current value | Why |
-|---|---|---|
-| events | 20–300 | a floor for output, a ceiling against automation |
-| distinct repositories | ≤ 10 | concentration; fleets spread across ~100 |
-| events on own repositories | ≥ 80% | their own work, not employment in an org |
-| distinct event kinds | **≥ 3** | the strongest human/cron separator found |
-| other actors on their repos | 0 | the reception signal |
-| login shape | not `^[a-z0-9]{8,12}$` | disposable generated accounts |
+| Filter                      | Current value          | Why                                              |
+| --------------------------- | ---------------------- | ------------------------------------------------ |
+| events                      | 20–300                 | a floor for output, a ceiling against automation |
+| distinct repositories       | ≤ 10                   | concentration; fleets spread across ~100         |
+| events on own repositories  | ≥ 80%                  | their own work, not employment in an org         |
+| distinct event kinds        | **≥ 3**                | the strongest human/cron separator found         |
+| other actors on their repos | 0                      | the reception signal                             |
+| login shape                 | not `^[a-z0-9]{8,12}$` | disposable generated accounts                    |
 
 A personal site — a repository named `<login>.github.io` — raises priority. Someone
 maintaining one is choosing what to present, which is production aimed at a reader
@@ -168,3 +168,7 @@ evidence about a person.
 - the record was compared against all prior records;
 - any synergy found is recorded as a convergence, not left in prose;
 - no contact was made without an `ai-epistemic-intervention` record and its disclosure.
+
+## Real-use postmortem
+
+After material use, assess routing, outcome, quality delta, concrete instruction effect, and any friction/workaround. Routine success stays ephemeral. If there is actionable learning, search `franklinbaldo/skills` issues and update a matching issue or open a sanitized **Skill use feedback** issue. Never publish secrets or private/confidential data merely to report feedback.
