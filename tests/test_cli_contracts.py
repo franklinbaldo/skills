@@ -2,6 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
+#     "beautifulsoup4>=4.12",
 #     "cyclopts>=3.0",
 #     "duckdb>=1.1",
 #     "httpx>=0.27",
@@ -47,6 +48,7 @@ CLI_MODULES = {
     "project_agent_skills": "okf-agent-skills/scripts",
     "project_skill_evals": "okf-agent-skills/scripts",
     "project_skill_mentions": "okf-agent-skills/scripts",
+    "consultar_dare": "consulta-dare-sefin/scripts",
 }
 
 
@@ -150,7 +152,7 @@ class SourceContractTests(unittest.TestCase):
 
     def test_sys_argv_only_in_the_third_party_adapter(self) -> None:
         offenders = [
-            str(path.relative_to(REPO_ROOT))
+            path.relative_to(REPO_ROOT).as_posix()
             for path in self.python_sources()
             if "sys.argv" in path.read_text(encoding="utf-8")
         ]
@@ -161,7 +163,7 @@ class SourceContractTests(unittest.TestCase):
         for path in self.python_sources():
             head = path.read_text(encoding="utf-8")[:400]
             if "# /// script" not in head or "requires-python" not in head:
-                missing.append(str(path.relative_to(REPO_ROOT)))
+                missing.append(path.relative_to(REPO_ROOT).as_posix())
         self.assertEqual(missing, [])
 
     def test_ruff_gate_passes(self) -> None:
