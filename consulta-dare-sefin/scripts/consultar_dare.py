@@ -214,7 +214,10 @@ def consultar_guia(
 
     if pasta_destino:
         pasta_destino.mkdir(parents=True, exist_ok=True)
-        nome_arquivo = f"comprovante_{parcela if parcela else codigo[:12]}.html"
+        # O código da guia entra sempre no nome: na consulta individual a parcela
+        # é sempre "00", e o nome só pela parcela fazia uma guia sobrescrever a outra.
+        sufixo = f"_p{parcela}" if parcela and parcela != "00" else ""
+        nome_arquivo = f"comprovante_{codigo.strip()}{sufixo}.html"
         arquivo = pasta_destino / nome_arquivo
         arquivo.write_text(html, encoding="utf-8")
         caminho_salvo = str(arquivo.resolve())
@@ -305,12 +308,16 @@ def main(
         ),
     ] = None,
     output_dir: Annotated[
-        Path,
+        Path | None,
         Parameter(
             name=["--output-dir", "-o"],
-            help="Diretório onde salvar os arquivos HTML de comprovante.",
+            help=(
+                "Diretório onde salvar os HTML de comprovante (com dados pessoais). "
+                "Omitido, nada é gravado. Prefira um caminho fora do controle de "
+                "versão, como .cache/comprovantes-dare/."
+            ),
         ),
-    ] = Path("comprovantes_dares"),
+    ] = None,
     csv_out: Annotated[
         Path | None,
         Parameter(

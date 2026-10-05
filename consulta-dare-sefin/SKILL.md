@@ -50,10 +50,15 @@ A URL canônica do script executável é:
 https://raw.githubusercontent.com/franklinbaldo/skills/main/consulta-dare-sefin/scripts/consultar_dare.py
 ```
 
-**Prefira rodar o script diretamente da sua URL HTTPS no GitHub com `uv run`**. Não é necessário clonar o repositório de skills nem instalar nada previamente. O script declara suas próprias dependências via PEP 723, de modo que o `uv` cria o ambiente isolado e instala `httpx`, `cyclopts`, `beautifulsoup4` e `rich` automaticamente na primeira execução.
+**Num projeto que instalou a skill, rode a cópia instalada** (`.agents/skills/consulta-dare-sefin/scripts/consultar_dare.py`, ou o espelho em `.claude/skills/`). Ela é a versão revisada no projeto e registrada no `skills-lock.json`; a URL da `main` executaria, com as permissões do usuário, qualquer mudança posterior do upstream sem revisão.
 
-> [!TIP]
-> Se esta skill foi lida de um commit específico (ref pinada) em vez da `main`, substitua `main` na URL do script raw pelo mesmo SHA do commit antes de executar, garantindo alinhamento de versão.
+Fora de um projeto, rode pela URL raw **com o SHA de um commit**, nunca pela `main`:
+
+```bash
+uv run https://raw.githubusercontent.com/franklinbaldo/skills/<SHA>/consulta-dare-sefin/scripts/consultar_dare.py --codigo "<codigo>"
+```
+
+O script declara as dependências via PEP 723 (`httpx`, `cyclopts`, `beautifulsoup4` e `rich`); o `uv` cria o ambiente isolado na primeira execução.
 
 ______________________________________________________________________
 
@@ -64,7 +69,7 @@ ______________________________________________________________________
 Basta passar o código de barras (48 dígitos) diretamente na URL do GitHub:
 
 ```bash
-uv run https://raw.githubusercontent.com/franklinbaldo/skills/main/consulta-dare-sefin/scripts/consultar_dare.py \
+uv run .agents/skills/consulta-dare-sefin/scripts/consultar_dare.py \
   --codigo "856600000124046500227247305300138966452150725722"
 ```
 
@@ -90,9 +95,9 @@ Prepare um arquivo `guias.json` no formato:
 Execute a conferência em lote salvando o CSV consolidado e os comprovantes HTML:
 
 ```bash
-uv run https://raw.githubusercontent.com/franklinbaldo/skills/main/consulta-dare-sefin/scripts/consultar_dare.py \
+uv run .agents/skills/consulta-dare-sefin/scripts/consultar_dare.py \
   --arquivo guias.json \
-  --output-dir comprovantes/ \
+  --output-dir .cache/comprovantes-dare/ \
   --csv resultado_dares.csv
 ```
 
@@ -109,19 +114,15 @@ parcela;vencimento;codigo
 Execute:
 
 ```bash
-uv run https://raw.githubusercontent.com/franklinbaldo/skills/main/consulta-dare-sefin/scripts/consultar_dare.py \
+uv run .agents/skills/consulta-dare-sefin/scripts/consultar_dare.py \
   --arquivo guias.csv \
-  --output-dir comprovantes/ \
+  --output-dir .cache/comprovantes-dare/ \
   --csv resultado_dares.csv
 ```
 
-### D. Execução Local (quando o repositório estiver clonado)
+### D. Onde ficam os comprovantes
 
-Caso esteja dentro do repositório de skills ou de um projeto que possua a pasta `.claude/skills/`:
-
-```bash
-uv run --script consulta-dare-sefin/scripts/consultar_dare.py --codigo "<codigo>"
-```
+Os HTML só são gravados quando `--output-dir` é informado. Eles trazem dados pessoais do contribuinte (CPF, endereço) e se regeram por nova consulta: grave-os em diretório fora do controle de versão, como `.cache/comprovantes-dare/`. O nome de cada arquivo leva o código de barras da guia, para que consultas no mesmo diretório não se sobrescrevam.
 
 ______________________________________________________________________
 
@@ -151,7 +152,7 @@ O script realiza a extração exaustiva de **todos os blocos e campos** da certi
 3. **Objeto JSON Completo (`--json resultado.json`):**
    Gera JSON estruturado completo contendo a lista de todos os registros com tipagem textual estrita.
 
-4. **Comprovantes Oficiais HTML (`comprovantes/comprovante_*.html`):**
+4. **Comprovantes Oficiais HTML (`.cache/comprovantes-dare/comprovante_<codigo>.html`):**
    Arquivo HTML standalone com layout oficial do Governo de Rondônia / SEFIN, pronto para impressão ou conversão em PDF.
 
 ______________________________________________________________________
