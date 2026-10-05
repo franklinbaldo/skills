@@ -3,6 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "cyclopts>=3.0",
+#     "defusedxml>=0.7",
 #     "duckdb>=1.1",
 #     "httpx>=0.27",
 #     "rich>=13.7",
@@ -47,6 +48,7 @@ CLI_MODULES = {
     "project_agent_skills": "okf-agent-skills/scripts",
     "project_skill_evals": "okf-agent-skills/scripts",
     "project_skill_mentions": "okf-agent-skills/scripts",
+    "acervo": "acervo-livros/scripts",
 }
 
 
