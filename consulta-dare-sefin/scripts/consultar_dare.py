@@ -193,6 +193,72 @@ def extrair_dados_comprovante(
     )
 
 
+def calcular_dv_modulo10(bloco: str) -> int:
+    """Calcula dígito verificador módulo 10 FEBRABAN para bloco de arrecadação."""
+    soma = 0
+    peso = 2
+    for d in reversed(bloco):
+        mult = int(d) * peso
+        if mult > 9:
+            mult = (mult // 10) + (mult % 10)
+        soma += mult
+        peso = 1 if peso == 2 else 2
+    resto = soma % 10
+    return 0 if resto == 0 else (10 - resto)
+
+
+def calcular_dv_modulo11(bloco: str) -> int:
+    """Calcula dígito verificador módulo 11 FEBRABAN para bloco de arrecadação."""
+    soma = 0
+    peso = 2
+    for d in reversed(bloco):
+        soma += int(d) * peso
+        peso += 1
+        if peso > 9:
+            peso = 2
+    resto = soma % 11
+    if resto in (0, 1):
+        return 0
+    if resto == 10:
+        return 1
+    return 11 - resto
+
+
+def converter_codigo_barras_para_linha_digitavel(codigo: str) -> str:
+    """Converte código de barras puro (44 dígitos) na linha digitável FEBRABAN (48 dígitos).
+
+    Se o código já possuir 48 dígitos, retorna apenas os dígitos numéricos.
+    Converte códigos contínuos de 44 dígitos calculando os 4 dígitos verificadores
+    de campo (Módulo 10 ou 11 conforme o 3º dígito do código FEBRABAN).
+    """
+    digitos = re.sub(r"\D", "", codigo)
+    if len(digitos) == 48:
+        return digitos
+    if len(digitos) == 44:
+        # Padrão FEBRABAN Arrecadação:
+        # Dígito 3 (índice 2): 6/7 = Módulo 10; 8/9 = Módulo 11
+        tipo_moeda = digitos[2]
+        calc_dv = calcular_dv_modulo11 if tipo_moeda in ("8", "9") else calcular_dv_modulo10
+        b1, b2, b3, b4 = digitos[0:11], digitos[11:22], digitos[22:33], digitos[33:44]
+        return f"{b1}{calc_dv(b1)}{b2}{calc_dv(b2)}{b3}{calc_dv(b3)}{b4}{calc_dv(b4)}"
+    raise ValueError(
+        f"Código de arrecadação inválido: esperado 44 dígitos (código puro) ou 48 dígitos "
+        f"(linha digitável), obtido {len(digitos)} dígitos."
+    )
+
+
+def converter_linha_digitavel_para_codigo_barras(linha: str) -> str:
+    """Converte linha digitável (48 dígitos) no código de barras puro FEBRABAN (44 dígitos)."""
+    digitos = re.sub(r"\D", "", linha)
+    if len(digitos) == 44:
+        return digitos
+    if len(digitos) == 48:
+        return digitos[0:11] + digitos[12:23] + digitos[24:35] + digitos[36:47]
+    raise ValueError(
+        f"Linha digitável inválida: esperado 48 dígitos, obtido {len(digitos)} dígitos."
+    )
+
+
 def consultar_guia(
     client: httpx.Client,
     codigo: str,
@@ -200,9 +266,21 @@ def consultar_guia(
     vencimento: str = "",
     pasta_destino: Path | None = None,
 ) -> ResultadoDare:
-    """Efetua requisição ao endpoint de impressão da SEFIN."""
+    """Efetua requisição ao endpoint de impressão da SEFIN.
+
+    Aceita código de barras puro (44 dígitos) ou linha digitável (48 dígitos),
+    com ou sem formatação. O endpoint da SEFIN exige linha digitável (48 dígitos);
+    se um código puro de 44 dígitos for fornecido, ele é automaticamente convertido
+    calculando os dígitos verificadores dos blocos conforme padrão FEBRABAN.
+    """
+    codigo_limpo = re.sub(r"\D", "", codigo)
+    try:
+        codigo_consulta = converter_codigo_barras_para_linha_digitavel(codigo_limpo)
+    except ValueError:
+        codigo_consulta = codigo_limpo
+
     params = {
-        "numero_guia_cbarras": codigo.strip(),
+        "numero_guia_cbarras": codigo_consulta,
         "numero_parcela": "00",
     }
 
@@ -217,14 +295,14 @@ def consultar_guia(
         # O código da guia entra sempre no nome: na consulta individual a parcela
         # é sempre "00", e o nome só pela parcela fazia uma guia sobrescrever a outra.
         sufixo = f"_p{parcela}" if parcela and parcela != "00" else ""
-        nome_arquivo = f"comprovante_{codigo.strip()}{sufixo}.html"
+        nome_arquivo = f"comprovante_{codigo_consulta}{sufixo}.html"
         arquivo = pasta_destino / nome_arquivo
         arquivo.write_text(html, encoding="utf-8")
         caminho_salvo = str(arquivo.resolve())
 
     return extrair_dados_comprovante(
         html=html,
-        codigo=codigo,
+        codigo=codigo_consulta,
         parcela=parcela,
         vencimento=vencimento,
         caminho_salvo=caminho_salvo,
@@ -343,8 +421,8 @@ def main(
     """Consulta e extrai todos os dados de comprovantes de pagamento de DARE na SEFIN/RO.
 
     Exemplos:
-        consultar_dare 856600000124046500227247305300138966452150725722
-        consultar_dare --arquivo guias.json --csv resultado_completo.csv --json resultado.json
+        consultar_dare <codigo-de-barras-ou-linha-digitavel>
+        consultar_dare --arquivo guias.json --csv .cache/resultado.csv --json .cache/resultado.json
     """
     dare_session = session or os.environ.get("SEFIN_DARE_SESSION")
 
@@ -514,6 +592,12 @@ def main(
         dados_json = [asdict(r) for r in resultados]
         json_out.write_text(json.dumps(dados_json, ensure_ascii=False, indent=2), encoding="utf-8")
         console.print(f"[green]JSON estruturado completo salvo em:[/green] {json_out.resolve()}")
+
+    # Sem nenhuma guia verificada (SEFIN fora do ar, timeout, só HTTP de erro), sair com
+    # código 1 para sinalizar falha em pipelines e automações.
+    if not resultados or all(r.situacao == "erro" for r in resultados):
+        console.print("[red]Nenhuma guia foi verificada.[/red]")
+        return 1
 
     return 0
 

@@ -46,3 +46,4 @@ jobs:
           uv run --quiet convert-to-pdfa/scripts/test_convert_to_pdfa.py
           uv run --quiet convert-to-pdfa/scripts/test_subprocess_decoding.py
           uv run --quiet pdf-to-markdown/scripts/test_convert_pdf.py
+          uv run --quiet consulta-dare-sefin/scripts/test_consultar_dare.py
