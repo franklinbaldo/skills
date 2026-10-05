@@ -15,6 +15,10 @@ on:
       - "scripts/check_markdown_format.py"
       - ".github/workflows/markdown-format.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

@@ -3,8 +3,18 @@ name: Lean 4 Compilation
 on:
   push:
     branches: [ main ]
+    paths:
+      - "legal-argument-lean/**"
+      - ".github/workflows/lean-compile.yml"
   pull_request:
     branches: [ main ]
+    paths:
+      - "legal-argument-lean/**"
+      - ".github/workflows/lean-compile.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
