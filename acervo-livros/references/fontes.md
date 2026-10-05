@@ -1,20 +1,24 @@
 # Fontes do acervo-livros
 
-Este arquivo registra como cada API se comportava em 2026-10-03. Envie sempre um
-User-Agent identificável: o Wikimedia devolve 403 para requisição sem User-Agent.
+Este arquivo registra como cada API se comportava em 2026-10-03 e serve como referência
+operacional para ampliar cobertura, diagnosticar falhas e escolher a melhor edição.
+
+Envie um User-Agent identificável: o Wikimedia devolve 403 para requisição sem User-Agent.
 
 ## Project Gutenberg
 
+**Ponto forte.** Livros completos com EPUB geralmente bem estruturado e excelente matéria-prima
+para separação automática de capítulos.
+
 **Busca.** `https://www.gutenberg.org/ebooks/search.opds/?query=<termo>` devolve um Atom/OPDS.
-- As entradas de livro têm `id` no formato `…/ebooks/<n>.opds`, com o título em `title` e o
-  autor em `content`.
-- As primeiras entradas costumam ser de navegação ("Authors", "Subjects") e devem ser
-  ignoradas.
-- Às vezes `content` traz a contagem de downloads em vez do autor.
+- As entradas de livro têm `id` no formato `…/ebooks/<n>.opds`, com título em `title` e autor
+  em `content`.
+- As primeiras entradas costumam ser de navegação ("Authors", "Subjects") e são ignoradas.
+- Às vezes `content` traz contagem de downloads em vez do autor.
 - O sufixo ` l.pt` na consulta filtra por idioma.
 
-**Licença.** `https://www.gutenberg.org/ebooks/<n>.opds` traz `<rights>Public domain in the USA.</rights>`.
-O script só baixa quando esse campo contém "public domain".
+**Metadados de disponibilidade.** `https://www.gutenberg.org/ebooks/<n>.opds` traz o campo
+`<rights>`. O script usa esse campo para decidir se aquela edição pode ser obtida.
 
 **Arquivos.** O script tenta nesta ordem:
 1. `/ebooks/<n>.epub3.images`
@@ -25,48 +29,55 @@ O script só baixa quando esse campo contém "public domain".
 O endereço `/ebooks/<n>.txt.utf-8` redirecionava para uma URL quebrada e respondia 404,
 por isso o TXT vem direto do cache.
 
-**Gutendex** (`gutendex.com`) é um espelho JSON de terceiros. Estava lento (cerca de 50 s)
-e devolvendo 503 com frequência, por isso não é usado.
+**Alternativa avaliada.** Gutendex (`gutendex.com`) oferece JSON amigável, mas estava lento
+(cerca de 50 s) e retornando 503 com frequência. O OPDS oficial foi mais previsível.
 
 ## Wikisource
 
-**API.** `https://<lang>.wikisource.org/w/api.php`. O script usa duas ações:
-- **Busca:** `action=query&list=search&srnamespace=0`. O namespace 0 reúne as obras.
+**Ponto forte.** Textos curtos, poemas, contos e obras revisadas colaborativamente, especialmente
+quando a edição em português é importante.
+
+**API.** `https://<lang>.wikisource.org/w/api.php`. O script usa:
+- **Busca:** `action=query&list=search&srnamespace=0`;
 - **Texto:** `action=parse&prop=text|links&redirects=1&disableeditsection=1`, com
   `formatversion=2`.
 
-**Subpáginas.** Os links que começam com `Título/` e existem viram capítulos.
+**Subpáginas.** Links que começam com `Título/` e existem entram como capítulos.
 
-**O que é descartado.** O cabeçalho de navegação usa as classes `ws-noexport` e
-`headertemplate`, que o conversor descarta. Notas de rodapé (`sup`, `mw-references`) e
-tabelas também saem.
+**Limpeza.** Elementos de navegação com classes `ws-noexport` e `headertemplate`, além de
+notas de rodapé e tabelas auxiliares, são removidos na conversão.
 
-**WS Export** (`ws-export.wmcloud.org`, que gera EPUB) devolveu 403 a partir de IP de nuvem.
-Não depende dele.
+**WS Export.** `ws-export.wmcloud.org` gera EPUB, mas devolveu 403 a partir de IP de nuvem.
+A implementação usa diretamente a API MediaWiki e não depende dele.
 
 ## Internet Archive
 
-**Busca.** `https://archive.org/advancedsearch.php`, com `q` incluindo
-`mediatype:texts AND (licenseurl:*publicdomain* OR possible-copyright-status:"NOT_IN_COPYRIGHT")`.
+**Ponto forte.** Cobertura muito ampla, inclusive edições raras e digitalizações que não aparecem
+nos outros acervos.
 
-**Metadados.** `https://archive.org/metadata/<identifier>`. O script confere de novo a
-licença e escolhe o arquivo nesta ordem:
-1. `.epub`, exceto `_lcp.epub`, que tem DRM de empréstimo;
+**Busca.** `https://archive.org/advancedsearch.php`, com filtros de texto e metadados de
+disponibilidade.
+
+**Metadados.** `https://archive.org/metadata/<identifier>`. O script lê os metadados e escolhe
+o melhor arquivo nesta ordem:
+1. `.epub`, exceto variantes de empréstimo;
 2. `_djvu.txt`;
 3. `.pdf`.
 
 **Download.** `https://archive.org/download/<identifier>/<arquivo>`.
 
-**Qualidade.** O EPUB "produced by the Internet Archive" é OCR automático. Ele traz um aviso
-no início e pode ter erros e cabeçalhos de página no meio do texto.
+**Qualidade.** EPUBs "produced by the Internet Archive" podem ser derivados de OCR. Nesses casos,
+espere erros tipográficos, cabeçalhos de página e hifenização residual; compare com outra edição
+quando a fidelidade textual for importante.
 
-## Fontes avaliadas e não incluídas
+## Outras fontes que podem ampliar cobertura
 
-- **Domínio Público (MEC, dominiopublico.gov.br).** Não tem API. As páginas JSP são
-  instáveis e os PDFs são muitas vezes escaneados. Para Machado, Alencar e outros autores
-  brasileiros, o Wikisource-pt cobre melhor.
-- **Standard Ebooks.** É ótimo, mas o feed OPDS completo exige assinatura, e o download
-  pela página pública dependeria de raspar HTML. Um candidato para incluir depois via
-  `standardebooks.org/ebooks/<autor>/<obra>/downloads/`.
-- **Bibliotecas-sombra** (Anna's Archive, LibGen, Z-Library, Sci-Hub). Fora de escopo por
-  princípio, não por limitação técnica.
+- **Domínio Público (MEC, dominiopublico.gov.br).** Útil para autores brasileiros, mas não tem
+  API estável; muitas obras aparecem apenas como PDFs escaneados.
+- **Standard Ebooks.** Excelente qualidade editorial e EPUBs muito limpos. É uma boa candidata
+  para futura integração, especialmente por autor/obra.
+- **Outros Wikisources por idioma.** A API já permite selecionar o subdomínio pelo código de idioma,
+  então ampliar a busca linguística não exige uma arquitetura diferente.
+
+Ao avaliar uma nova fonte, priorize três propriedades: cobertura, qualidade estrutural do texto e
+metadados suficientes para registrar procedência e decidir automaticamente qual arquivo usar.
