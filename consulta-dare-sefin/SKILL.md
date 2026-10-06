@@ -68,17 +68,15 @@ ______________________________________________________________________
 ## 3. Uso do Script
 
 > [!WARNING]
-> Nunca use guia real em exemplo, issue, PR ou documentação: quem tem o código de barras obtém
-> do endpoint o nome, o CPF e o endereço do contribuinte. CSV, JSON e HTML de saída carregam os
-> mesmos dados e vão sempre para `.cache/`, fora do controle de versão.
+> **Privacidade dos Dados:** Nunca utilize código de barras de guias reais em exemplos, issues, pull requests ou documentações públicas. A partir do código de barras da guia, qualquer pessoa obtém via endpoint o nome completo, CPF e endereço residencial do contribuinte. Os arquivos de saída (CSV, JSON e HTML de comprovantes) contêm esses dados pessoais e devem ficar fora do controle de versão. Neste repositório, `.cache/` é ignorado; em projetos consumidores, confirme a regra com `git check-ignore` ou use um diretório externo ao repositório.
 
 ### A. Consulta Direta de Guia Individual (Zero Configuração)
 
-Basta passar o código de barras (48 dígitos) diretamente na URL do GitHub:
+Basta passar o código de barras ou linha digitável (44 ou 48 dígitos):
 
 ```bash
 uv run .agents/skills/consulta-dare-sefin/scripts/consultar_dare.py \
-  --codigo "<codigo-de-barras-48-digitos-da-guia-1>"
+  --codigo "<codigo-de-barras-da-guia-1>"
 ```
 
 ### B. Consulta de Lote via JSON
@@ -90,12 +88,12 @@ Prepare um arquivo `guias.json` no formato:
   {
     "parcela": "1",
     "vencimento": "31/01/2026",
-    "codigo": "<codigo-de-barras-48-digitos-da-guia-1>"
+    "codigo": "<codigo-de-barras-da-guia-1>"
   },
   {
     "parcela": "2",
     "vencimento": "27/02/2026",
-    "codigo": "<codigo-de-barras-48-digitos-da-guia-2>"
+    "codigo": "<codigo-de-barras-da-guia-2>"
   }
 ]
 ```
@@ -115,8 +113,8 @@ Também aceita arquivo `.csv` delimitado por ponto e vírgula contendo no mínim
 
 ```csv
 parcela;vencimento;codigo
-1;31/01/2026;<codigo-de-barras-48-digitos-da-guia-1>
-2;27/02/2026;<codigo-de-barras-48-digitos-da-guia-2>
+1;31/01/2026;<codigo-de-barras-da-guia-1>
+2;27/02/2026;<codigo-de-barras-da-guia-2>
 ```
 
 Execute:
@@ -131,6 +129,15 @@ uv run .agents/skills/consulta-dare-sefin/scripts/consultar_dare.py \
 ### D. Onde ficam os comprovantes
 
 Os HTML só são gravados quando `--output-dir` é informado. Eles trazem dados pessoais do contribuinte (CPF, endereço) e se regeram por nova consulta: grave-os em diretório fora do controle de versão, como `.cache/comprovantes-dare/`. O nome de cada arquivo leva o código de barras da guia, para que consultas no mesmo diretório não se sobrescrevam.
+
+### E. Código de Barras Puro (44 dígitos) vs. Linha Digitável (48 dígitos)
+
+O script aceita indistintamente **código de barras puro (44 dígitos)** ou **linha digitável (48 dígitos)**, com ou sem pontuação:
+
+- **Código de barras puro (44 dígitos):** Sequência contínua sem dígitos verificadores de campo, normalmente lida diretamente de leitores ópticos ou decodificada de traços em PDFs.
+- **Linha digitável (48 dígitos):** Sequência contendo 4 blocos de 11 dígitos acrescidos de 1 dígito verificador em cada bloco (padrão FEBRABAN arrecadação).
+
+O portal da SEFIN/RO exige estritamente a linha digitável de 48 dígitos (respondendo com redirecionamento vazio HTTP 302 se receber 44 dígitos). O script realiza a conversão automática e transparente: ao receber 44 dígitos, calcula os 4 dígitos verificadores de bloco (Módulo 10 ou 11 FEBRABAN) antes de consultar o portal fazendário.
 
 ______________________________________________________________________
 

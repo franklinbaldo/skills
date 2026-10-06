@@ -220,21 +220,68 @@ def extrair_dados_comprovante(
     )
 
 
-def _dv_mod10(numero: str) -> int:
-    total = 0
-    for i, ch in enumerate(reversed(numero)):
-        d = int(ch) * (2 if i % 2 == 0 else 1)
-        total += d // 10 + d % 10
-    return (10 - total % 10) % 10
+def calcular_dv_modulo10(bloco: str) -> int:
+    """Calcula dígito verificador módulo 10 FEBRABAN para bloco de arrecadação."""
+    soma = 0
+    peso = 2
+    for d in reversed(bloco):
+        mult = int(d) * peso
+        if mult > 9:
+            mult = (mult // 10) + (mult % 10)
+        soma += mult
+        peso = 1 if peso == 2 else 2
+    resto = soma % 10
+    return 0 if resto == 0 else (10 - resto)
 
 
-def _dv_mod11(numero: str) -> int:
-    total, peso = 0, 2
-    for ch in reversed(numero):
-        total += int(ch) * peso
-        peso = 2 if peso == 9 else peso + 1
-    resto = total % 11
-    return 0 if resto in (0, 1) else 11 - resto
+def calcular_dv_modulo11(bloco: str) -> int:
+    """Calcula dígito verificador módulo 11 FEBRABAN para bloco de arrecadação."""
+    soma = 0
+    peso = 2
+    for d in reversed(bloco):
+        soma += int(d) * peso
+        peso += 1
+        if peso > 9:
+            peso = 2
+    resto = soma % 11
+    if resto in (0, 1):
+        return 0
+    if resto == 10:
+        return 1
+    return 11 - resto
+
+
+def converter_codigo_barras_para_linha_digitavel(codigo: str) -> str:
+    """Converte código de barras puro (44 dígitos) na linha digitável FEBRABAN (48 dígitos).
+
+    Se o código já possuir 48 dígitos, retorna apenas os dígitos numéricos.
+    Converte códigos contínuos de 44 dígitos calculando os 4 dígitos verificadores
+    de campo (Módulo 10 ou 11 conforme o 3º dígito do código FEBRABAN).
+    """
+    digitos = re.sub(r"\D", "", codigo)
+    if len(digitos) == 48:
+        return digitos
+    if len(digitos) == 44:
+        # Padrão FEBRABAN Arrecadação:
+        # Dígito 3 (índice 2): 6/7 = Módulo 10; 8/9 = Módulo 11
+        tipo_moeda = digitos[2]
+        calc_dv = calcular_dv_modulo11 if tipo_moeda in ("8", "9") else calcular_dv_modulo10
+        b1, b2, b3, b4 = digitos[0:11], digitos[11:22], digitos[22:33], digitos[33:44]
+        return f"{b1}{calc_dv(b1)}{b2}{calc_dv(b2)}{b3}{calc_dv(b3)}{b4}{calc_dv(b4)}"
+    raise ValueError(
+        f"Código de arrecadação inválido: esperado 44 dígitos (código puro) ou 48 dígitos "
+        f"(linha digitável), obtido {len(digitos)} dígitos."
+    )
+
+
+def converter_linha_digitavel_para_codigo_barras(linha: str) -> str:
+    """Converte linha digitável (48 dígitos) no código de barras puro FEBRABAN (44 dígitos)."""
+    digitos = re.sub(r"\D", "", linha)
+    if len(digitos) == 44:
+        return digitos
+    if len(digitos) == 48:
+        return digitos[0:11] + digitos[12:23] + digitos[24:35] + digitos[36:47]
+    raise ValueError(f"Linha digitável inválida: esperado 48 dígitos, obtido {len(digitos)} dígitos.")
 
 
 def codigo_invalido(codigo: str) -> str | None:
@@ -254,7 +301,7 @@ def codigo_invalido(codigo: str) -> str | None:
         return f"código com {len(digitos)} dígitos (esperado 48 ou 44)"
     if digitos[0] != "8" or digitos[2] not in "6789":
         return "código não é de guia de arrecadação"
-    dv = _dv_mod10 if digitos[2] in "67" else _dv_mod11
+    dv = calcular_dv_modulo10 if digitos[2] in "67" else calcular_dv_modulo11
     if len(digitos) == 48:
         for i in range(4):
             bloco = digitos[i * 12 : i * 12 + 11]
@@ -280,9 +327,13 @@ def consultar_guia(
     vencimento: str = "",
     pasta_destino: Path | None = None,
 ) -> ResultadoDare:
-    """Efetua requisição ao endpoint de impressão da SEFIN."""
+    """Valida a guia e consulta usando apenas a linha digitável normalizada."""
+    motivo = codigo_invalido(codigo)
+    if motivo:
+        raise ValueError(motivo)
+    codigo_consulta = converter_codigo_barras_para_linha_digitavel(codigo)
     params = {
-        "numero_guia_cbarras": codigo.strip(),
+        "numero_guia_cbarras": codigo_consulta,
         "numero_parcela": "00",
     }
 
@@ -297,14 +348,14 @@ def consultar_guia(
         # O código da guia entra sempre no nome: na consulta individual a parcela
         # é sempre "00", e o nome só pela parcela fazia uma guia sobrescrever a outra.
         sufixo = f"_p{parcela}" if parcela and parcela != "00" else ""
-        nome_arquivo = f"comprovante_{codigo.strip()}{sufixo}.html"
+        nome_arquivo = f"comprovante_{codigo_consulta}{sufixo}.html"
         arquivo = pasta_destino / nome_arquivo
         arquivo.write_text(html, encoding="utf-8")
         caminho_salvo = str(arquivo.resolve())
 
     return extrair_dados_comprovante(
         html=html,
-        codigo=codigo,
+        codigo=codigo_consulta,
         parcela=parcela,
         vencimento=vencimento,
         caminho_salvo=caminho_salvo,
@@ -376,7 +427,7 @@ def main(
         str | None,
         Parameter(
             name=["CODIGO", "--codigo", "-c"],
-            help="Código de barras ou linha digitável da guia (48 dígitos). Aceito como argumento posicional ou flag.",
+            help="Código de barras ou linha digitável da guia (44 ou 48 dígitos). Aceito como argumento posicional ou flag.",
         ),
     ] = None,
     *,
@@ -423,8 +474,8 @@ def main(
     """Consulta e extrai todos os dados de comprovantes de pagamento de DARE na SEFIN/RO.
 
     Exemplos:
-        consultar_dare <codigo-de-barras-48-digitos>
-        consultar_dare --arquivo guias.json --csv resultado_completo.csv --json resultado.json
+        consultar_dare <codigo-de-barras-ou-linha-digitavel>
+        consultar_dare --arquivo guias.json --csv .cache/comprovantes-dare/resultado.csv --json .cache/comprovantes-dare/resultado.json
     """
     dare_session = session or os.environ.get("SEFIN_DARE_SESSION")
 
@@ -576,4 +627,4 @@ def main(
 
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(app())
