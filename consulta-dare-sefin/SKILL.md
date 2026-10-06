@@ -34,6 +34,9 @@ Esse endpoint é **totalmente público**:
   - **Código da Receita:** Ex.: `7257` (*Ressarcimento ao Erário — IPERON*);
   - **Autenticação SEFIN:** Número do documento gerado pelo sistema fazendário.
 
+> [!IMPORTANT]
+> O endpoint responde HTTP 200 com o título "COMPROVANTE DE PAGAMENTO DE DARE" **até para guia inexistente**: o comprovante vem vazio (Data Pagamento "Não informado", Cod. Receita "0000", Valor Total "0,00"). O script só classifica como `pago` com data de pagamento e valor total positivo; o modelo vazio é `nao_encontrado`, e qualquer outra página é `erro`.
+
 ______________________________________________________________________
 
 ## 2. Origem Canônica e Execução Direta via URL
@@ -65,7 +68,7 @@ ______________________________________________________________________
 ## 3. Uso do Script
 
 > [!WARNING]
-> **Privacidade dos Dados:** Nunca utilize código de barras de guias reais em exemplos, issues, pull requests ou documentações públicas. A partir do código de barras da guia, qualquer pessoa obtém via endpoint o nome completo, CPF e endereço residencial do contribuinte. Os arquivos de saída (CSV, JSON e HTML de comprovantes) contêm esses dados pessoais e devem sempre ser direcionados para `.cache/`, fora do controle de versão.
+> **Privacidade dos Dados:** Nunca utilize código de barras de guias reais em exemplos, issues, pull requests ou documentações públicas. A partir do código de barras da guia, qualquer pessoa obtém via endpoint o nome completo, CPF e endereço residencial do contribuinte. Os arquivos de saída (CSV, JSON e HTML de comprovantes) contêm esses dados pessoais e devem ficar fora do controle de versão. Neste repositório, `.cache/` é ignorado; em projetos consumidores, confirme a regra com `git check-ignore` ou use um diretório externo ao repositório.
 
 ### A. Consulta Direta de Guia Individual (Zero Configuração)
 

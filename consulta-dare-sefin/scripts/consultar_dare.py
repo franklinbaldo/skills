@@ -23,7 +23,7 @@ import json
 import os
 import re
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Annotated
 
@@ -100,6 +100,34 @@ def _extrair_campo_regex(padrao: str, texto: str, default: str = "") -> str:
     return m.group(1).strip() if m else default
 
 
+def _valor_positivo(valor: str) -> bool:
+    try:
+        return float(valor.replace(".", "").replace(",", ".")) > 0
+    except ValueError:
+        return False
+
+
+def _situacao(tem_titulo: bool, data_pagamento: str, valor_total: str, codigo_receita: str) -> str:
+    """Pago, não encontrado ou erro, cada um por marcador explícito.
+
+    Medido em 2026-10-05: a SEFIN responde HTTP 200 com o título "COMPROVANTE
+    DE PAGAMENTO DE DARE" até para guia inexistente; nesse caso o comprovante
+    vem vazio (Data Pagamento "Não informado", Cod. Receita "0000", Valor Total
+    "0,00"). O título sozinho, portanto, não prova pagamento, e a ausência dele
+    não prova ausência: página de manutenção ou layout novo vira erro.
+    """
+    if not tem_titulo:
+        return "erro"
+    if re.fullmatch(r"\d{2}/\d{2}/\d{4}", data_pagamento.strip()) and _valor_positivo(valor_total):
+        return "pago"
+    vazio = (
+        data_pagamento.strip().lower().startswith("não informado")
+        and not _valor_positivo(valor_total)
+        and codigo_receita.strip() in ("", "0000")
+    )
+    return "nao_encontrado" if vazio else "erro"
+
+
 def extrair_dados_comprovante(
     html: str,
     codigo: str,
@@ -110,10 +138,8 @@ def extrair_dados_comprovante(
     """Extrai exaustivamente todos os campos estruturados do HTML do comprovante da SEFIN."""
     soup = BeautifulSoup(html, "html.parser")
 
-    texto_geral = soup.get_text()
     titulo_el = soup.find(class_=re.compile(r"legacy-title", re.I))
-
-    situacao = "pago" if (titulo_el or "COMPROVANTE DE PAGAMENTO DE DARE" in texto_geral) else "nao_encontrado"
+    tem_titulo = bool(titulo_el and "COMPROVANTE DE PAGAMENTO DE DARE" in titulo_el.get_text(" ", strip=True).upper())
 
     # 1. Dados do Contribuinte
     contribuinte = _extrair_campo_regex(r"Nome\s*/\s*Contribuinte:</b>\s*([^<]+)", html)
@@ -152,6 +178,7 @@ def extrair_dados_comprovante(
     codigo_barras_formatado = _extrair_campo_regex(r'<div class="legacy-barcode">([^<]+)</div>', html)
     versao_sefin = _extrair_campo_regex(r"Versão\s*([^<\n]+)", html)
 
+    situacao = _situacao(tem_titulo, data_pagamento, valor_total, codigo_receita)
     obs = f"Doc: {numero_doc}" if numero_doc else ("Quitado" if situacao == "pago" else "")
 
     return ResultadoDare(
@@ -254,9 +281,43 @@ def converter_linha_digitavel_para_codigo_barras(linha: str) -> str:
         return digitos
     if len(digitos) == 48:
         return digitos[0:11] + digitos[12:23] + digitos[24:35] + digitos[36:47]
-    raise ValueError(
-        f"Linha digitável inválida: esperado 48 dígitos, obtido {len(digitos)} dígitos."
-    )
+    raise ValueError(f"Linha digitável inválida: esperado 48 dígitos, obtido {len(digitos)} dígitos.")
+
+
+def codigo_invalido(codigo: str) -> str | None:
+    """Motivo pelo qual o código não pode ser consultado, ou None se é válido.
+
+    Código truncado ou com dígito trocado, mandado à SEFIN, volta como página
+    sem comprovante e seria lido como "não pago". A validação vem antes da
+    consulta: linha digitável de arrecadação (48 dígitos, quatro blocos com
+    dígito verificador) ou código de barras (44 dígitos, verificador geral na
+    4ª posição). O terceiro dígito escolhe o módulo: 6 ou 7, módulo 10; 8 ou 9,
+    módulo 11.
+    """
+    if any(ch not in "0123456789 .-" for ch in codigo):
+        return "código com caractere que não é dígito"
+    digitos = "".join(ch for ch in codigo if ch.isdigit())
+    if len(digitos) not in (44, 48):
+        return f"código com {len(digitos)} dígitos (esperado 48 ou 44)"
+    if digitos[0] != "8" or digitos[2] not in "6789":
+        return "código não é de guia de arrecadação"
+    dv = calcular_dv_modulo10 if digitos[2] in "67" else calcular_dv_modulo11
+    if len(digitos) == 48:
+        for i in range(4):
+            bloco = digitos[i * 12 : i * 12 + 11]
+            if dv(bloco) != int(digitos[i * 12 + 11]):
+                return f"dígito verificador do bloco {i + 1} não confere"
+        return None
+    if dv(digitos[:3] + digitos[4:]) != int(digitos[3]):
+        return "dígito verificador geral não confere"
+    return None
+
+
+def _resultado_erro(parcela: str, vencimento: str, codigo: str, motivo: str) -> ResultadoDare:
+    """Resultado de guia não verificada: só a identificação e o motivo, o resto vazio."""
+    vazios = {f.name: "" for f in fields(ResultadoDare)}
+    vazios.update(parcela=parcela, vencimento=vencimento, codigo=codigo, situacao="erro", observacao=motivo)
+    return ResultadoDare(**vazios)
 
 
 def consultar_guia(
@@ -266,19 +327,11 @@ def consultar_guia(
     vencimento: str = "",
     pasta_destino: Path | None = None,
 ) -> ResultadoDare:
-    """Efetua requisição ao endpoint de impressão da SEFIN.
-
-    Aceita código de barras puro (44 dígitos) ou linha digitável (48 dígitos),
-    com ou sem formatação. O endpoint da SEFIN exige linha digitável (48 dígitos);
-    se um código puro de 44 dígitos for fornecido, ele é automaticamente convertido
-    calculando os dígitos verificadores dos blocos conforme padrão FEBRABAN.
-    """
-    codigo_limpo = re.sub(r"\D", "", codigo)
-    try:
-        codigo_consulta = converter_codigo_barras_para_linha_digitavel(codigo_limpo)
-    except ValueError:
-        codigo_consulta = codigo_limpo
-
+    """Valida a guia e consulta usando apenas a linha digitável normalizada."""
+    motivo = codigo_invalido(codigo)
+    if motivo:
+        raise ValueError(motivo)
+    codigo_consulta = converter_codigo_barras_para_linha_digitavel(codigo)
     params = {
         "numero_guia_cbarras": codigo_consulta,
         "numero_parcela": "00",
@@ -374,7 +427,7 @@ def main(
         str | None,
         Parameter(
             name=["CODIGO", "--codigo", "-c"],
-            help="Código de barras ou linha digitável da guia (48 dígitos). Aceito como argumento posicional ou flag.",
+            help="Código de barras ou linha digitável da guia (44 ou 48 dígitos). Aceito como argumento posicional ou flag.",
         ),
     ] = None,
     *,
@@ -422,7 +475,7 @@ def main(
 
     Exemplos:
         consultar_dare <codigo-de-barras-ou-linha-digitavel>
-        consultar_dare --arquivo guias.json --csv .cache/resultado.csv --json .cache/resultado.json
+        consultar_dare --arquivo guias.json --csv .cache/comprovantes-dare/resultado.csv --json .cache/comprovantes-dare/resultado.json
     """
     dare_session = session or os.environ.get("SEFIN_DARE_SESSION")
 
@@ -480,6 +533,15 @@ def main(
             venc = str(g.get("vencimento", "")).strip()
 
             if not cod:
+                # Linha sem código não some do lote: vira erro, e o lote sai com 1.
+                console.print(f"[{idx}/{len(guias_a_consultar)}] [red]Linha sem código de barras.[/red]")
+                resultados.append(_resultado_erro(parc, venc, "", "linha sem código de barras"))
+                continue
+
+            motivo = codigo_invalido(cod)
+            if motivo:
+                console.print(f"[{idx}/{len(guias_a_consultar)}] [red]Código inválido:[/red] {motivo}")
+                resultados.append(_resultado_erro(parc, venc, cod, f"código inválido: {motivo}"))
                 continue
 
             console.print(f"[{idx}/{len(guias_a_consultar)}] Consultando guia {parc or cod[:10]}...", end=" ")
@@ -502,45 +564,7 @@ def main(
                     console.print(f"[yellow]{res.situacao.upper()}[/yellow]")
             except Exception as e:
                 console.print(f"[red]FALHA:[/red] {e}")
-                resultados.append(
-                    ResultadoDare(
-                        parcela=parc,
-                        vencimento=venc,
-                        codigo=cod,
-                        situacao="erro",
-                        valor_total="",
-                        valor_principal="",
-                        valor_multa="",
-                        valor_juros="",
-                        outros_acrescimos="",
-                        data_pagamento="",
-                        contribuinte="",
-                        cpf_cnpj="",
-                        telefone="",
-                        endereco="",
-                        municipio="",
-                        cep="",
-                        uf="",
-                        numero_documento="",
-                        numero_processo="",
-                        numero_parcela="",
-                        codigo_receita="",
-                        tipo_dare="",
-                        sequencial="",
-                        mes_ano_referencia="",
-                        complemento="",
-                        unidade_gestora="",
-                        gestao="",
-                        nome_servidor="",
-                        cpf_servidor="",
-                        restituicao="",
-                        valor_restituido="",
-                        codigo_barras_formatado="",
-                        versao_sefin="",
-                        arquivo_comprovante="",
-                        observacao=str(e),
-                    )
-                )
+                resultados.append(_resultado_erro(parc, venc, cod, str(e)))
 
             time.sleep(0.3)
 
@@ -593,14 +617,14 @@ def main(
         json_out.write_text(json.dumps(dados_json, ensure_ascii=False, indent=2), encoding="utf-8")
         console.print(f"[green]JSON estruturado completo salvo em:[/green] {json_out.resolve()}")
 
-    # Sem nenhuma guia verificada (SEFIN fora do ar, timeout, só HTTP de erro), sair com
-    # código 1 para sinalizar falha em pipelines e automações.
-    if not resultados or all(r.situacao == "erro" for r in resultados):
-        console.print("[red]Nenhuma guia foi verificada.[/red]")
+    # Lote com qualquer guia não verificada (SEFIN fora do ar, timeout, HTTP de erro) não é
+    # conferência concluída: sair com zero diria a quem automatiza que foi.
+    erros = sum(r.situacao == "erro" for r in resultados)
+    if not resultados or erros:
+        console.print(f"[red]{erros or 'Nenhuma'} guia(s) não verificada(s).[/red]")
         return 1
-
     return 0
 
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(app())

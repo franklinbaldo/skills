@@ -5,3 +5,4 @@ __pycache__/
 .ruff_cache/
 node_modules/
 suno-profile/scripts/.chrome-login-profile/
+.cache/
