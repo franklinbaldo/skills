@@ -6,6 +6,7 @@
 #     "cyclopts>=3.0",
 #     "duckdb>=1.1",
 #     "httpx>=0.27",
+#     "pydantic>=2.6",
 #     "rich>=13.7",
 # ]
 # ///
@@ -71,7 +72,13 @@ def load(module_name: str):
     module = importlib.util.module_from_spec(spec)
     # Registered before exec: dataclasses and cyclopts resolve annotations through sys.modules.
     sys.modules[name] = module
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        # A half-executed module left cached would make every later test fail with
+        # "no attribute 'app'" instead of the real import error.
+        del sys.modules[name]
+        raise
     return module
 
 

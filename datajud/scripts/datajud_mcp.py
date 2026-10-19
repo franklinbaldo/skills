@@ -4,6 +4,7 @@
 # dependencies = [
 #     "fastmcp>=2.0",
 #     "cyclopts>=3.0",
+#     "pydantic>=2.6",
 #     "rich>=13.0",
 # ]
 # ///
@@ -161,8 +162,11 @@ def datajud_processo(
     modo `lote` do `datajud.py`: a API custa o mesmo por requisição com 1 ou 100.
 
     - ``cnj``: número do processo, com ou sem pontuação.
-    - ``tribunal``: sigla do acervo (``tjro``, ``tjsp``, ``stj``...); omitida,
-      sai do próprio número CNJ (segmento J.TR), e ``tjro`` se não der.
+    - ``tribunal``: sigla do acervo (``tjro``, ``tjsp``, ``stj``...) para
+      consultar só ele. Omitida, a busca cobre a família do número: o tribunal
+      de origem (segmento J.TR), os demais tribunais do estado de origem (TJ,
+      TRT, TRF, TRE, TJM) e os superiores (STJ, TST, TSE, STM) — o processo
+      que sobe ao STJ segue lá com o mesmo número. O STF não tem índice na API.
     - ``incluir_movimentos``: quando ``True``, acrescenta a lista completa de
       movimentos, inclusive o ruído. Use só quando o marco procurado não
       aparecer entre os marcos — é payload grande.
@@ -171,21 +175,27 @@ def datajud_processo(
     (decurso de prazo, publicação, DJE, expedição de documento, juntada,
     petição, conclusão, mero expediente, intimação, mandado, ajuste de classe).
     """
-    tribunal = tribunal or dj.tribunal_do_cnj(cnj) or dj.DEFAULT_TRIBUNAL
     numero = dj.so_digitos(cnj)
-    body = {
-        "size": 50,
-        "query": {"match": {"numeroProcesso": numero}},
-        "sort": [{"grau.keyword": "asc"}],
-    }
-    bruto = dj.search(body, tribunal=tribunal)
-    hits = bruto.get("hits", {}).get("hits", [])
-    if not hits:
+    try:
+        item = dj.consultar_um(cnj, tribunal=tribunal)
+    except dj.ValidationError:
+        return {
+            "processo": cnj,
+            "encontrado": False,
+            "resumo": f"{cnj!r} não é número CNJ (20 dígitos).",
+        }
+    consultados = item.consultados
+    falhas = [f.model_dump() for f in item.falhas]
+    tribunal = tribunal or item.origem or dj.DEFAULT_TRIBUNAL
+    onde = ", ".join(c.upper() for c in consultados) or "nenhum índice (número sem tribunal deduzível)"
+    if not item.encontrado:
         return {
             "processo": dj.cnj(numero),
             "tribunal": tribunal.upper(),
+            "consultados": consultados,
+            "falhas": falhas,
             "encontrado": False,
-            "resumo": f"Nenhum registro de {dj.cnj(numero)} no acervo {tribunal.upper()}.",
+            "resumo": f"Nenhum registro de {dj.cnj(numero)} em {onde}.",
             "next_actions": [
                 {
                     "tool": "datajud_processo",
@@ -196,11 +206,12 @@ def datajud_processo(
         }
 
     documentos = []
-    for h in hits:
-        src = h["_source"]
+    for registro in item.registros:
+        src = registro.fonte
         movimentos = src.get("movimentos") or []
         marcos = _marcos(movimentos)
         doc = {
+            "tribunal": registro.tribunal.upper(),
             "grau": dj.grau_label(src.get("grau")),
             "classe": dj.classe_str(src),
             "assuntos": dj.assuntos_str(src),
@@ -231,15 +242,18 @@ def datajud_processo(
     # Só agora a chave interna sai: ela precisou sobreviver ao max() acima.
     for doc in documentos:
         doc["marcos"] = _publicar(doc["marcos"])
+    achados = ", ".join(dict.fromkeys(d["tribunal"] for d in documentos))
     resumo = (
-        f"{dj.cnj(numero)} — {tribunal.upper()} — {len(documentos)} registro(s) de grau. "
+        f"{dj.cnj(numero)} — {achados} — {len(documentos)} registro(s) de grau. "
         f"Último marco: {ultimo['data']} {ultimo['nome']}." if ultimo
-        else f"{dj.cnj(numero)} — {tribunal.upper()} — sem marcos registrados."
+        else f"{dj.cnj(numero)} — {achados} — sem marcos registrados."
     )
 
     saida: dict[str, Any] = {
         "processo": dj.cnj(numero),
         "tribunal": tribunal.upper(),
+        "consultados": consultados,
+        "falhas": falhas,
         "encontrado": True,
         "resumo": resumo,
         "documentos": documentos,
@@ -248,7 +262,8 @@ def datajud_processo(
         saida["next_actions"] = [
             {
                 "tool": "datajud_processo",
-                "args": {"cnj": cnj, "tribunal": tribunal, "incluir_movimentos": True},
+                "args": {"cnj": cnj, "incluir_movimentos": True,
+                         **({"tribunal": consultados[0]} if len(consultados) == 1 else {})},
                 "reason": "Ver também os movimentos de rotina omitidos dos marcos.",
             }
         ]

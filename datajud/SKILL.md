@@ -91,38 +91,72 @@ Unificadas; a de ruído é curta e estável. Em 2026-10-19, num acervo de 3.448
 processos, a lista original de cinco deixava "Petição" como último marco de 728
 processos; os códigos acrescentados vieram dessa medição.
 
-O tribunal sai do próprio número CNJ (segmento `J.TR`: TJ pela UF, TRT, TRF,
-STJ, STF); `--tribunal` só é preciso quando o número não o revela.
+Sem `--tribunal`, o processo é procurado na **família** do número (seção
+"Onde o processo pode estar"); `--tribunal` consulta só aquele índice e
+`--so-origem`, só o tribunal de origem.
 
 ### 2. `scripts/datajud.py` — Pesquisa aprofundada, contagens, facetas e lote
 
 Cliente focado em buscas avançadas, agregações, descoberta de códigos TPU e
 download em lote.
 
+## Onde o processo pode estar
+
+A API não tem índice unificado: cada tribunal é um índice
+(`api_publica_tjro`, `api_publica_stj`…). Vários índices numa só requisição,
+por vírgula ou curinga, esbarram no tempo-limite de 60 s do balanceador do CNJ
+(medido em 2026-10-19: três tribunais grandes ou `*` dão 504). Por isso a busca
+consulta um índice por requisição, em paralelo.
+
+O número CNJ diz o tribunal de **origem** (segmento `J.TR`), e por ele a skill
+monta a **família** onde procurar:
+
+- a **origem** (`tjro`, `trt14`, `trf1`, `tre-ro`, `tjmmg`, `stj`, `tst`…);
+- os **demais tribunais do estado de origem**: TJ, TRT da região, TRF da
+  região, TRE e, em MG, RS e SP, o TJM — processo pode mudar de ramo por
+  declínio de competência; é raro, mas acontece. Número federal só diz a região
+  (o TRF1 cobre 13 estados), então ali entram só o TRF e os superiores;
+- os **superiores**: STJ, TST, TSE, STM. Quem sobe ao STJ segue lá **com o
+  mesmo número de origem**, grau `SUP` e a classe do recurso (medido: 7 de 100
+  processos do TJRO com 2º grau estavam no índice `stj`).
+
+O **STF não tem índice** na API pública (`index_not_found`): número do STF
+sai como "sem tribunal deduzível", e passagem pelo STF não aparece no DataJud.
+
+Cada registro devolvido carrega o tribunal onde foi achado (`_index` no cru,
+`tribunal` na saída), e a resposta lista os índices **consultados** — ausência
+só significa algo para quem foi consultado e respondeu.
+
 ## Lote é o padrão
 
 Cada requisição ao DataJud leva de segundos a dezenas de segundos (medido em
 2026-10-19: ~40 s), e custa o mesmo com 1 ou com 100 processos. Um laço de
 `processo` sobre um acervo de milhares leva horas; o modo `lote` levou ~6 min
-para 3.448 processos. Sempre que houver **mais de um processo**, use-o:
+para 3.448 processos só na origem. Sempre que houver **mais de um processo**,
+use-o:
 
 ```bash
 uv run scripts/datajud.py lote numeros.txt --saida .cache/datajud
+uv run scripts/datajud.py lote numeros.txt --saida .cache/datajud --so-origem   # mais rápido, sem família
 ```
 
 - `numeros.txt` tem um CNJ por linha, com ou sem máscara; duplicatas caem.
-- O tribunal de cada processo sai do número; cada tribunal vai em consultas
-  `terms` de até 100 processos, em paralelo (`--trabalhadores`, padrão 4).
-- A resposta **crua** de cada processo (capa e movimentos de todos os graus)
-  fica em `<saida>/<tribunal>/<numero>.json`, inclusive o vazio de quem não foi
-  encontrado. Rodar de novo pula o que já está em disco: interrupção, lote
-  recusado pelo balanceador ou erro de rede se resolvem rodando outra vez.
+- Cada índice da família vai em consultas `terms` de até 100 processos, em
+  paralelo (`--trabalhadores`, padrão 4). A família multiplica as consultas
+  (oito índices para um número do TJRO), não o custo por processo.
+- A resposta **crua** de cada processo fica em `<saida>/<origem>/<numero>.json`:
+  os índices consultados e os registros achados em qualquer deles (capa e
+  movimentos de todos os graus), inclusive o vazio de quem não foi encontrado.
+- Rodar de novo pula o que já está em disco. Índice que não responde (504 do
+  balanceador, rede) **não grava nada** daquele processo: a falha não vira
+  "não encontrado", e a próxima execução refaz.
 - Não jogue a resposta fora: guardada, ela responde as perguntas seguintes
-  (situação, instância, último marco, trânsito) sem nova requisição. Ponha a
-  saída em diretório de cache fora do controle de versão.
+  (situação, instância, último marco, passagem por superior) sem nova
+  requisição. Ponha a saída em diretório de cache fora do controle de versão.
 
 O resumo final diz quantos estão em disco, quantos foram encontrados, quais
-números não revelam o tribunal e quais lotes falharam (código de saída 1).
+apareceram também em outro tribunal, quais números não revelam o tribunal e
+quais processos ficaram com índice sem resposta (código de saída 1).
 
 ## Movimento e documento envelhecem em ritmos diferentes
 
@@ -176,8 +210,8 @@ uv run scripts/datajud.py facetas --classe 1116 --por orgao --limite 10
 ```
 
 Em `buscar`, `contar`, `facetas` e `codigos`, use `--tribunal stj|stf|trf1|tjsp|...`
-quando necessário; o padrão é TJRO. Em `processo` e `lote`, o tribunal sai do
-número CNJ.
+quando necessário; o padrão é TJRO. Em `processo` e `lote`, a busca cobre a
+família do número CNJ.
 
 ## Escolha econômica do modo
 
