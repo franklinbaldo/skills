@@ -91,6 +91,19 @@ RUIDO = {
     1061,  # Disponibilização no Diário da Justiça Eletrônico
     60,    # Expedição de documento
     581,   # Juntada
+    # Medidos em 2026-10-19 num acervo de 3.448 processos (TJRO, TRT14, TRF1):
+    # depois dos cinco acima, eram estes que ocupavam o "último marco" sem mudar
+    # o estado do processo (petição sozinha respondia por 728).
+    85,     # Petição (juntada de)
+    51,     # Conclusão
+    11010,  # Mero expediente
+    12291,  # Movimentação processual (genérico)
+    12263,  # Intimação (expedida)
+    106,    # Mandado (expedido)
+    12270,  # Documento
+    10966,  # Mudança de classe processual
+    14738,  # Retificação de classe processual
+    14739,  # Evolução da classe processual
 }
 
 MARCOS_VISIVEIS = 12
@@ -137,24 +150,28 @@ def _publicar(marcos: list[dict]) -> list[dict]:
 @mcp.tool
 def datajud_processo(
     cnj: str,
-    tribunal: str = "tjro",
+    tribunal: str | None = None,
     incluir_movimentos: bool = False,
 ) -> dict[str, Any]:
     """Estado atual de um processo no DataJud: capa, marcos e último ato.
 
     Responde "onde este processo está" sem despejar a lista inteira de
     movimentos. Um processo pode ter mais de um registro (um por grau); todos
-    voltam, cada um com seus próprios marcos.
+    voltam, cada um com seus próprios marcos. Para mais de um processo, use o
+    modo `lote` do `datajud.py`: a API custa o mesmo por requisição com 1 ou 100.
 
     - ``cnj``: número do processo, com ou sem pontuação.
-    - ``tribunal``: sigla do acervo (``tjro``, ``tjsp``, ``stj``...).
+    - ``tribunal``: sigla do acervo (``tjro``, ``tjsp``, ``stj``...); omitida,
+      sai do próprio número CNJ (segmento J.TR), e ``tjro`` se não der.
     - ``incluir_movimentos``: quando ``True``, acrescenta a lista completa de
       movimentos, inclusive o ruído. Use só quando o marco procurado não
       aparecer entre os marcos — é payload grande.
 
-    Marcos são todos os movimentos **menos** decurso de prazo, publicação,
-    disponibilização no DJE, expedição de documento e juntada.
+    Marcos são todos os movimentos **menos** os de rotina listados em ``RUIDO``
+    (decurso de prazo, publicação, DJE, expedição de documento, juntada,
+    petição, conclusão, mero expediente, intimação, mandado, ajuste de classe).
     """
+    tribunal = tribunal or dj.tribunal_do_cnj(cnj) or dj.DEFAULT_TRIBUNAL
     numero = dj.so_digitos(cnj)
     body = {
         "size": 50,
@@ -333,7 +350,7 @@ app = cyclopts.App(name="datajud-mcp", help=__doc__)
 def processo(
     numero: str,
     *,
-    tribunal: str = "tjro",
+    tribunal: str | None = None,
     incluir_movimentos: bool = False,
     json: bool = False,
 ) -> int:
@@ -344,7 +361,7 @@ def processo(
     numero
         número do processo (com ou sem máscara CNJ).
     tribunal
-        sigla do índice (padrão tjro).
+        sigla do índice; omitida, sai do número CNJ (e tjro se não der).
     incluir_movimentos
         inclui a linha completa de movimentação. Na visão humana, mostra a
         tabela integral; use apenas quando necessário.

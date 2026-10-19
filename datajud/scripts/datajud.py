@@ -37,7 +37,9 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated, Literal
 
 import cyclopts
@@ -150,6 +152,35 @@ def cnj(n):
     if len(d) == 20:
         return f"{d[0:7]}-{d[7:9]}.{d[9:13]}.{d[13:14]}.{d[14:16]}.{d[16:20]}"
     return n or ""
+
+
+# Segmento J.TR do numero CNJ (Res. CNJ 65/2008): J=8 estadual (TR = UF),
+# 5 trabalho, 4 federal, 3 STJ, 1 STF. Um acervo de orgao publico mistura
+# TJ, TRT, TRF e tribunais superiores; deduzir o indice evita perguntar ao
+# TJRO por processo que nunca esteve la.
+_UF_TJ = {
+    "01": "ac", "02": "al", "03": "ap", "04": "am", "05": "ba", "06": "ce",
+    "07": "dft", "08": "es", "09": "go", "10": "ma", "11": "mt", "12": "ms",
+    "13": "mg", "14": "pa", "15": "pb", "16": "pr", "17": "pe", "18": "pi",
+    "19": "rj", "20": "rn", "21": "rs", "22": "ro", "23": "rr", "24": "sc",
+    "25": "se", "26": "sp", "27": "to",
+}
+
+
+def tribunal_do_cnj(n):
+    """Sigla do indice DataJud deduzida do numero CNJ, ou None se nao der."""
+    d = so_digitos(n)
+    if len(d) != 20:
+        return None
+    j, tr = d[13], d[14:16]
+    if j == "8":
+        return f"tj{_UF_TJ[tr]}" if tr in _UF_TJ else None
+    if j == "5":
+        return f"trt{int(tr)}"
+    if j == "4":
+        return f"trf{int(tr)}"
+    # Tribunal superior tem TR 00; J=1 com outro TR é número malformado no cadastro.
+    return {"3": "stj", "1": "stf"}.get(j) if tr == "00" else None
 
 
 def fmt_data_ajuiz(s):
@@ -479,6 +510,84 @@ def cmd_codigos(termo: str, por: str, tribunal: str, limite: int, as_json: bool)
 
 
 # ----------------------------------------------------------------------------
+# Modo: lote (muitos processos, resposta crua guardada em disco)
+# ----------------------------------------------------------------------------
+# A API leva dezenas de segundos por requisicao com 1 ou com 100 processos
+# (medido em 2026-10-19: ~40 s); um por um, um acervo de 3.448 processos
+# levaria horas. Uma consulta `terms` por tribunal, em lotes, levou ~6 min.
+LOTE = 100
+
+
+def _arquivo_lote(saida: Path, numero: str, tribunal: str) -> Path:
+    return saida / tribunal / f"{so_digitos(numero)}.json"
+
+
+def baixar_lote(numeros: list[str], tribunal: str, saida: Path) -> int:
+    """Uma requisicao para ate LOTE processos do mesmo indice; grava um arquivo por
+    processo, inclusive o vazio (nao encontrado), para nao perguntar de novo."""
+    d = search(
+        {"size": LOTE * 10,
+         "query": {"terms": {"numeroProcesso": [so_digitos(n) for n in numeros]}}},
+        tribunal=tribunal,
+    )
+    hits = d.get("hits", {}).get("hits", [])
+    total = d.get("hits", {}).get("total", {}).get("value", 0)
+    if total > len(hits):
+        raise RuntimeError(f"resposta truncada em {tribunal}: {len(hits)} de {total}")
+    por_numero = {so_digitos(n): [] for n in numeros}
+    for h in hits:
+        por_numero.setdefault(h["_source"].get("numeroProcesso", ""), []).append(h)
+    for n in numeros:
+        arquivo = _arquivo_lote(saida, n, tribunal)
+        arquivo.parent.mkdir(parents=True, exist_ok=True)
+        arquivo.write_text(
+            json.dumps({"processo": cnj(n), "tribunal": tribunal,
+                        "hits": por_numero[so_digitos(n)]}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    return len(numeros)
+
+
+def cmd_lote(arquivo: Path, saida: Path, trabalhadores: int, as_json: bool):
+    numeros = list(dict.fromkeys(
+        cnj(linha.strip()) for linha in arquivo.read_text(encoding="utf-8").splitlines()
+        if so_digitos(linha)))
+    sem_tribunal = [n for n in numeros if tribunal_do_cnj(n) is None]
+    pendentes: dict[str, list[str]] = {}
+    for n in numeros:
+        t = tribunal_do_cnj(n)
+        if t and not _arquivo_lote(saida, n, t).exists():
+            pendentes.setdefault(t, []).append(n)
+    lotes = [(t, ns[i:i + LOTE]) for t, ns in pendentes.items() for i in range(0, len(ns), LOTE)]
+    feitos, falhas = len(numeros) - sum(len(ns) for _, ns in lotes) - len(sem_tribunal), []
+    with ThreadPoolExecutor(max(1, trabalhadores)) as pool:
+        futuros = {pool.submit(baixar_lote, ns, t, saida): (t, ns) for t, ns in lotes}
+        for futuro in as_completed(futuros):
+            t, ns = futuros[futuro]
+            try:
+                feitos += futuro.result()
+            except RuntimeError as e:
+                falhas.append({"tribunal": t, "processos": len(ns), "erro": str(e)[:200]})
+            print(f"\r{feitos}/{len(numeros)} processos em disco", end="", file=sys.stderr)
+    print(file=sys.stderr)
+    encontrados = sum(
+        1 for n in numeros if tribunal_do_cnj(n)
+        and _arquivo_lote(saida, n, tribunal_do_cnj(n)).exists()
+        and json.loads(_arquivo_lote(saida, n, tribunal_do_cnj(n)).read_text(encoding="utf-8"))["hits"])
+    resumo = {"processos": len(numeros), "em_disco": feitos, "encontrados": encontrados,
+              "sem_tribunal": sem_tribunal, "falhas": falhas, "saida": str(saida)}
+    if as_json:
+        print(json.dumps(resumo, ensure_ascii=False, indent=2))
+    else:
+        print(f"{len(numeros)} processos; {feitos} em disco ({encontrados} encontrados no DataJud) em {saida}")
+        if sem_tribunal:
+            print(f"  sem tribunal deduzivel pelo numero: {', '.join(sem_tribunal)}")
+        for f in falhas:
+            print(f"  falha em {f['tribunal']} ({f['processos']} processos): {f['erro']} — rode de novo")
+    return 1 if falhas else 0
+
+
+# ----------------------------------------------------------------------------
 # CLI
 # ----------------------------------------------------------------------------
 @dataclass
@@ -516,7 +625,7 @@ app = cyclopts.App(
 def processo(
     numero: str,
     *,
-    tribunal: str = DEFAULT_TRIBUNAL,
+    tribunal: str | None = None,
     movimentos: bool = False,
     json: AsJson = False,
 ) -> int:
@@ -527,13 +636,43 @@ def processo(
     numero
         numero do processo (com ou sem mascara CNJ).
     tribunal
-        sigla do indice (padrao tjro).
+        sigla do indice; omitida, sai do numero CNJ (J.TR), e tjro se nao der.
     movimentos
         lista a linha completa de movimentacao.
     json
         emite JSON em vez do relatorio legivel.
     """
-    return cmd_processo(numero, tribunal, movimentos, json)
+    alvo = tribunal or tribunal_do_cnj(numero) or DEFAULT_TRIBUNAL
+    return cmd_processo(numero, alvo, movimentos, json)
+
+
+@app.command
+def lote(
+    arquivo: Path,
+    *,
+    saida: Path = Path("datajud"),
+    trabalhadores: int = 4,
+    json: AsJson = False,
+) -> int:
+    """Baixa muitos processos de uma vez e guarda a resposta crua de cada um.
+
+    O tribunal sai do numero CNJ; cada tribunal vai em consultas de ate 100
+    processos. Grava `<saida>/<tribunal>/<numero>.json` (capa e movimentos de
+    todos os graus, ou lista vazia se nao encontrado) e pula o que ja esta em
+    disco, entao rodar de novo retoma de onde parou.
+
+    Parameters
+    ----------
+    arquivo
+        texto com um numero de processo por linha (com ou sem mascara).
+    saida
+        diretorio dos JSON (padrao ./datajud).
+    trabalhadores
+        consultas simultaneas (padrao 4).
+    json
+        emite o resumo em JSON.
+    """
+    return cmd_lote(arquivo, saida, trabalhadores, json)
 
 
 @app.command

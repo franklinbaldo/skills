@@ -48,7 +48,9 @@ registrado, não o que o ato fundamentou.
 
 1. Defina se a pergunta é sobre **um processo**, **uma lista**, **uma contagem** ou
    **uma distribuição**.
-2. Use o modo mais barato que resolve a pergunta.
+2. Use o modo mais barato que resolve a pergunta. **Mais de um processo é sempre
+   `lote`**, nunca um laço de `processo`: a API cobra por requisição, não por
+   processo (seção "Lote é o padrão").
 3. Não puxe movimentos completos quando capa/último estado bastarem.
 4. Quando o próximo passo depender do conteúdo de um ato, pare e roteie para a
    fonte de teor.
@@ -81,13 +83,46 @@ uv run scripts/datajud_mcp.py processo <cnj> --json                 # saída em 
 
 Medido em dois processos reais: 59 movimentos viraram 24 marcos; 138 (dois
 graus) viraram 69. O que sai é ruído estável — decurso de prazo, publicação,
-disponibilização no DJE, expedição de documento, juntada. **Filtra-se o ruído,
-não se enumeram os marcos**: a lista de códigos que importam é longa e envelhece
-a cada revisão das Tabelas Processuais Unificadas; a de ruído é curta e estável.
+disponibilização no DJE, expedição de documento, juntada, petição, conclusão,
+mero expediente, intimação e mandado expedidos, ajuste de classe (`RUIDO` no
+script). **Filtra-se o ruído, não se enumeram os marcos**: a lista de códigos
+que importam é longa e envelhece a cada revisão das Tabelas Processuais
+Unificadas; a de ruído é curta e estável. Em 2026-10-19, num acervo de 3.448
+processos, a lista original de cinco deixava "Petição" como último marco de 728
+processos; os códigos acrescentados vieram dessa medição.
 
-### 2. `scripts/datajud.py` — Pesquisa aprofundada, contagens e facetas
+O tribunal sai do próprio número CNJ (segmento `J.TR`: TJ pela UF, TRT, TRF,
+STJ, STF); `--tribunal` só é preciso quando o número não o revela.
 
-Cliente focado em buscas avançadas, agregações e descoberta de códigos TPU.
+### 2. `scripts/datajud.py` — Pesquisa aprofundada, contagens, facetas e lote
+
+Cliente focado em buscas avançadas, agregações, descoberta de códigos TPU e
+download em lote.
+
+## Lote é o padrão
+
+Cada requisição ao DataJud leva de segundos a dezenas de segundos (medido em
+2026-10-19: ~40 s), e custa o mesmo com 1 ou com 100 processos. Um laço de
+`processo` sobre um acervo de milhares leva horas; o modo `lote` levou ~6 min
+para 3.448 processos. Sempre que houver **mais de um processo**, use-o:
+
+```bash
+uv run scripts/datajud.py lote numeros.txt --saida .cache/datajud
+```
+
+- `numeros.txt` tem um CNJ por linha, com ou sem máscara; duplicatas caem.
+- O tribunal de cada processo sai do número; cada tribunal vai em consultas
+  `terms` de até 100 processos, em paralelo (`--trabalhadores`, padrão 4).
+- A resposta **crua** de cada processo (capa e movimentos de todos os graus)
+  fica em `<saida>/<tribunal>/<numero>.json`, inclusive o vazio de quem não foi
+  encontrado. Rodar de novo pula o que já está em disco: interrupção, lote
+  recusado pelo balanceador ou erro de rede se resolvem rodando outra vez.
+- Não jogue a resposta fora: guardada, ela responde as perguntas seguintes
+  (situação, instância, último marco, trânsito) sem nova requisição. Ponha a
+  saída em diretório de cache fora do controle de versão.
+
+O resumo final diz quantos estão em disco, quantos foram encontrados, quais
+números não revelam o tribunal e quais lotes falharam (código de saída 1).
 
 ## Movimento e documento envelhecem em ritmos diferentes
 
@@ -140,11 +175,14 @@ uv run scripts/datajud.py facetas --por classe
 uv run scripts/datajud.py facetas --classe 1116 --por orgao --limite 10
 ```
 
-Use `--tribunal stj|stf|trf1|tjsp|...` quando necessário. O padrão é TJRO.
+Em `buscar`, `contar`, `facetas` e `codigos`, use `--tribunal stj|stf|trf1|tjsp|...`
+quando necessário; o padrão é TJRO. Em `processo` e `lote`, o tribunal sai do
+número CNJ.
 
 ## Escolha econômica do modo
 
-- **“qual o andamento?”** → `processo`;
+- **“qual o andamento deste processo?”** → `processo`;
+- **“qual o estado destes processos?”** (dois ou mais) → `lote`;
 - **“quantos?”** → `contar`;
 - **“quais?”** → `buscar`;
 - **“como se distribuem?”** → `facetas`;
@@ -177,7 +215,9 @@ O script já trata:
 - `track_total_hits: true` para não saturar contagens em 10.000;
 - `.keyword` em `grau`/campos textuais de agregação;
 - datas de ajuizamento `AAAAMMDDHHMMSS`;
-- múltiplos documentos do mesmo CNJ por grau;
+- múltiplos documentos do mesmo CNJ por grau (no `lote`, agrupados por número);
+- resposta de lote truncada (`total` maior que os hits devolvidos) vira erro,
+  nunca "não encontrado";
 - filtragem de assuntos vizinhos em `codigos`;
 - chave pública do CNJ.
 
