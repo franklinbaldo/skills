@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import importlib.util
 import io
 import re
 import subprocess
@@ -53,10 +54,25 @@ CLI_MODULES = {
 
 
 def load(module_name: str):
-    directory = str(REPO_ROOT / CLI_MODULES[module_name])
-    if directory not in sys.path:
-        sys.path.insert(0, directory)
-    return importlib.import_module(module_name)
+    """Load the script by file path under a private name.
+
+    Importing by bare module name trusts `sys.modules`: once any earlier script
+    pulled in the stdlib `queue` (e.g. via `concurrent.futures`), the
+    solo-builder-triage `queue.py` was never loaded and the stdlib module came
+    back instead. The directory still goes on `sys.path` for sibling imports.
+    """
+    directory = REPO_ROOT / CLI_MODULES[module_name]
+    if str(directory) not in sys.path:
+        sys.path.insert(0, str(directory))
+    name = f"_cli_contract_{module_name}"
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, directory / f"{module_name}.py")
+    module = importlib.util.module_from_spec(spec)
+    # Registered before exec: dataclasses and cyclopts resolve annotations through sys.modules.
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def run_app(app, tokens: list[str]) -> tuple[int, str]:
