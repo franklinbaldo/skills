@@ -64,12 +64,12 @@ Como MCP, aponte o cliente para este arquivo. Como CLI::
 
 from __future__ import annotations
 
-import json as jsonlib
 import sys
 from pathlib import Path
 from typing import Any
 
 import cyclopts
+from pydantic import BaseModel, Field, ValidationError
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
@@ -110,14 +110,18 @@ RUIDO = {
 MARCOS_VISIVEIS = 12
 
 
-def _marcos(movimentos: list[dict]) -> list[dict]:
-    """Movimentos que mudam o estado útil, em ordem cronológica.
+class Marco(BaseModel):
+    """Movimento que muda o estado útil do processo."""
 
-    Cada marco carrega ``_ord``, o ``dataHora`` cru da API em ISO. **Esse campo
-    é o único critério de ordenação válido, e sobrevive até o cálculo do último
-    marco global** — só então é removido, por :func:`_publicar`.
+    data: str
+    """``dataHora`` formatada, ``dd/mm/aaaa HH:MM``."""
+    codigo: int | None = None
+    nome: str | None = None
+    ordem: str = Field(default="", exclude=True)
+    """``dataHora`` crua, em ISO: o único critério de ordenação válido.
 
-    Duas armadilhas, ambas encontradas em revisão:
+    Fica fora da saída (``exclude``), mas vive no modelo até o cálculo do
+    último marco global. Duas armadilhas, ambas encontradas em revisão:
 
     1. Ordenar pela data formatada ``dd/mm/aaaa`` compara como texto e põe 30/04
        depois de 22/06.
@@ -126,26 +130,72 @@ def _marcos(movimentos: list[dict]) -> list[dict]:
        fuso: ``fmt_data_iso`` corta em ``HH:MM``, de modo que 09:45:01 e
        09:45:59 empatam e o desempate cai na ordem de iteração.
     """
-    saida = []
-    for m in movimentos or []:
-        codigo = m.get("codigo")
-        if codigo in RUIDO:
-            continue
-        saida.append(
-            {
-                "data": dj.fmt_data_iso(m.get("dataHora")),
-                "_ord": m.get("dataHora") or "",
-                "codigo": codigo,
-                "nome": m.get("nome"),
-            }
-        )
-    saida.sort(key=lambda x: x["_ord"])
+
+
+class MovimentoResumo(BaseModel):
+    data: str
+    codigo: int | None = None
+    nome: str | None = None
+
+
+class DocumentoResumo(BaseModel):
+    """Um registro (um grau) do processo num tribunal."""
+
+    tribunal: str
+    grau: str
+    classe: str
+    assuntos: str
+    orgao: str
+    ajuizamento: str
+    ultima_atualizacao: str
+    marcos: list[Marco]
+    total_movimentos: int
+    movimentos_omitidos: int
+    movimentos: list[MovimentoResumo] | None = None
+    """só com ``incluir_movimentos``."""
+
+
+class ProximaAcao(BaseModel):
+    tool: str
+    args: dict[str, Any]
+    reason: str
+
+
+class ConsultaProcesso(BaseModel):
+    """Entrada de ``datajud_processo``."""
+
+    cnj: str
+    tribunal: str | None = None
+    incluir_movimentos: bool = False
+    so_origem: bool = False
+
+
+class ProcessoResumo(BaseModel):
+    """Saída de ``datajud_processo``: resumo primeiro, itens depois."""
+
+    processo: str
+    tribunal: str | None = None
+    consultados: list[str] = Field(default_factory=list)
+    falhas: list[dj.FalhaIndice] = Field(default_factory=list)
+    encontrado: bool
+    completo: bool = False
+    """todo índice consultado respondeu; sem isso, ausência não é ausência."""
+    sqlite: str | None = None
+    resumo: str
+    documentos: list[DocumentoResumo] = Field(default_factory=list)
+    next_actions: list[ProximaAcao] = Field(default_factory=list)
+
+
+def _marcos(movimentos: list[dict]) -> list[Marco]:
+    """Movimentos que mudam o estado útil, em ordem cronológica (por ``ordem``)."""
+    saida = [
+        Marco(data=dj.fmt_data_iso(m.get("dataHora")), ordem=m.get("dataHora") or "",
+              codigo=m.get("codigo"), nome=m.get("nome"))
+        for m in movimentos or []
+        if m.get("codigo") not in RUIDO
+    ]
+    saida.sort(key=lambda x: x.ordem)
     return saida
-
-
-def _publicar(marcos: list[dict]) -> list[dict]:
-    """Remove a chave interna de ordenação da saída pública."""
-    return [{k: v for k, v in m.items() if k != "_ord"} for m in marcos]
 
 
 @mcp.tool
@@ -154,7 +204,7 @@ def datajud_processo(
     tribunal: str | None = None,
     incluir_movimentos: bool = False,
     so_origem: bool = False,
-) -> dict[str, Any]:
+) -> ProcessoResumo:
     """Estado atual de um processo no DataJud: capa, marcos e último ato.
 
     Responde "onde este processo está" sem despejar a lista inteira de
@@ -178,112 +228,81 @@ def datajud_processo(
     (decurso de prazo, publicação, DJE, expedição de documento, juntada,
     petição, conclusão, mero expediente, intimação, mandado, ajuste de classe).
     """
-    numero = dj.so_digitos(cnj)
+    entrada = ConsultaProcesso(cnj=cnj, tribunal=tribunal,
+                               incluir_movimentos=incluir_movimentos, so_origem=so_origem)
+    numero = dj.so_digitos(entrada.cnj)
     try:
-        item = dj.consultar_um(cnj, tribunal=tribunal, so_origem=so_origem)
-    except dj.ValidationError:
-        return {
-            "processo": cnj,
-            "encontrado": False,
-            "resumo": f"{cnj!r} não é número CNJ (20 dígitos).",
-        }
+        item = dj.consultar_um(entrada.cnj, tribunal=entrada.tribunal, so_origem=entrada.so_origem)
+    except ValidationError:
+        return ProcessoResumo(processo=entrada.cnj, encontrado=False,
+                              resumo=f"{entrada.cnj!r} não é número CNJ (20 dígitos).")
     consultados = item.consultados
-    falhas = [f.model_dump() for f in item.falhas]
     # Sem indice consultado (numero do STF, por exemplo) nada foi observado: nao e ausencia.
-    completo = bool(consultados) and not falhas
-    tribunal = tribunal or item.origem or dj.DEFAULT_TRIBUNAL
+    completo = bool(consultados) and not item.falhas
+    sigla = entrada.tribunal or item.origem or dj.DEFAULT_TRIBUNAL
     onde = ", ".join(c.upper() for c in consultados) or "nenhum índice (número sem tribunal deduzível)"
+    base = dict(processo=dj.cnj(numero), tribunal=sigla.upper(), consultados=consultados,
+                falhas=item.falhas, completo=completo, sqlite=str(dj.store.caminho_banco()))
     if not item.encontrado:
-        return {
-            "processo": dj.cnj(numero),
-            "tribunal": tribunal.upper(),
-            "consultados": consultados,
-            "falhas": falhas,
-            "encontrado": False,
-            "completo": completo,
-            "sqlite": str(dj.store.caminho_banco()),
-            "resumo": (f"Consulta incompleta de {dj.cnj(numero)} em {onde}: "
-                       "ha indices sem resposta; nao afirmar ausencia."
-                       if not completo else
-                       f"Nenhum registro de {dj.cnj(numero)} em {onde}."),
-            "next_actions": [
-                {
-                    "tool": "datajud_processo",
-                    "args": {"cnj": cnj, "tribunal": "<outra sigla>"},
-                    "reason": "O processo pode estar no acervo de outro tribunal.",
-                }
-            ],
-        }
+        return ProcessoResumo(
+            **base, encontrado=False,
+            resumo=(f"Consulta incompleta de {dj.cnj(numero)} em {onde}: "
+                    "ha indices sem resposta; nao afirmar ausencia."
+                    if not completo else
+                    f"Nenhum registro de {dj.cnj(numero)} em {onde}."),
+            next_actions=[ProximaAcao(
+                tool="datajud_processo", args={"cnj": entrada.cnj, "tribunal": "<outra sigla>"},
+                reason="O processo pode estar no acervo de outro tribunal.",
+            )],
+        )
 
     documentos = []
     for registro in item.registros:
         src = registro.fonte
         movimentos = src.get("movimentos") or []
         marcos = _marcos(movimentos)
-        doc = {
-            "tribunal": registro.tribunal.upper(),
-            "grau": dj.grau_label(src.get("grau")),
-            "classe": dj.classe_str(src),
-            "assuntos": dj.assuntos_str(src),
-            "orgao": dj.orgao_str(src),
-            "ajuizamento": dj.fmt_data_ajuiz(src.get("dataAjuizamento")),
-            "ultima_atualizacao": dj.fmt_data_iso(src.get("dataHoraUltimaAtualizacao")),
-            "marcos": marcos,
-            "total_movimentos": len(movimentos),
-            "movimentos_omitidos": len(movimentos) - len(marcos),
-        }
-        if incluir_movimentos:
-            doc["movimentos"] = [
-                {
-                    "data": dj.fmt_data_iso(m.get("dataHora")),
-                    "codigo": m.get("codigo"),
-                    "nome": m.get("nome"),
-                }
+        documentos.append(DocumentoResumo(
+            tribunal=registro.tribunal.upper(),
+            grau=dj.grau_label(src.get("grau")),
+            classe=dj.classe_str(src),
+            assuntos=dj.assuntos_str(src),
+            orgao=dj.orgao_str(src),
+            ajuizamento=dj.fmt_data_ajuiz(src.get("dataAjuizamento")),
+            ultima_atualizacao=dj.fmt_data_iso(src.get("dataHoraUltimaAtualizacao")),
+            marcos=marcos,
+            total_movimentos=len(movimentos),
+            movimentos_omitidos=len(movimentos) - len(marcos),
+            movimentos=[
+                MovimentoResumo(data=dj.fmt_data_iso(m.get("dataHora")),
+                                codigo=m.get("codigo"), nome=m.get("nome"))
                 for m in movimentos
-            ]
-        documentos.append(doc)
+            ] if entrada.incluir_movimentos else None,
+        ))
 
     # O último marco do processo é o mais recente entre TODOS os graus — não o
     # último documento da lista, que vem ordenada por grau e não por data. A
-    # comparação usa o timestamp cru; a data formatada perde segundos e fuso.
-    todos = [m for d in documentos for m in d["marcos"]]
-    ultimo = max(todos, key=lambda m: m["_ord"]) if todos else None
-
-    # Só agora a chave interna sai: ela precisou sobreviver ao max() acima.
-    for doc in documentos:
-        doc["marcos"] = _publicar(doc["marcos"])
-    achados = ", ".join(dict.fromkeys(d["tribunal"] for d in documentos))
+    # comparação usa o timestamp cru (`ordem`); a data formatada perde segundos e fuso.
+    todos = [m for d in documentos for m in d.marcos]
+    ultimo = max(todos, key=lambda m: m.ordem) if todos else None
+    achados = ", ".join(dict.fromkeys(d.tribunal for d in documentos))
     resumo = (
         f"{dj.cnj(numero)} — {achados} — {len(documentos)} registro(s) de grau. "
-        f"Último marco: {ultimo['data']} {ultimo['nome']}." if ultimo
+        f"Último marco: {ultimo.data} {ultimo.nome}." if ultimo
         else f"{dj.cnj(numero)} — {achados} — sem marcos registrados."
     )
-
     if not completo:
         resumo += (" Consulta PARCIAL: nao responderam " +
-                   ", ".join(f["indice"].upper() for f in falhas) +
+                   ", ".join(f.indice.upper() for f in item.falhas) +
                    "; o ultimo marco nao garante o estado atual.")
 
-    saida: dict[str, Any] = {
-        "processo": dj.cnj(numero),
-        "tribunal": tribunal.upper(),
-        "consultados": consultados,
-        "falhas": falhas,
-        "encontrado": True,
-        "completo": completo,
-        "sqlite": str(dj.store.caminho_banco()),
-        "resumo": resumo,
-        "documentos": documentos,
-    }
-    if not incluir_movimentos and any(d["movimentos_omitidos"] for d in documentos):
-        saida["next_actions"] = [
-            {
-                "tool": "datajud_processo",
-                "args": {"cnj": cnj, "incluir_movimentos": True,
-                         **({"tribunal": consultados[0]} if len(consultados) == 1 else {})},
-                "reason": "Ver também os movimentos de rotina omitidos dos marcos.",
-            }
-        ]
+    saida = ProcessoResumo(**base, encontrado=True, resumo=resumo, documentos=documentos)
+    if not entrada.incluir_movimentos and any(d.movimentos_omitidos for d in documentos):
+        saida.next_actions.append(ProximaAcao(
+            tool="datajud_processo",
+            args={"cnj": entrada.cnj, "incluir_movimentos": True,
+                  **({"tribunal": consultados[0]} if len(consultados) == 1 else {})},
+            reason="Ver também os movimentos de rotina omitidos dos marcos.",
+        ))
     return saida
 
 
@@ -407,10 +426,10 @@ def processo(
         numero, tribunal=tribunal, incluir_movimentos=incluir_movimentos, so_origem=so_origem
     )
     if json:
-        print(jsonlib.dumps(resultado, ensure_ascii=False, indent=2))
+        print(resultado.model_dump_json(indent=2))
     else:
-        _render_human(resultado, incluir_movimentos=incluir_movimentos)
-    return 0 if resultado.get("encontrado") and resultado.get("completo", True) else 1
+        _render_human(resultado.model_dump(mode="json"), incluir_movimentos=incluir_movimentos)
+    return 0 if resultado.encontrado and resultado.completo else 1
 
 
 @app.default

@@ -128,7 +128,7 @@ Cada registro devolvido carrega o tribunal onde foi achado (`_index` no cru,
 `tribunal` na saída), e a resposta lista os índices **consultados** — ausência
 só significa algo para quem foi consultado e respondeu.
 
-## Acervo SQLite: observações imutáveis por padrão
+## Acervo SQLite: relacional, só de acréscimo
 
 **Toda chamada real à API** passa por datajud.search(), incluindo a tool MCP,
 processo, lote, buscar, contar, facetas e codigos. O transporte registra
@@ -139,38 +139,74 @@ automaticamente a resposta em um único banco SQLite persistente:
 - Para usar outro local persistente: variável de ambiente DATAJUD_SQLITE.
 - O banco NÃO deve ir para o Git nem para caches efêmeros. Preserve-o com backup
   privado; metadados processuais podem exigir controle de acesso.
-- Execute uv run scripts/datajud.py banco para mostrar caminho e totais.
-- Execute uv run scripts/datajud.py historico NUMERO --json para consultar
-  versões locais sem acessar a API. O agente também pode consultar o SQLite.
 
-O modelo é **somente de acréscimo**, inclusive quando o processo muda:
+Leitura sem acessar a API:
 
-1. consultas: um evento por tentativa/resposta, com instante UTC, tribunal,
-   corpo da requisição, status e metadados completos da resposta. Retorna 0
-   hits? A consulta e o recorte continuam registrados. Falha HTTP/ES? Registra
-   erro, jamais presume ausência.
-2. versoes_documento: cada documento DataJud (\_source completo, \_index,
-   \_id) possui identidade lógica e SHA-256 do conteúdo. Se idêntico à versão
-   anterior, não duplica. Se retificado, **nova linha** com outro hash; a
-   versão anterior não é apagada.
-3. observacoes_documento: **uma linha nova em cada nova observação** de cada
-   documento, apontando para a versão correspondente e a consulta que a
-   encontrou, mesmo quando o conteúdo está idêntico. Atributos de busca
-   transitórios, como \_score, ficam na observação.
+```bash
+uv run scripts/datajud.py estado <CNJ>                   # capa, assuntos e movimentos vigentes
+uv run scripts/datajud.py estado <CNJ> --em 2026-10-01   # como o acervo o conhecia naquela data
+uv run scripts/datajud.py historico <CNJ> --detalhar     # o que entrou e saiu em cada observação
+uv run scripts/datajud.py banco                          # linhas por tabela
+```
 
-Triggers SQLite impedem UPDATE e DELETE nas três tabelas. Nenhuma consulta
-reescreve uma versão histórica. A data do **registro de um movimento no
-tribunal** pode ser anterior à data de **observação pela skill**; mantenha
-essas duas dimensões separadas.
+Com `--json`, cada comando emite o modelo Pydantic correspondente
+(`EstadoProcesso`, `HistoricoProcesso`, `Estatisticas`), e o agente também pode
+consultar o SQLite direto.
 
-Exemplo SQL para auditar um número CNJ (20 dígitos):
+O documento do DataJud é **decomposto em tabelas**, e só o que mudou ganha
+linha. Andamento novo é uma linha em `movimentos` e uma em
+`presencas_movimento`, e não uma cópia do histórico. Medido em 2026-10-19, o
+acervo de 3.448 processos (4.820 documentos, 406 mil movimentos) ocupa 60 MB,
+contra 100 MB no formato anterior, e cada nova passada sem mudança acrescenta
+só as observações. No formato anterior, cada passada copiava de novo o
+documento inteiro, porque a reindexação do CNJ muda `@timestamp`.
+
+| Tabela                                      | Uma linha por…                                                             |
+| ------------------------------------------- | -------------------------------------------------------------------------- |
+| `consultas`                                 | requisição à API, com sucesso ou erro (erro nunca vira ausência)           |
+| `registros`                                 | documento: índice + `_id` (um grau de um processo num tribunal)            |
+| `capas`                                     | versão da capa (classe, órgão, sistema, formato, sigilo, ajuizamento)      |
+| `assuntos`, `movimentos`                    | item do registro, identificado pelo hash do conteúdo e pela ocorrência     |
+| `tipos_movimento`, `orgaos`, `complementos` | catálogo do que se repete entre os itens                                   |
+| `movimento_complementos`                    | complemento tabelado de um movimento                                       |
+| `observacoes`                               | registro visto numa consulta; guarda os campos voláteis e o recorte pedido |
+| `presencas_movimento`, `presencas_assunto`  | item que **entrou** ou **saiu** do registro naquela observação             |
+| `fontes_brutas`                             | hit cru comprimido, só nas observações em que algo mudou                   |
+
+Regras que o desenho garante:
+
+- **Volátil não é mudança.** `@timestamp`, `dataHoraUltimaAtualizacao` e
+  `_score` ficam na observação, e não criam versão.
+- **Retificação não apaga.** Movimento corrigido na fonte sai e o corrigido
+  entra; os dois ficam, com a data em que trocaram.
+- **Repetição é dado.** O mesmo movimento idêntico aparece repetido no mesmo
+  documento (9.308 vezes no acervo medido), e cada ocorrência tem linha própria.
+- **Recorte não é ausência.** Campo fora do `_source` pedido (o `buscar` pede só
+  a capa) não foi observado, e não gera "saiu".
+- Cada tabela tem um modelo Pydantic (`Linha*` em `datajud_store.py`), e o DDL
+  é gerado dele. A resposta da API também tem modelos (`datajud_modelos.py`),
+  com campo extra aceito: campo novo do CNJ não derruba a consulta.
+- Triggers impedem UPDATE e DELETE em todas as tabelas.
+
+Banco do formato anterior (`versoes_documento`, `observacoes_documento`):
+as tabelas antigas ficam só para leitura, e as observações delas são
+decompostas nas tabelas novas antes da primeira escrita ou leitura. Os 4.820
+documentos levaram 36 s e foram reconstruídos idênticos. `uv run scripts/datajud.py migrar` faz isso num momento escolhido.
+
+A data do **registro de um movimento no tribunal** (`movimentos.data_hora`)
+não é a data da **observação pela skill** (`observacoes.observado_em`).
+Mantenha as duas separadas. Exemplo SQL, os movimentos que entraram de um
+processo, com a data em que a skill os viu:
 
 ```sql
-SELECT v.tribunal, v.grau, v.sha256, o.observado_em, v.conteudo_json
-FROM observacoes_documento AS o
-JOIN versoes_documento AS v ON v.id = o.versao_id
-WHERE v.numero_processo = '70095117120248220001'
-ORDER BY o.observado_em DESC, o.id DESC;
+SELECT r.tribunal, r.grau, m.data_hora, t.codigo, t.nome, o.observado_em
+FROM registros AS r
+JOIN movimentos AS m ON m.registro_id = r.id
+JOIN tipos_movimento AS t ON t.id = m.tipo_id
+JOIN presencas_movimento AS p ON p.movimento_id = m.id AND p.evento = 'entrou'
+JOIN observacoes AS o ON o.id = p.observacao_id
+WHERE r.numero_processo = '70095117120248220001'
+ORDER BY m.data_hora;
 ```
 
 O SQLite é um **histórico de observações**, não espelho vivo. Processos
@@ -197,12 +233,12 @@ uv run scripts/datajud.py lote numeros.txt --saida .cache/datajud     # JSON leg
   paralelo (`--trabalhadores`, padrão 4). A família multiplica as consultas
   (oito índices para um número do TJRO), não o custo por processo.
 - Por padrão, todas as respostas vão para o SQLite, sem criar milhares de JSONs.
-  Rodar novamente observa a fonte de novo e registra nova data/hora; se o
-  documento estiver igual, apenas a observação é acrescentada.
+  Rodar novamente observa a fonte de novo e registra nova data/hora; o que não
+  mudou rende só a observação.
 - `--saida` é compatibilidade opcional: exporta também JSON por processo e
   mantém a retomada antiga nesse diretório. A história canônica é o SQLite.
 - Índice sem resposta (504, rede etc.) registra um evento de falha, nunca
-  ausência do processo. Versões e observações anteriores permanecem intactas.
+  ausência do processo. Observações anteriores permanecem intactas.
 - Use os resultados acumulados para análises posteriores com SQL, sem novas
   requisições desnecessárias. Para atualizar a informação, faça nova consulta.
 

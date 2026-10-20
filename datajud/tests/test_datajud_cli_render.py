@@ -23,6 +23,7 @@ def _resultado() -> dict:
         "resumo": "7027457-61.2021.8.22.0001 — TJRO — último marco: Definitivo.",
         "documentos": [
             {
+                "tribunal": "TJRO",
                 "grau": "Juizado Especial",
                 "classe": "Cumprimento de sentença (156)",
                 "assuntos": "Acidente de Trânsito",
@@ -65,19 +66,19 @@ def test_render_human_e_compacto_e_nao_despeja_json(capsys):
 
 
 def test_cli_json_preserva_payload_cru(monkeypatch, capsys):
-    payload = _resultado()
+    payload = mod.ProcessoResumo.model_validate({**_resultado(), "completo": True})
     monkeypatch.setattr(mod, "datajud_processo", lambda *args, **kwargs: payload)
 
     status = mod.processo("7027457-61.2021.8.22.0001", json=True)
     out = capsys.readouterr().out
 
     assert status == 0
-    assert json.loads(out) == payload
+    assert mod.ProcessoResumo.model_validate(json.loads(out)) == payload
     assert "╭" not in out
 
 
 def test_cli_humana_nao_muda_contrato_mcp(monkeypatch, capsys):
-    payload = _resultado()
+    payload = mod.ProcessoResumo.model_validate({**_resultado(), "completo": True})
     monkeypatch.setattr(mod, "datajud_processo", lambda *args, **kwargs: payload)
 
     status = mod.processo("7027457-61.2021.8.22.0001")
@@ -85,5 +86,5 @@ def test_cli_humana_nao_muda_contrato_mcp(monkeypatch, capsys):
 
     assert status == 0
     assert "Cumprimento de sentença" in out
-    assert payload["documentos"][0]["marcos"][0]["nome"] == "Marco 1"
-    assert len(payload["documentos"][0]["marcos"]) == 14
+    assert payload.documentos[0].marcos[0].nome == "Marco 1"
+    assert len(payload.documentos[0].marcos) == 14
