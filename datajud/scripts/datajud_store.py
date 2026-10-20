@@ -43,8 +43,8 @@ Contrato
 
 Cada tabela tem um modelo Pydantic (`Linha*`), e o DDL e gerado a partir dele:
 a tabela e o modelo nao divergem. Toda funcao publica recebe e devolve modelos
-(`RespostaRegistrada`, `HistoricoProcesso`, `EstadoProcesso`, `Estatisticas`,
-`ResultadoMigracao`). Triggers proibem UPDATE e DELETE em todas as tabelas.
+(`RespostaRegistrada`, `HistoricoProcesso`, `EstadoProcesso`, `Novidades`,
+`Estatisticas`, `ResultadoMigracao`). Triggers proibem UPDATE e DELETE em todas as tabelas.
 
 Recorte por `_source` nao e ausencia: campo fora do recorte nao foi observado,
 e nao gera "saiu" nem capa nova.
@@ -1007,6 +1007,122 @@ def historico(numero: str, *, limite: int = 100, detalhar: bool = False,
             saida.registros.append(HistoricoRegistro(
                 registro=registro, observacoes=n, primeira_vista=primeira,
                 ultima_vista=ultima, mudancas=mudancas,
+            ))
+    return saida
+
+
+class MovimentoNovo(BaseModel):
+    evento: Literal["entrou", "saiu"]
+    """"saiu" e retificacao ou remocao na fonte."""
+    data_hora: str | None = None
+    """quando o tribunal registrou o movimento."""
+    codigo: int | None = None
+    nome: str | None = None
+    observado_em: str
+    """quando a skill viu a mudanca."""
+    marco: bool
+    """o codigo nao esta no `ruido` passado a `novidades`."""
+
+
+class RegistroNovidade(BaseModel):
+    registro: LinhaRegistro
+    registro_novo: bool
+    """visto pela primeira vez no periodo: o processo apareceu noutro tribunal ou grau."""
+    capa_nova: bool
+    movimentos_iniciais: int = 0
+    """movimentos que o registro novo ja trazia: contagem, e nao novidade."""
+    movimentos: list[MovimentoNovo] = Field(default_factory=list)
+
+
+class ProcessoNovidade(BaseModel):
+    numero: str
+    processo_novo: bool
+    """nenhum registro do numero tinha sido observado antes do periodo (linha de base)."""
+    registros: list[RegistroNovidade]
+
+
+class Novidades(BaseModel):
+    """Saida de `novidades`: o que mudou nos processos observados desde um instante."""
+
+    desde: str
+    ate: str
+    processos: list[ProcessoNovidade] = Field(default_factory=list)
+
+
+def _inicio(desde: str | date | datetime) -> str:
+    """Instante ISO em UTC; data sem hora vale desde o inicio do dia (UTC)."""
+    if isinstance(desde, str):
+        desde = date.fromisoformat(desde) if len(desde) == 10 else datetime.fromisoformat(desde)
+    if not isinstance(desde, datetime):
+        desde = datetime.combine(desde, time.min, tzinfo=timezone.utc)
+    if desde.tzinfo is None:
+        desde = desde.replace(tzinfo=timezone.utc)
+    return desde.astimezone(timezone.utc).isoformat(timespec="microseconds")
+
+
+def novidades(desde: str | date | datetime, *, numeros: list[str] | None = None,
+              ruido: set[int] | frozenset[int] = frozenset(),
+              banco: Path | None = None) -> Novidades:
+    """Movimentos que entraram ou sairam, capas novas e registros novos desde `desde`.
+
+    Feita para a rotina que reconsulta um acervo inteiro todo dia: o que ela
+    precisa saber e o que a passada trouxe de diferente, e nao o estado. A
+    primeira observacao de um registro e linha de base, e nao novidade: os
+    movimentos que ele ja trazia viram contagem (`movimentos_iniciais`), senao
+    a primeira passada sobre 3.448 processos listaria 406 mil "novidades".
+    """
+    inicio = _inicio(desde)
+    filtro = {_digitos(n) for n in numeros} if numeros is not None else None
+    with _leitura(banco) as con:
+        ate = con.execute("SELECT MAX(observado_em) FROM observacoes").fetchone()[0] or inicio
+        saida = Novidades(desde=inicio, ate=ate)
+        por_registro: dict[int, list[LinhaObservacao]] = {}
+        for obs in _ler(con, LinhaObservacao, "observado_em >= ? AND mudou = 1", (inicio,),
+                        sufixo="ORDER BY registro_id, id"):
+            por_registro.setdefault(obs.registro_id, []).append(obs)
+        registros = _por_id(con, LinhaRegistro, set(por_registro))
+        por_numero: dict[str, list[RegistroNovidade]] = {}
+        for registro_id, lista in por_registro.items():
+            registro = registros[registro_id]
+            if filtro is not None and registro.numero_processo not in filtro:
+                continue
+            primeira_id = con.execute(
+                "SELECT MIN(id) FROM observacoes WHERE registro_id = ?", (registro_id,)
+            ).fetchone()[0]
+            novo = lista[0].id == primeira_id
+            capa_nova, iniciais = False, 0
+            movimentos: list[MovimentoNovo] = []
+            for obs in lista:
+                if obs.id == primeira_id:
+                    iniciais = con.execute(
+                        "SELECT COUNT(*) FROM presencas_movimento WHERE observacao_id = ?",
+                        (obs.id,)).fetchone()[0]
+                    continue
+                anterior = con.execute(
+                    "SELECT capa_id FROM observacoes WHERE registro_id = ? AND id < ? "
+                    "AND capa_id IS NOT NULL ORDER BY id DESC LIMIT 1", (registro_id, obs.id),
+                ).fetchone()
+                if obs.capa_id is not None and anterior is not None and anterior[0] != obs.capa_id:
+                    capa_nova = True
+                for evento, codigo, nome, data_hora in con.execute(_ITENS_DA_OBSERVACAO[0][1], (obs.id,)):
+                    movimentos.append(MovimentoNovo(
+                        evento=evento, data_hora=data_hora, codigo=codigo, nome=nome,
+                        observado_em=obs.observado_em, marco=codigo not in ruido,
+                    ))
+            if not (novo or capa_nova or movimentos):
+                continue  # so assuntos mudaram
+            movimentos.sort(key=lambda m: (m.data_hora or "", m.evento))
+            por_numero.setdefault(registro.numero_processo, []).append(RegistroNovidade(
+                registro=registro, registro_novo=novo, capa_nova=capa_nova,
+                movimentos_iniciais=iniciais, movimentos=movimentos,
+            ))
+        for numero in sorted(por_numero):
+            visto_antes = con.execute(
+                "SELECT 1 FROM observacoes AS o JOIN registros AS r ON r.id = o.registro_id "
+                "WHERE r.numero_processo = ? AND o.observado_em < ? LIMIT 1", (numero, inicio),
+            ).fetchone()
+            saida.processos.append(ProcessoNovidade(
+                numero=numero, processo_novo=visto_antes is None, registros=por_numero[numero],
             ))
     return saida
 

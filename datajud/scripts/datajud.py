@@ -33,6 +33,7 @@ Modos:
     codigos  <termo> --por X    descobre codigos de classe/assunto por nome
     estado   <CNJ> [--em DATA]  o processo como o acervo local o conhecia (sem API)
     historico <CNJ>             mudancas observadas de cada registro (sem API)
+    novidades <desde>           o que mudou no acervo local desde um instante (sem API)
     banco                       linhas por tabela do acervo local
     migrar                      decompoe o acervo da versao anterior (#125)
 
@@ -71,6 +72,29 @@ CAPA_FIELDS = [
     "sistema", "formato", "dataAjuizamento", "dataHoraUltimaAtualizacao",
     "nivelSigilo", "tribunal",
 ]
+
+# Códigos de movimento que não mudam o estado útil do processo. Ver a docstring
+# de `datajud_mcp.py`: filtra-se o ruído, que é estável, e não os marcos, que não são.
+RUIDO = {
+    1051,  # Decurso de Prazo
+    92,    # Publicação
+    1061,  # Disponibilização no Diário da Justiça Eletrônico
+    60,    # Expedição de documento
+    581,   # Juntada
+    # Medidos em 2026-10-19 num acervo de 3.448 processos (TJRO, TRT14, TRF1):
+    # depois dos cinco acima, eram estes que ocupavam o "último marco" sem mudar
+    # o estado do processo (petição sozinha respondia por 728).
+    85,     # Petição (juntada de)
+    51,     # Conclusão
+    11010,  # Mero expediente
+    12291,  # Movimentação processual (genérico)
+    12263,  # Intimação (expedida)
+    106,    # Mandado (expedido)
+    12270,  # Documento
+    10966,  # Mudança de classe processual
+    14738,  # Retificação de classe processual
+    14739,  # Evolução da classe processual
+}
 
 # Rotulos de grau conforme aparecem no acervo.
 GRAU_LABEL = {
@@ -1290,6 +1314,60 @@ def estado(
               f"{'' if movimentos else '; os ultimos:'}")
         for mv in lista:
             print(f"      {fmt_data_iso(mv.movimento.data_hora)}  ({mv.tipo.codigo}) {mv.tipo.nome}")
+    return 0
+
+
+@app.command
+def novidades(
+    desde: str,
+    *,
+    numeros: Path | None = None,
+    todos: bool = False,
+    json: AsJson = False,
+) -> int:
+    """O que mudou no acervo local desde um instante, sem acessar a API.
+
+    Movimentos que entraram ou sairam, capas novas e processos que apareceram
+    noutro tribunal ou grau. A primeira observacao de um registro e linha de
+    base e nao novidade. Para saber o que mudou na fonte, rode antes o `lote`.
+
+    Parameters
+    ----------
+    desde
+        data (AAAA-MM-DD, desde o inicio do dia em UTC) ou instante ISO.
+    numeros
+        restringe aos processos deste arquivo (um CNJ por linha).
+    todos
+        lista tambem os movimentos de rotina (RUIDO); sem a flag, so os marcos.
+    json
+        emite `Novidades` em JSON, com todos os movimentos e o campo `marco`.
+    """
+    lista = None
+    if numeros is not None:
+        lista = [x.strip() for x in numeros.read_text(encoding="utf-8").splitlines() if x.strip()]
+    saida = store.novidades(desde, numeros=lista, ruido=RUIDO)
+    if json:
+        _imprimir(saida)
+        return 0
+    print(f"{len(saida.processos)} processo(s) com novidade entre {saida.desde[:19]} e {saida.ate[:19]}")
+    for processo in saida.processos:
+        novo = " (primeira observacao)" if processo.processo_novo else ""
+        print(f"\n### {cnj(processo.numero)}{novo}")
+        for item in processo.registros:
+            r = item.registro
+            sinais = []
+            if item.registro_novo and not processo.processo_novo:
+                sinais.append(f"registro novo, com {item.movimentos_iniciais} movimento(s)")
+            if item.capa_nova:
+                sinais.append("capa nova")
+            print(f"    {r.tribunal.upper()} · {grau_label(r.grau)}{': ' + '; '.join(sinais) if sinais else ''}")
+            for m in item.movimentos:
+                if todos or m.marco:
+                    sinal = "+" if m.evento == "entrou" else "-"
+                    print(f"      {sinal} {fmt_data_iso(m.data_hora)}  ({m.codigo}) {m.nome}")
+            rotina = sum(not m.marco for m in item.movimentos)
+            if rotina and not todos:
+                print(f"      ({rotina} movimento(s) de rotina; --todos lista)")
     return 0
 
 

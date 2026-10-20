@@ -84,28 +84,9 @@ import datajud as dj  # noqa: E402  — o script vizinho traz search(), retry e 
 
 mcp = FastMCP("datajud")
 
-# Códigos de movimento que não mudam o estado útil do processo. Ver a docstring
-# do módulo: filtra-se o ruído, que é estável, e não os marcos, que não são.
-RUIDO = {
-    1051,  # Decurso de Prazo
-    92,    # Publicação
-    1061,  # Disponibilização no Diário da Justiça Eletrônico
-    60,    # Expedição de documento
-    581,   # Juntada
-    # Medidos em 2026-10-19 num acervo de 3.448 processos (TJRO, TRT14, TRF1):
-    # depois dos cinco acima, eram estes que ocupavam o "último marco" sem mudar
-    # o estado do processo (petição sozinha respondia por 728).
-    85,     # Petição (juntada de)
-    51,     # Conclusão
-    11010,  # Mero expediente
-    12291,  # Movimentação processual (genérico)
-    12263,  # Intimação (expedida)
-    106,    # Mandado (expedido)
-    12270,  # Documento
-    10966,  # Mudança de classe processual
-    14738,  # Retificação de classe processual
-    14739,  # Evolução da classe processual
-}
+# Códigos de movimento que não mudam o estado útil do processo: a lista mora em
+# `datajud.py`, para o modo `novidades` separar marco de ruído pelo mesmo critério.
+RUIDO = dj.RUIDO
 
 MARCOS_VISIVEIS = 12
 

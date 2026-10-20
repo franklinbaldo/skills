@@ -11,6 +11,7 @@ import json
 import sqlite3
 import sys
 import zlib
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.error import HTTPError
 
@@ -414,3 +415,43 @@ def test_falha_de_indice_nao_vira_nenhum_encontrado(monkeypatch, tmp_path, capsy
     assert dj.cmd_processo("7009511-71.2024.8.22.0001", None, False, False) == 1
     erro = capsys.readouterr().err
     assert "incompleta" in erro and "Nenhum processo" not in erro
+
+
+def test_novidades_separa_linha_de_base_marco_e_rotina(tmp_path):
+    banco = tmp_path / "a.sqlite"
+    registrar(banco, hit())
+    base = store.novidades("2000-01-01", ruido=dj.RUIDO, banco=banco)
+    (processo,) = base.processos
+    assert processo.processo_novo and processo.registros[0].registro_novo
+    assert processo.registros[0].movimentos_iniciais == 2 and processo.registros[0].movimentos == []
+
+    with sqlite3.connect(banco) as con:
+        depois_da_base = con.execute("SELECT MAX(observado_em) FROM observacoes").fetchone()[0]
+    marco = mov(848, "2026-10-18T09:00:00Z", "Transito em julgado")
+    rotina = mov(581, "2026-10-18T10:00:00Z", "Juntada")
+    registrar(banco, hit([*ANTIGOS, marco, rotina]))
+    stj = hit([mov(26, "2026-10-18T11:00:00Z", "Distribuicao")])
+    stj["_index"], stj["_id"] = "api_publica_stj", "STJ_SUP_" + NUMERO
+    stj["_source"]["grau"] = "SUP"
+    store.registrar_resposta("stj", REQUISICAO, resposta(stj), banco=banco)
+
+    agora = store.novidades(datetime.fromisoformat(depois_da_base) + timedelta(microseconds=1),
+                            ruido=dj.RUIDO, banco=banco)
+    (processo,) = agora.processos
+    assert not processo.processo_novo
+    tjro, stj_reg = sorted(processo.registros, key=lambda r: r.registro.tribunal, reverse=True)
+    assert [(m.codigo, m.marco, m.evento) for m in tjro.movimentos] == [
+        (848, True, "entrou"), (581, False, "entrou")]
+    assert stj_reg.registro_novo and stj_reg.movimentos_iniciais == 1
+    assert store.novidades("2000-01-01", numeros=["0000000-00.2024.8.22.0001"], banco=banco).processos == []
+
+
+def test_cli_novidades_emite_o_modelo(monkeypatch, tmp_path, capsys):
+    banco = tmp_path / "acervo.sqlite"
+    monkeypatch.setenv("DATAJUD_SQLITE", str(banco))
+    registrar(banco, hit())
+    assert dj.app(result_action="return_value", tokens=["novidades", "2000-01-01", "--json"]) == 0
+    saida = store.Novidades.model_validate_json(capsys.readouterr().out)
+    assert saida.processos[0].processo_novo
+    assert dj.app(result_action="return_value", tokens=["novidades", "2000-01-01"]) == 0
+    assert "primeira observacao" in capsys.readouterr().out
