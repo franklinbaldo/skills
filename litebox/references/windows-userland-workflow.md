@@ -50,7 +50,7 @@ Never put credentials in the workflow, source tree, or artifacts.
 For a local ELF on the Linux builder:
 
 ```bash
-./target/release/litebox-packager \
+./target/release/litebox_packager \
   /usr/bin/PROGRAM \
   --output program-litebox.tar \
   --verbose
@@ -60,7 +60,7 @@ The packager invokes `ldd`, adds discovered shared libraries, and rewrites ELF
 syscall sites. Add non-ELF runtime data explicitly:
 
 ```bash
-./target/release/litebox-packager \
+./target/release/litebox_packager \
   /usr/bin/PROGRAM \
   --include /path/config:/work/config \
   --include /path/input:/work/input \
@@ -70,7 +70,7 @@ syscall sites. Add non-ELF runtime data explicitly:
 It can also start from a public OCI image:
 
 ```bash
-./target/release/litebox-packager \
+./target/release/litebox_packager \
   --oci-image docker.io/OWNER/IMAGE:PINNED_TAG \
   --output program-litebox.tar
 ```
