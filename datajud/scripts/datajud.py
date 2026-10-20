@@ -3,6 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "cyclopts>=3.0",
+#     "pydantic>=2.6",
 # ]
 # ///
 """
@@ -19,10 +20,12 @@ do CNJ). Para teor de acordao/voto/sentenca do TJRO use a skill juris-tjro.
 Autenticacao: chave PUBLICA unica do CNJ (mesma para todos; pode ser trocada
 pelo CNJ a qualquer momento — ver SKILL.md se comecar a dar 401).
 
-Dependencias: cyclopts (CLI). O acesso HTTP usa apenas a stdlib.
+Dependencias: cyclopts (CLI) e pydantic (entrada e saida de `consultar`/`lote`).
+O acesso HTTP usa apenas a stdlib.
 
 Modos:
     processo <CNJ>              capa + movimentacoes de um processo (todos os graus)
+    lote     <arquivo>          muitos processos, resposta crua guardada em disco
     buscar   [filtros]          lista processos que casam com os filtros
     contar   [filtros]          apenas o total real (track_total_hits)
     facetas  [filtros] --por X  agregacao (quantos por classe/assunto/orgao/grau)
@@ -37,11 +40,14 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Annotated, Literal
+from pathlib import Path
+from typing import Annotated, Any, Literal
 
 import cyclopts
 from cyclopts import Parameter
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 BASE = "https://api-publica.datajud.cnj.jus.br"
 # Chave PUBLICA do CNJ — a mesma para todo mundo, documentada na wiki do DataJud.
@@ -150,6 +156,246 @@ def cnj(n):
     if len(d) == 20:
         return f"{d[0:7]}-{d[7:9]}.{d[9:13]}.{d[13:14]}.{d[14:16]}.{d[16:20]}"
     return n or ""
+
+
+# Segmento J.TR do numero CNJ (Res. CNJ 65/2008). J: 1 STF, 3 STJ, 4 federal,
+# 5 trabalho, 6 eleitoral, 7 militar da Uniao, 8 estadual, 9 militar estadual.
+# TR: a UF (estadual, eleitoral, militar estadual), a regiao (TRT, TRF) ou 00
+# (tribunal superior). O numero diz o tribunal de ORIGEM; o mesmo numero segue
+# no STJ/TST quando o processo sobe (medido em 2026-10-19: 7 de 100 processos
+# do TJRO com 2o grau estavam no indice `stj` com o numero do TJRO) e, raro,
+# pode aparecer em outro ramo do mesmo estado depois de declinio de competencia.
+_UF = {
+    "01": "ac", "02": "al", "03": "ap", "04": "am", "05": "ba", "06": "ce",
+    "07": "df", "08": "es", "09": "go", "10": "ma", "11": "mt", "12": "ms",
+    "13": "mg", "14": "pa", "15": "pb", "16": "pr", "17": "pe", "18": "pi",
+    "19": "rj", "20": "rn", "21": "rs", "22": "ro", "23": "rr", "24": "sc",
+    "25": "se", "26": "sp", "27": "to",
+}
+_TRT_UFS = {
+    1: ["rj"], 2: ["sp"], 3: ["mg"], 4: ["rs"], 5: ["ba"], 6: ["pe"], 7: ["ce"],
+    8: ["pa", "ap"], 9: ["pr"], 10: ["df", "to"], 11: ["am", "rr"], 12: ["sc"],
+    13: ["pb"], 14: ["ro", "ac"], 15: ["sp"], 16: ["ma"], 17: ["es"], 18: ["go"],
+    19: ["al"], 20: ["se"], 21: ["rn"], 22: ["pi"], 23: ["mt"], 24: ["ms"],
+}
+_TRF_UFS = {
+    1: ["ac", "am", "ap", "ba", "df", "go", "ma", "mt", "pa", "pi", "ro", "rr", "to"],
+    2: ["rj", "es"], 3: ["sp", "ms"], 4: ["rs", "pr", "sc"],
+    5: ["pe", "al", "ce", "pb", "rn", "se"], 6: ["mg"],
+}
+_TJM = {"mg", "rs", "sp"}
+# Indices dos tribunais superiores na API publica. O STF nao tem indice
+# (`api_publica_stf` responde index_not_found, medido em 2026-10-19).
+SUPERIORES = ["stj", "tst", "tse", "stm"]
+
+
+def _tj(uf):
+    return "tjdft" if uf == "df" else f"tj{uf}"
+
+
+def tribunal_do_cnj(n):
+    """Indice DataJud do tribunal de ORIGEM do numero CNJ, ou None se nao der.
+
+    None tambem para o STF, que nao tem indice na API publica.
+    """
+    d = so_digitos(n)
+    if len(d) != 20:
+        return None
+    j, tr = d[13], int(d[14:16])
+    uf = _UF.get(d[14:16])
+    if tr == 0:
+        return {"3": "stj", "5": "tst", "6": "tse", "7": "stm"}.get(j)
+    if j == "8" and uf:
+        return _tj(uf)
+    if j == "6" and uf:
+        return f"tre-{uf}"
+    if j == "9" and uf in _TJM:
+        return f"tjm{uf}"
+    if j == "5" and tr in _TRT_UFS:
+        return f"trt{tr}"
+    if j == "4" and tr in _TRF_UFS:
+        return f"trf{tr}"
+    return None
+
+
+def _ufs_do_cnj(d):
+    j, tr = d[13], int(d[14:16])
+    if j in "689" and d[14:16] in _UF:
+        return [_UF[d[14:16]]]
+    if j == "5":
+        return _TRT_UFS.get(tr, [])
+    # Federal: a regiao cobre varios estados (o TRF1, treze); o TR nao diz qual.
+    return []
+
+
+def familia_do_cnj(n):
+    """Indices onde o processo pode estar: a origem, os tribunais do estado de
+    origem (TJ, TRT, TRF, TRE e, onde existe, TJM) e os superiores.
+
+    Vazia quando o numero nao revela tribunal (malformado, ou STF)."""
+    d = so_digitos(n)
+    origem = tribunal_do_cnj(n)
+    if origem is None:
+        return []
+    indices = [origem]
+    for uf in _ufs_do_cnj(d):
+        indices += [_tj(uf), f"tre-{uf}"]
+        indices += [f"trt{r}" for r, ufs in _TRT_UFS.items() if uf in ufs]
+        indices += [f"trf{r}" for r, ufs in _TRF_UFS.items() if uf in ufs]
+        if uf in _TJM:
+            indices.append(f"tjm{uf}")
+    indices += SUPERIORES
+    return list(dict.fromkeys(indices))
+
+
+# ----------------------------------------------------------------------------
+# Modelos de entrada e saida de `consultar` e do modo `lote`
+# ----------------------------------------------------------------------------
+def _validar_cnj(valor: str) -> str:
+    d = so_digitos(valor)
+    if len(d) != 20:
+        raise ValueError(f"numero CNJ precisa de 20 digitos: {valor!r}")
+    return cnj(d)
+
+
+NumeroCNJ = Annotated[str, AfterValidator(_validar_cnj)]
+"""Numero de processo com ou sem mascara; vira NNNNNNN-DD.AAAA.J.TR.OOOO."""
+
+
+class FalhaIndice(BaseModel):
+    """Indice que nao respondeu: o processo nao e ausente nele, so nao foi visto."""
+
+    indice: str
+    erro: str
+
+
+class Registro(BaseModel):
+    """Um registro (um grau) do processo num tribunal, como a API o devolveu.
+
+    Guarda o hit cru (`_index`, `_source`) intacto: a capa e os movimentos sao
+    o dado; as propriedades so leem o que todo consumidor precisa.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    indice_bruto: str = Field(default="", alias="_index")
+    fonte: dict[str, Any] = Field(alias="_source")
+
+    @property
+    def tribunal(self) -> str:
+        """`api_publica_tjro` -> `tjro`."""
+        return self.indice_bruto.removeprefix("api_publica_")
+
+    @property
+    def numero(self) -> str:
+        return self.fonte.get("numeroProcesso") or ""
+
+    @property
+    def grau(self) -> str | None:
+        return self.fonte.get("grau")
+
+
+class ConsultaLote(BaseModel):
+    """Entrada de `consultar`: os numeros e onde procura-los."""
+
+    numeros: list[NumeroCNJ]
+    so_origem: bool = False
+    """so o tribunal de origem, sem a familia (estado de origem + superiores)."""
+    trabalhadores: int = Field(default=4, ge=1, le=16)
+    """consultas simultaneas a API."""
+
+
+class ProcessoConsultado(BaseModel):
+    """Saida de `consultar` por processo; e tambem o JSON gravado pelo `lote`."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    processo: NumeroCNJ
+    origem: str | None
+    """indice do tribunal de origem deduzido do numero (None: malformado ou STF)."""
+    consultados: list[str]
+    """indices perguntados; ausencia so vale para quem foi consultado e respondeu."""
+    registros: list[Registro] = Field(default_factory=list, alias="hits")
+    falhas: list[FalhaIndice] = Field(default_factory=list)
+
+    @property
+    def encontrado(self) -> bool:
+        return bool(self.registros)
+
+    @property
+    def tribunais(self) -> list[str]:
+        return list(dict.fromkeys(r.tribunal for r in self.registros))
+
+    def para_disco(self) -> str:
+        return self.model_dump_json(by_alias=True)
+
+
+class FalhaLote(BaseModel):
+    processo: NumeroCNJ
+    indices: list[str]
+
+
+class PresencaForaDaOrigem(BaseModel):
+    processo: NumeroCNJ
+    tambem_em: list[str]
+
+
+class ResumoLote(BaseModel):
+    """Saida do modo `lote`."""
+
+    processos: int
+    em_disco: int
+    encontrados: int
+    tambem_em_outro_tribunal: list[PresencaForaDaOrigem] = Field(default_factory=list)
+    sem_tribunal: list[NumeroCNJ] = Field(default_factory=list)
+    """numeros validos que nao revelam tribunal com indice na API (malformado, STF)."""
+    invalidos: list[str] = Field(default_factory=list)
+    """linhas do arquivo que nao sao numero CNJ."""
+    falhas: list[FalhaLote] = Field(default_factory=list)
+    saida: str
+
+
+def consultar(entrada: ConsultaLote) -> dict[str, ProcessoConsultado]:
+    """Procura cada numero em todos os indices da sua familia (ou so na origem).
+
+    Uma consulta `terms` por indice para ate LOTE numeros, em paralelo. Devolve
+    um `ProcessoConsultado` por numero (chave: os 20 digitos). Indice que falha
+    fica em `falhas`, e o processo nao deve ser tratado como ausente nele.
+    """
+    alvo: dict[str, ProcessoConsultado] = {}
+    for n in entrada.numeros:
+        indices = [tribunal_do_cnj(n)] if entrada.so_origem else familia_do_cnj(n)
+        alvo[so_digitos(n)] = ProcessoConsultado(
+            processo=n, origem=tribunal_do_cnj(n), consultados=[i for i in indices if i])
+    por_indice: dict[str, list[str]] = {}
+    for d, item in alvo.items():
+        for i in item.consultados:
+            por_indice.setdefault(i, []).append(d)
+    tarefas = [(i, ds[k:k + LOTE]) for i, ds in por_indice.items() for k in range(0, len(ds), LOTE)]
+
+    def rodar(tarefa):
+        i, ds = tarefa
+        d = search({"size": LOTE * 10, "query": {"terms": {"numeroProcesso": ds}}}, tribunal=i)
+        hits = d.get("hits", {}).get("hits", [])
+        total = d.get("hits", {}).get("total", {}).get("value", 0)
+        if total > len(hits):
+            raise RuntimeError(f"resposta truncada em {i}: {len(hits)} de {total}")
+        return [Registro.model_validate(h) for h in hits]
+
+    with ThreadPoolExecutor(entrada.trabalhadores) as pool:
+        futuros = {pool.submit(rodar, t): t for t in tarefas}
+        for futuro in as_completed(futuros):
+            i, ds = futuros[futuro]
+            try:
+                for registro in futuro.result():
+                    if registro.numero in alvo:
+                        alvo[registro.numero].registros.append(registro)
+            except (RuntimeError, ValidationError) as e:
+                for num in ds:
+                    alvo[num].falhas.append(FalhaIndice(indice=i, erro=str(e)[:200]))
+    for item in alvo.values():
+        item.registros.sort(key=lambda r: (r.tribunal, r.grau or ""))
+    return alvo
 
 
 def fmt_data_ajuiz(s):
@@ -264,25 +510,37 @@ def montar_query(args):
 # ----------------------------------------------------------------------------
 # Modo: processo
 # ----------------------------------------------------------------------------
-def cmd_processo(numero: str, tribunal: str, movimentos: bool, as_json: bool):
+def consultar_um(numero: str, *, tribunal: str | None = None,
+                 so_origem: bool = False) -> ProcessoConsultado:
+    """Um processo: so no indice pedido, ou na familia do numero (o padrao)."""
+    if not tribunal:
+        return consultar(ConsultaLote(numeros=[numero], so_origem=so_origem))[so_digitos(numero)]
+    d = search({"size": 50, "query": {"match": {"numeroProcesso": so_digitos(numero)}},
+                "sort": [{"grau.keyword": "asc"}]}, tribunal=tribunal)
+    registros = [Registro.model_validate(h) for h in d.get("hits", {}).get("hits", [])]
+    for r in registros:
+        r.indice_bruto = r.indice_bruto or f"api_publica_{tribunal}"
+    return ProcessoConsultado(processo=numero, origem=tribunal_do_cnj(numero),
+                              consultados=[tribunal], registros=registros)
+
+
+def cmd_processo(numero: str, tribunal: str | None, movimentos: bool, as_json: bool,
+                 so_origem: bool = False):
     nr = so_digitos(numero)
-    body = {
-        "size": 50,
-        "query": {"match": {"numeroProcesso": nr}},
-        "sort": [{"grau.keyword": "asc"}],
-    }
-    d = search(body, tribunal=tribunal)
-    hits = d.get("hits", {}).get("hits", [])
-    if not hits:
-        print(f"Nenhum processo {cnj(nr)} encontrado em {tribunal.upper()}.",
-              file=sys.stderr)
+    item = consultar_um(numero, tribunal=tribunal, so_origem=so_origem)
+    onde = ", ".join(i.upper() for i in item.consultados) or "nenhum indice (numero sem tribunal deduzivel)"
+    for f in item.falhas:
+        print(f"Aviso: {f.indice.upper()} nao respondeu ({f.erro}).", file=sys.stderr)
+    if not item.encontrado:
+        print(f"Nenhum processo {cnj(nr)} encontrado em {onde}.", file=sys.stderr)
         return 1
 
     if as_json:
         out = []
-        for h in hits:
-            src = h["_source"]
+        for r in item.registros:
+            src = r.fonte
             out.append({
+                "tribunal": r.tribunal,
                 "grau": src.get("grau"),
                 "classe": src.get("classe"),
                 "assuntos": src.get("assuntos"),
@@ -291,15 +549,17 @@ def cmd_processo(numero: str, tribunal: str, movimentos: bool, as_json: bool):
                 "ultimaAtualizacao": src.get("dataHoraUltimaAtualizacao"),
                 "movimentos": src.get("movimentos") if movimentos else "(omitido; use --movimentos)",
             })
-        print(json.dumps({"processo": cnj(nr), "tribunal": tribunal.upper(),
+        print(json.dumps({"processo": item.processo, "consultados": item.consultados,
+                          "falhas": [f.model_dump() for f in item.falhas],
                           "documentos": out}, ensure_ascii=False, indent=2))
         return 0
 
-    print(f"Processo {cnj(nr)} — {tribunal.upper()} — {len(hits)} registro(s) de grau")
+    print(f"Processo {item.processo} — {len(item.registros)} registro(s) em "
+          f"{', '.join(t.upper() for t in item.tribunais)} (consultados: {onde})")
     print("=" * 92)
-    for h in hits:
-        src = h["_source"]
-        print(f"\n### {grau_label(src.get('grau'))} — {classe_str(src)}")
+    for r in item.registros:
+        src = r.fonte
+        print(f"\n### {r.tribunal.upper()} · {grau_label(src.get('grau'))} — {classe_str(src)}")
         print(f"    assuntos: {assuntos_str(src)}")
         print(f"    orgao:    {orgao_str(src)}")
         print(f"    sistema:  {(src.get('sistema') or {}).get('nome','—')} | "
@@ -479,6 +739,97 @@ def cmd_codigos(termo: str, por: str, tribunal: str, limite: int, as_json: bool)
 
 
 # ----------------------------------------------------------------------------
+# Modo: lote (muitos processos, resposta crua guardada em disco)
+# ----------------------------------------------------------------------------
+# A API leva dezenas de segundos por requisicao com 1 ou com 100 processos
+# (medido em 2026-10-19: ~40 s); um por um, um acervo de 3.448 processos
+# levaria horas. Uma consulta `terms` por tribunal, em lotes, levou ~6 min.
+LOTE = 100
+
+
+def _arquivo_lote(saida: Path, numero: str) -> Path:
+    return saida / (tribunal_do_cnj(numero) or "sem-tribunal") / f"{so_digitos(numero)}.json"
+
+
+def ler_processo(saida: Path, numero: str) -> ProcessoConsultado | None:
+    """O `ProcessoConsultado` gravado pelo `lote`, ou None se nao ha (ou nao e valido)."""
+    arquivo = _arquivo_lote(saida, numero)
+    if not arquivo.exists():
+        return None
+    try:
+        return ProcessoConsultado.model_validate_json(arquivo.read_text(encoding="utf-8"))
+    except ValidationError:
+        return None  # formato antigo ou corrompido: consulta de novo
+
+
+def _ja_baixado(saida: Path, numero: str, so_origem: bool) -> bool:
+    """Em disco e consultado em todos os indices pedidos agora."""
+    gravado = ler_processo(saida, numero)
+    pedidos = [tribunal_do_cnj(numero)] if so_origem else familia_do_cnj(numero)
+    return gravado is not None and set(pedidos) <= set(gravado.consultados)
+
+
+_CNJ = TypeAdapter(NumeroCNJ)
+
+
+def cmd_lote(arquivo: Path, saida: Path, trabalhadores: int, so_origem: bool, as_json: bool):
+    numeros, invalidos = [], []
+    for linha in arquivo.read_text(encoding="utf-8").splitlines():
+        if not linha.strip():
+            continue
+        try:
+            numeros.append(_CNJ.validate_python(linha.strip()))
+        except ValidationError:
+            invalidos.append(linha.strip())
+    numeros = list(dict.fromkeys(numeros))
+    sem_tribunal = [n for n in numeros if tribunal_do_cnj(n) is None]
+    pendentes = [n for n in numeros
+                 if tribunal_do_cnj(n) and not _ja_baixado(saida, n, so_origem)]
+    print(f"{len(numeros)} processos; {len(pendentes)} a consultar"
+          f"{' (so na origem)' if so_origem else ' (familia: estado de origem + superiores)'}",
+          file=sys.stderr)
+    resultado = consultar(ConsultaLote(numeros=pendentes, so_origem=so_origem,
+                                       trabalhadores=trabalhadores))
+    resumo = ResumoLote(processos=len(numeros), em_disco=0, encontrados=0,
+                        sem_tribunal=sem_tribunal, invalidos=invalidos, saida=str(saida))
+    for item in resultado.values():
+        if item.falhas:
+            # Indice que nao respondeu nao e ausencia: nada vai a disco, a proxima execucao refaz.
+            resumo.falhas.append(FalhaLote(processo=item.processo,
+                                           indices=[f.indice for f in item.falhas]))
+            continue
+        destino = _arquivo_lote(saida, item.processo)
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_text(item.para_disco(), encoding="utf-8")
+    for n in numeros:
+        gravado = ler_processo(saida, n) if tribunal_do_cnj(n) else None
+        if gravado is None:
+            continue
+        resumo.em_disco += 1
+        resumo.encontrados += gravado.encontrado
+        outros = [t for t in gravado.tribunais if t != gravado.origem]
+        if outros:
+            resumo.tambem_em_outro_tribunal.append(
+                PresencaForaDaOrigem(processo=gravado.processo, tambem_em=outros))
+    if as_json:
+        print(resumo.model_dump_json(indent=2))
+    else:
+        print(f"{resumo.processos} processos; {resumo.em_disco} em disco "
+              f"({resumo.encontrados} encontrados no DataJud) em {saida}")
+        if resumo.tambem_em_outro_tribunal:
+            print(f"  {len(resumo.tambem_em_outro_tribunal)} tambem em outro tribunal "
+                  "(superior ou outro ramo do estado)")
+        if resumo.sem_tribunal:
+            print("  sem tribunal deduzivel pelo numero (malformado ou STF, fora da API): "
+                  f"{', '.join(resumo.sem_tribunal)}")
+        if resumo.invalidos:
+            print(f"  linhas que nao sao numero CNJ: {', '.join(resumo.invalidos)}")
+        if resumo.falhas:
+            print(f"  {len(resumo.falhas)} processo(s) com indice que nao respondeu — rode de novo")
+    return 1 if resumo.falhas else 0
+
+
+# ----------------------------------------------------------------------------
 # CLI
 # ----------------------------------------------------------------------------
 @dataclass
@@ -486,7 +837,7 @@ class Filtros:
     """Filtros comuns aos modos de busca/contagem/agregacao."""
 
     tribunal: str = DEFAULT_TRIBUNAL
-    """sigla do indice (padrao tjro). Ex.: stj, trf1, tjsp, stf."""
+    """sigla do indice (padrao tjro). Ex.: stj, trf1, tjsp, tre-ro (o STF nao tem indice)."""
     classe: str | None = None
     """codigo da classe processual (use o modo `codigos` para descobrir)."""
     assunto: str | None = None
@@ -504,7 +855,7 @@ class Filtros:
 
 
 AsJson = Annotated[bool, Parameter(name=["--json"])]
-FiltrosArg = Annotated[Filtros, Parameter(name="*")]
+FiltrosArg = Annotated[Filtros | None, Parameter(name="*")]
 
 app = cyclopts.App(
     name="datajud",
@@ -516,24 +867,65 @@ app = cyclopts.App(
 def processo(
     numero: str,
     *,
-    tribunal: str = DEFAULT_TRIBUNAL,
+    tribunal: str | None = None,
+    so_origem: bool = False,
     movimentos: bool = False,
     json: AsJson = False,
 ) -> int:
-    """Capa + movimentacoes de um processo (todos os graus).
+    """Capa + movimentacoes de um processo, em todos os tribunais onde ele aparece.
+
+    Por padrao procura na familia do numero: o tribunal de origem, os demais
+    tribunais do estado de origem (TJ, TRT, TRF, TRE, TJM) e os superiores
+    (STJ, TST, TSE, STM). O STF nao tem indice na API publica.
 
     Parameters
     ----------
     numero
         numero do processo (com ou sem mascara CNJ).
     tribunal
-        sigla do indice (padrao tjro).
+        consulta so este indice, sem deduzir familia.
+    so_origem
+        consulta so o tribunal de origem deduzido do numero.
     movimentos
         lista a linha completa de movimentacao.
     json
         emite JSON em vez do relatorio legivel.
     """
-    return cmd_processo(numero, tribunal, movimentos, json)
+    return cmd_processo(numero, tribunal, movimentos, json, so_origem=so_origem)
+
+
+@app.command
+def lote(
+    arquivo: Path,
+    *,
+    saida: Path = Path("datajud"),
+    trabalhadores: int = 4,
+    so_origem: bool = False,
+    json: AsJson = False,
+) -> int:
+    """Baixa muitos processos de uma vez e guarda a resposta crua de cada um.
+
+    Cada numero e procurado na sua familia (origem, tribunais do estado de
+    origem e superiores), em consultas de ate 100 processos por indice. Grava
+    `<saida>/<origem>/<numero>.json` com os indices consultados e os registros
+    achados em qualquer deles (cada um com `_index`), e pula o que ja esta em
+    disco; indice que nao responde nao grava nada, entao rodar de novo retoma.
+
+    Parameters
+    ----------
+    arquivo
+        texto com um numero de processo por linha (com ou sem mascara).
+    saida
+        diretorio dos JSON (padrao ./datajud).
+    trabalhadores
+        consultas simultaneas (padrao 4).
+    so_origem
+        consulta so o tribunal de origem (mais rapido; perde passagem por
+        superior e transferencia entre ramos).
+    json
+        emite o resumo em JSON.
+    """
+    return cmd_lote(arquivo, saida, trabalhadores, so_origem, json)
 
 
 @app.command

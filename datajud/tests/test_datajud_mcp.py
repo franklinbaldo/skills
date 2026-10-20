@@ -38,7 +38,18 @@ def _hit(grau: str, movimentos: list[dict]) -> dict:
 
 
 def _responder(monkeypatch, hits: list[dict]) -> None:
-    monkeypatch.setattr(dj, "search", lambda *a, **k: {"hits": {"hits": hits}})
+    """Os registros existem só no índice de origem (TJRO), como na API real.
+
+    Sem tribunal explícito a busca percorre a família do número (origem, demais
+    tribunais do estado e superiores); responder os mesmos hits em todos os
+    índices os repetiria uma vez por índice.
+    """
+
+    def search(body, tribunal="tjro", **_):
+        achados = hits if tribunal == "tjro" else []
+        return {"hits": {"total": {"value": len(achados)}, "hits": achados}}
+
+    monkeypatch.setattr(dj, "search", search)
 
 
 def test_ultimo_marco_desempata_por_segundo_entre_graus(monkeypatch):

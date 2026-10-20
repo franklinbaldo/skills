@@ -6,6 +6,7 @@
 #     "cyclopts>=3.0",
 #     "duckdb>=1.1",
 #     "httpx>=0.27",
+#     "pydantic>=2.6",
 #     "rich>=13.7",
 # ]
 # ///
@@ -24,6 +25,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import importlib.util
 import io
 import re
 import subprocess
@@ -53,10 +55,31 @@ CLI_MODULES = {
 
 
 def load(module_name: str):
-    directory = str(REPO_ROOT / CLI_MODULES[module_name])
-    if directory not in sys.path:
-        sys.path.insert(0, directory)
-    return importlib.import_module(module_name)
+    """Load the script by file path under a private name.
+
+    Importing by bare module name trusts `sys.modules`: once any earlier script
+    pulled in the stdlib `queue` (e.g. via `concurrent.futures`), the
+    solo-builder-triage `queue.py` was never loaded and the stdlib module came
+    back instead. The directory still goes on `sys.path` for sibling imports.
+    """
+    directory = REPO_ROOT / CLI_MODULES[module_name]
+    if str(directory) not in sys.path:
+        sys.path.insert(0, str(directory))
+    name = f"_cli_contract_{module_name}"
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, directory / f"{module_name}.py")
+    module = importlib.util.module_from_spec(spec)
+    # Registered before exec: dataclasses and cyclopts resolve annotations through sys.modules.
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        # A half-executed module left cached would make every later test fail with
+        # "no attribute 'app'" instead of the real import error.
+        del sys.modules[name]
+        raise
+    return module
 
 
 def run_app(app, tokens: list[str]) -> tuple[int, str]:
