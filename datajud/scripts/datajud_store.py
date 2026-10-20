@@ -71,6 +71,7 @@ import os
 import re
 import sqlite3
 import threading
+import time as relogio
 import types
 import zlib
 from collections import Counter
@@ -86,6 +87,13 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 _LOCK = threading.Lock()
 VERSAO = 3
+EM_TROCA = -1
+"""`user_version` do arquivo antigo depois de copiado e antes de ceder o nome ao novo."""
+ESPERA_TROCA = 60.0
+
+
+class _ArquivoTrocado(Exception):
+    """O arquivo aberto deixou de ser o acervo atual (conversao em curso ou concluida)."""
 
 
 # ----------------------------------------------------------------------------
@@ -459,8 +467,8 @@ def _tabelas_existentes(con: sqlite3.Connection, esquema: str = "main") -> set[s
 
 
 @contextmanager
-def _transacao(con: sqlite3.Connection) -> Iterator[None]:
-    con.execute("BEGIN IMMEDIATE")
+def _transacao(con: sqlite3.Connection, modo: str = "IMMEDIATE") -> Iterator[None]:
+    con.execute(f"BEGIN {modo}")
     try:
         yield
     except BaseException:
@@ -469,8 +477,20 @@ def _transacao(con: sqlite3.Connection) -> Iterator[None]:
     con.execute("COMMIT")
 
 
-def _abrir(caminho: Path) -> sqlite3.Connection:
-    """Abre (e cria, se preciso) um banco na versao atual."""
+def _conferir_versao(con: sqlite3.Connection) -> None:
+    """Dentro da transacao: o arquivo ainda e o acervo atual, e nao o antigo em troca."""
+    versao = con.execute("PRAGMA user_version").fetchone()[0]
+    if versao == EM_TROCA or (versao != VERSAO and _tabelas_existentes(con) - {"sqlite_sequence"}):
+        raise _ArquivoTrocado(versao)
+
+
+def _abrir(caminho: Path, *, novo: bool = False) -> sqlite3.Connection:
+    """Abre (e cria, se preciso) um banco na versao atual.
+
+    Recusa (`_ArquivoTrocado`) o arquivo de versao anterior ou em troca: criar as
+    tabelas nele, ou carimbar a versao, faria um processo que esperava a trava da
+    conversao gravar no arquivo que virou backup.
+    """
     # Transacoes explicitas (BEGIN IMMEDIATE): o calculo de presencas le o
     # estado atual antes de escrever, e dois processos nao podem intercalar.
     con = sqlite3.connect(caminho, timeout=30, isolation_level=None)
@@ -479,6 +499,8 @@ def _abrir(caminho: Path) -> sqlite3.Connection:
         con.execute("PRAGMA journal_mode = WAL")
         con.execute("PRAGMA foreign_keys = ON")
         with _transacao(con):
+            if not novo:
+                _conferir_versao(con)
             for modelo in TABELAS:
                 con.execute(ddl(modelo))
             for indice in _INDICES:
@@ -511,24 +533,43 @@ class ResultadoMigracao(BaseModel):
 _ULTIMA_MIGRACAO: ResultadoMigracao | None = None
 
 
-def _precisa_migrar(caminho: Path) -> bool:
+def _versao(caminho: Path) -> int | None:
+    """`user_version` do arquivo, ou None se ainda nao ha acervo nele."""
     if not caminho.exists() or caminho.stat().st_size == 0:
-        return False
-    con = sqlite3.connect(f"file:{caminho.as_posix()}?mode=ro", uri=True)
+        return None
+    con = sqlite3.connect(f"file:{caminho.as_posix()}?mode=ro", uri=True, timeout=30)
     try:
-        versao = con.execute("PRAGMA user_version").fetchone()[0]
-        return versao != VERSAO and bool(_tabelas_existentes(con))
+        if not _tabelas_existentes(con) - {"sqlite_sequence"}:
+            return None
+        return con.execute("PRAGMA user_version").fetchone()[0]
     finally:
         con.close()
 
 
 def _conexao(banco: Path | None = None) -> sqlite3.Connection:
+    """Conexao com o acervo atual, convertendo antes o de versao anterior.
+
+    Arquivo em troca (`EM_TROCA`) e de outro processo que acabou de copia-lo:
+    espera o novo assumir o nome. Passado o prazo, a troca morreu no meio, e o
+    antigo, que nao foi alterado alem do carimbo, e convertido de novo.
+    """
     global _ULTIMA_MIGRACAO
     caminho = banco or caminho_banco()
     caminho.parent.mkdir(parents=True, exist_ok=True)
-    if _precisa_migrar(caminho):
-        _ULTIMA_MIGRACAO = _migrar_arquivo(caminho)
-    return _abrir(caminho)
+    prazo = relogio.monotonic() + ESPERA_TROCA
+    while True:
+        versao = _versao(caminho)
+        if versao == EM_TROCA and relogio.monotonic() < prazo:
+            relogio.sleep(0.2)
+            continue
+        if versao is not None and versao != VERSAO:
+            _ULTIMA_MIGRACAO = _migrar_arquivo(caminho)
+        try:
+            return _abrir(caminho)
+        except _ArquivoTrocado:
+            if relogio.monotonic() >= prazo:
+                raise RuntimeError(f"{caminho} continua em conversao depois de {ESPERA_TROCA:.0f} s") from None
+            relogio.sleep(0.2)
 
 
 def _migrar_arquivo(caminho: Path) -> ResultadoMigracao:
@@ -536,38 +577,41 @@ def _migrar_arquivo(caminho: Path) -> ResultadoMigracao:
 
     Nada se apaga: o antigo fica ao lado. A conversao le as tabelas antigas, sem
     consultar a API; o arquivo novo so assume o nome depois de completo.
+
+    Da copia ate a troca, nenhuma escrita pode cair no antigo, senao ela iria
+    para o backup e faltaria no novo (achado em pge-iperon/judicial#659). A
+    trava de escrita do antigo fica com a conversao durante a copia; antes de
+    solta-la, o antigo e carimbado `EM_TROCA`, e quem o abrir depois (inclusive
+    quem esperava a trava) recusa e espera o novo.
     """
     temporario = caminho.with_name(caminho.stem + ".v3-em-construcao.sqlite")
     for resto in (temporario, Path(f"{temporario}-wal"), Path(f"{temporario}-shm")):
         resto.unlink(missing_ok=True)
-    novo = _abrir(temporario)
+    trava = sqlite3.connect(caminho, timeout=30, isolation_level=None)
+    trava.execute("PRAGMA busy_timeout = 30000")
+    trava.execute("BEGIN IMMEDIATE")
+    original = trava.execute("PRAGMA user_version").fetchone()[0]
     try:
-        novo.execute("ATTACH DATABASE ? AS antigo", (f"file:{caminho.as_posix()}?mode=ro",))
-    except sqlite3.OperationalError:
-        novo.execute("ATTACH DATABASE ? AS antigo", (str(caminho),))
-    try:
-        antigas = _tabelas_existentes(novo, "antigo")
-        tem_v2 = "presencas_movimento" in antigas
-        tem_legado = {"versoes_documento", "observacoes_documento"} <= antigas
-        convertidas = 0
-        with _transacao(novo):
-            if "consultas" in antigas:
-                _copiar_consultas(novo)
-            if tem_v2:
-                convertidas += _converter_v2(novo)
-            if tem_legado:
-                convertidas += _reproduzir_legado(novo, desde_v2=tem_v2)
-        novo.execute("DETACH DATABASE antigo")
-    finally:
-        novo.close()
-    origem = "v2+legado" if tem_v2 and tem_legado else "v2" if tem_v2 else "legado" if tem_legado else "nada"
+        resultado = _construir(caminho, temporario)
+        trava.execute(f"PRAGMA user_version = {EM_TROCA}")
+        trava.execute("COMMIT")
+    except BaseException:
+        trava.execute("ROLLBACK")
+        trava.close()
+        temporario.unlink(missing_ok=True)
+        raise
+    trava.close()
     carimbo = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup = caminho.with_name(f"{caminho.stem}-antes-v3-{carimbo}{caminho.suffix}")
     try:
         caminho.replace(backup)
     except PermissionError as erro:
-        # No Windows, arquivo aberto noutro processo nao se renomeia: o antigo fica
-        # intacto e a conversao se repete na proxima abertura.
+        # No Windows, arquivo aberto noutro processo nao se renomeia: o antigo volta
+        # a versao que tinha, e a conversao se repete na proxima abertura.
+        restaura = sqlite3.connect(caminho, timeout=30)
+        restaura.execute(f"PRAGMA user_version = {original}")
+        restaura.commit()
+        restaura.close()
         temporario.unlink(missing_ok=True)
         raise RuntimeError(
             f"{caminho} esta aberto noutro processo; feche-o para converter o acervo para a versao "
@@ -579,7 +623,35 @@ def _migrar_arquivo(caminho: Path) -> ResultadoMigracao:
     temporario.replace(caminho)
     for sufixo in ("-wal", "-shm"):
         Path(f"{temporario}{sufixo}").unlink(missing_ok=True)
-    return ResultadoMigracao(origem=origem, observacoes=convertidas, backup=str(backup))
+    return resultado.model_copy(update={"backup": str(backup)})
+
+
+def _construir(caminho: Path, temporario: Path) -> ResultadoMigracao:
+    """O banco v3 em `temporario`, a partir das tabelas de `caminho`."""
+    novo = _abrir(temporario, novo=True)
+    try:
+        novo.execute("ATTACH DATABASE ? AS antigo", (f"file:{caminho.as_posix()}?mode=ro",))
+    except sqlite3.OperationalError:
+        novo.execute("ATTACH DATABASE ? AS antigo", (str(caminho),))
+    try:
+        antigas = _tabelas_existentes(novo, "antigo")
+        tem_v2 = "presencas_movimento" in antigas
+        tem_legado = {"versoes_documento", "observacoes_documento"} <= antigas
+        convertidas = 0
+        # DEFERRED: so o arquivo novo recebe trava de escrita; o antigo, anexado, e so
+        # lido, e a trava de escrita dele e da conversao (`_migrar_arquivo`).
+        with _transacao(novo, "DEFERRED"):
+            if "consultas" in antigas:
+                _copiar_consultas(novo)
+            if tem_v2:
+                convertidas += _converter_v2(novo)
+            if tem_legado:
+                convertidas += _reproduzir_legado(novo, desde_v2=tem_v2)
+        novo.execute("DETACH DATABASE antigo")
+    finally:
+        novo.close()
+    origem = "v2+legado" if tem_v2 and tem_legado else "v2" if tem_v2 else "legado" if tem_legado else "nada"
+    return ResultadoMigracao(origem=origem, observacoes=convertidas)
 
 
 def _copiar_consultas(con: sqlite3.Connection) -> None:
@@ -1003,25 +1075,41 @@ def registrar_resposta(
     projecao = RequisicaoBusca.model_validate(requisicao).source
     observado_em = _agora()
     with _LOCK:
-        con = _conexao(banco)
-        try:
-            with _transacao(con):
-                consulta_id = _inserir(con, LinhaConsulta(
-                    observado_em=observado_em, tribunal=tribunal,
-                    requisicao_zlib=zlib.compress(_json(requisicao).encode("utf-8"), 9),
-                    projecao_json=None if projecao is None else _json(projecao),
-                    resultado=resultado, resposta_meta_json=_json(_envelope(resposta)), erro=erro,
+        prazo = relogio.monotonic() + ESPERA_TROCA
+        while True:
+            try:
+                return _gravar(banco, tribunal, requisicao, resposta, hits, projecao, observado_em,
+                               resultado, erro)
+            except _ArquivoTrocado:
+                # A conexao abriu o arquivo antigo pouco antes da troca: reabre o novo.
+                if relogio.monotonic() >= prazo:
+                    raise RuntimeError("o acervo continua em conversao") from None
+                relogio.sleep(0.2)
+
+
+def _gravar(banco: Path | None, tribunal: str, requisicao: dict[str, Any], resposta: dict[str, Any],
+            hits: list[dict[str, Any]], projecao: Any, observado_em: str,
+            resultado: str, erro: str | None) -> RespostaRegistrada:
+    con = _conexao(banco)
+    try:
+        with _transacao(con):
+            _conferir_versao(con)
+            consulta_id = _inserir(con, LinhaConsulta(
+                observado_em=observado_em, tribunal=tribunal,
+                requisicao_zlib=zlib.compress(_json(requisicao).encode("utf-8"), 9),
+                projecao_json=None if projecao is None else _json(projecao),
+                resultado=resultado, resposta_meta_json=_json(_envelope(resposta)), erro=erro,
+            ))
+            saida = RespostaRegistrada(consulta_id=consulta_id)
+            cache: _Cache = {}
+            for hit in hits:
+                saida.observacoes.append(_observar(
+                    con, cache, consulta_id=consulta_id, observado_em=observado_em,
+                    tribunal=tribunal, hit_bruto=hit, projecao=projecao,
                 ))
-                saida = RespostaRegistrada(consulta_id=consulta_id)
-                cache: _Cache = {}
-                for hit in hits:
-                    saida.observacoes.append(_observar(
-                        con, cache, consulta_id=consulta_id, observado_em=observado_em,
-                        tribunal=tribunal, hit_bruto=hit, projecao=projecao,
-                    ))
-            return saida
-        finally:
-            con.close()
+        return saida
+    finally:
+        con.close()
 
 
 def registrar_erro(
