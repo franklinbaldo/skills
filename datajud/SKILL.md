@@ -146,12 +146,19 @@ Leitura sem acessar a API:
 uv run scripts/datajud.py estado <CNJ>                   # capa, assuntos e movimentos vigentes
 uv run scripts/datajud.py estado <CNJ> --em 2026-10-01   # como o acervo o conhecia naquela data
 uv run scripts/datajud.py historico <CNJ> --detalhar     # o que entrou e saiu em cada observação
+uv run scripts/datajud.py novidades 2026-10-19 --numeros acervo.txt  # o que mudou no acervo desde a data
 uv run scripts/datajud.py banco                          # linhas por tabela
 ```
 
 Com `--json`, cada comando emite o modelo Pydantic correspondente
-(`EstadoProcesso`, `HistoricoProcesso`, `Estatisticas`), e o agente também pode
+(`EstadoProcesso`, `HistoricoProcesso`, `Novidades`, `Estatisticas`), e o agente também pode
 consultar o SQLite direto.
+
+`novidades` é para a rotina que reconsulta um acervo inteiro (`lote`) e quer
+só o que a passada trouxe: movimentos que entraram ou saíram (com `marco`
+falso para os códigos de `RUIDO`), capas novas e processos que apareceram
+noutro tribunal ou grau. A primeira observação de um registro é linha de base:
+os movimentos que ele já trazia viram contagem, e não novidade.
 
 O documento do DataJud é **decomposto em tabelas**, e só o que mudou ganha
 linha. Andamento novo é uma linha em `movimentos` e uma em
