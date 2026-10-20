@@ -1,3 +1,7 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """Armazenamento imutavel das observacoes da API publica DataJud (SQLite).
 
 Cada resposta HTTP produz um evento de consulta; cada hit aponta para uma versao
