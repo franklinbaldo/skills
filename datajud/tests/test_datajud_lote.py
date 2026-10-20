@@ -161,7 +161,7 @@ def test_mcp_procura_na_familia_e_marca_o_tribunal(monkeypatch):
     monkeypatch.setattr(dj, "search", search)
     saida = mod.datajud_processo("0000774-14.2019.4.01.4102")
     assert sorted(vistos) == sorted(dj.familia_do_cnj(numero))
-    assert sorted(d["tribunal"] for d in saida["documentos"]) == ["STJ", "TRF1"]
+    assert sorted(d.tribunal for d in saida.documentos) == ["STJ", "TRF1"]
 
     vistos.clear()
     mod.datajud_processo("0000774-14.2019.4.01.4102", tribunal="trf1")

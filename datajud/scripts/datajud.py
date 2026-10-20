@@ -20,8 +20,9 @@ do CNJ). Para teor de acordao/voto/sentenca do TJRO use a skill juris-tjro.
 Autenticacao: chave PUBLICA unica do CNJ (mesma para todos; pode ser trocada
 pelo CNJ a qualquer momento — ver SKILL.md se comecar a dar 401).
 
-Dependencias: cyclopts (CLI) e pydantic (entrada e saida de `consultar`/`lote`).
-O acesso HTTP usa apenas a stdlib.
+Dependencias: cyclopts (CLI) e pydantic: o corpo da requisicao e a resposta da
+API (`datajud_modelos.py`), as tabelas do acervo (`datajud_store.py`) e a
+entrada e a saida de cada comando sao modelos. O acesso HTTP usa so a stdlib.
 
 Modos:
     processo <CNJ>              capa + movimentacoes de um processo (todos os graus)
@@ -30,6 +31,10 @@ Modos:
     contar   [filtros]          apenas o total real (track_total_hits)
     facetas  [filtros] --por X  agregacao (quantos por classe/assunto/orgao/grau)
     codigos  <termo> --por X    descobre codigos de classe/assunto por nome
+    estado   <CNJ> [--em DATA]  o processo como o acervo local o conhecia (sem API)
+    historico <CNJ>             mudancas observadas de cada registro (sem API)
+    banco                       linhas por tabela do acervo local
+    migrar                      decompoe o acervo da versao anterior (#125)
 
 Rode `python datajud.py -h` ou `python datajud.py <modo> -h` para detalhes.
 """
@@ -42,14 +47,13 @@ import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
-from json import dumps as json_dumps
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import cyclopts
 import datajud_store as store
 from cyclopts import Parameter
+from datajud_modelos import Assunto, Codificado, Movimento, OrgaoJulgador, RequisicaoBusca
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 BASE = "https://api-publica.datajud.cnj.jus.br"
@@ -401,6 +405,91 @@ class ResumoLote(BaseModel):
     saida: str
 
 
+class DocumentoProcesso(BaseModel):
+    """Um registro na saida `--json` do modo `processo`."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    tribunal: str
+    grau: str | None = None
+    classe: Codificado | None = None
+    assuntos: list[Assunto] | None = None
+    orgao_julgador: OrgaoJulgador | None = Field(default=None, alias="orgaoJulgador")
+    data_ajuizamento: str | None = Field(default=None, alias="dataAjuizamento")
+    ultima_atualizacao: str | None = Field(default=None, alias="ultimaAtualizacao")
+    movimentos: list[Movimento] | None = None
+    """nulo sem `--movimentos`."""
+
+
+class SaidaProcesso(BaseModel):
+    """Saida `--json` do modo `processo`."""
+
+    processo: NumeroCNJ
+    consultados: list[str]
+    falhas: list[FalhaIndice]
+    documentos: list[DocumentoProcesso]
+
+
+class ItemBusca(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    numero_processo: str = Field(alias="numeroProcesso")
+    grau: str | None = None
+    classe: Codificado | None = None
+    assuntos: list[Assunto] | None = None
+    orgao_julgador: str | None = Field(default=None, alias="orgaoJulgador")
+    """nome do orgao."""
+    data_ajuizamento: str | None = Field(default=None, alias="dataAjuizamento")
+
+
+class SaidaBusca(BaseModel):
+    """Saida `--json` do modo `buscar`."""
+
+    tribunal: str
+    total: int
+    retornados: int
+    resultados: list[ItemBusca]
+
+
+class SaidaContagem(BaseModel):
+    """Saida `--json` do modo `contar`."""
+
+    tribunal: str
+    total: int
+
+
+class Faceta(BaseModel):
+    chave: str | int
+    qtd: int
+
+
+class SaidaFacetas(BaseModel):
+    """Saida `--json` do modo `facetas`."""
+
+    tribunal: str
+    total: int
+    por: str
+    buckets: list[Faceta]
+
+
+class CodigoEncontrado(BaseModel):
+    codigo: int | str
+    nome: str
+    qtd: int
+
+
+class SaidaCodigos(BaseModel):
+    """Saida `--json` do modo `codigos`."""
+
+    por: str
+    termo: str
+    itens: list[CodigoEncontrado]
+
+
+def _imprimir(modelo: BaseModel) -> None:
+    print(modelo.model_dump_json(by_alias=True, indent=2))
+
+
 def consultar(entrada: ConsultaLote) -> dict[str, ProcessoConsultado]:
     """Procura cada numero em todos os indices da sua familia (ou so na origem).
 
@@ -421,7 +510,8 @@ def consultar(entrada: ConsultaLote) -> dict[str, ProcessoConsultado]:
 
     def rodar(tarefa):
         i, ds = tarefa
-        d = search({"size": LOTE * 10, "query": {"terms": {"numeroProcesso": ds}}}, tribunal=i)
+        d = search(RequisicaoBusca(size=LOTE * 10, query={"terms": {"numeroProcesso": ds}}).bruto(),
+                   tribunal=i)
         hits = d.get("hits", {}).get("hits", [])
         total = d.get("hits", {}).get("total", {}).get("value", 0)
         if total > len(hits):
@@ -561,8 +651,8 @@ def consultar_um(numero: str, *, tribunal: str | None = None,
     """Um processo: so no indice pedido, ou na familia do numero (o padrao)."""
     if not tribunal:
         return consultar(ConsultaLote(numeros=[numero], so_origem=so_origem))[so_digitos(numero)]
-    d = search({"size": 50, "query": {"match": {"numeroProcesso": so_digitos(numero)}},
-                "sort": [{"grau.keyword": "asc"}]}, tribunal=tribunal)
+    d = search(RequisicaoBusca(size=50, query={"match": {"numeroProcesso": so_digitos(numero)}},
+                               sort=[{"grau.keyword": "asc"}]).bruto(), tribunal=tribunal)
     registros = [Registro.model_validate(h) for h in d.get("hits", {}).get("hits", [])]
     for r in registros:
         r.indice_bruto = r.indice_bruto or f"api_publica_{tribunal}"
@@ -586,10 +676,10 @@ def cmd_processo(numero: str, tribunal: str | None, movimentos: bool, as_json: b
         return 1
 
     if as_json:
-        out = []
+        documentos = []
         for r in item.registros:
             src = r.fonte
-            out.append({
+            documentos.append(DocumentoProcesso.model_validate({
                 "tribunal": r.tribunal,
                 "grau": src.get("grau"),
                 "classe": src.get("classe"),
@@ -597,11 +687,10 @@ def cmd_processo(numero: str, tribunal: str | None, movimentos: bool, as_json: b
                 "orgaoJulgador": src.get("orgaoJulgador"),
                 "dataAjuizamento": src.get("dataAjuizamento"),
                 "ultimaAtualizacao": src.get("dataHoraUltimaAtualizacao"),
-                "movimentos": src.get("movimentos") if movimentos else "(omitido; use --movimentos)",
-            })
-        print(json.dumps({"processo": item.processo, "consultados": item.consultados,
-                          "falhas": [f.model_dump() for f in item.falhas],
-                          "documentos": out}, ensure_ascii=False, indent=2))
+                "movimentos": src.get("movimentos") if movimentos else None,
+            }))
+        _imprimir(SaidaProcesso(processo=item.processo, consultados=item.consultados,
+                                falhas=item.falhas, documentos=documentos))
         return 0
 
     print(f"Processo {item.processo} — {len(item.registros)} registro(s) em "
@@ -640,25 +729,18 @@ def cmd_processo(numero: str, tribunal: str | None, movimentos: bool, as_json: b
 # Modo: buscar
 # ----------------------------------------------------------------------------
 def cmd_buscar(filtros: "Filtros", recentes: bool, tamanho: int, as_json: bool):
-    query = montar_query(filtros)
-    body = {
-        "size": tamanho,
-        "track_total_hits": True,
-        "query": query,
-        "_source": CAPA_FIELDS,
-    }
-    if recentes:
-        body["sort"] = [{"dataAjuizamento": "desc"}]
+    body = RequisicaoBusca(
+        size=tamanho, track_total_hits=True, query=montar_query(filtros), source=CAPA_FIELDS,
+        sort=[{"dataAjuizamento": "desc"}] if recentes else None,
+    ).model_dump(by_alias=True, exclude_none=True)
 
     d = search(body, tribunal=filtros.tribunal)
     total = d.get("hits", {}).get("total", {}).get("value", 0)
     hits = d.get("hits", {}).get("hits", [])
 
     if as_json:
-        out = []
-        for h in hits:
-            src = h["_source"]
-            out.append({
+        resultados = [
+            ItemBusca.model_validate({
                 "numeroProcesso": cnj(src.get("numeroProcesso", "")),
                 "grau": src.get("grau"),
                 "classe": src.get("classe"),
@@ -666,9 +748,10 @@ def cmd_buscar(filtros: "Filtros", recentes: bool, tamanho: int, as_json: bool):
                 "orgaoJulgador": (src.get("orgaoJulgador") or {}).get("nome"),
                 "dataAjuizamento": src.get("dataAjuizamento"),
             })
-        print(json.dumps({"tribunal": filtros.tribunal.upper(), "total": total,
-                          "retornados": len(out), "resultados": out},
-                         ensure_ascii=False, indent=2))
+            for src in (h["_source"] for h in hits)
+        ]
+        _imprimir(SaidaBusca(tribunal=filtros.tribunal.upper(), total=total,
+                             retornados=len(resultados), resultados=resultados))
         return 0
 
     print(f"{total} processo(s) no acervo de {filtros.tribunal.upper()} para o filtro "
@@ -690,12 +773,11 @@ def cmd_buscar(filtros: "Filtros", recentes: bool, tamanho: int, as_json: bool):
 # Modo: contar
 # ----------------------------------------------------------------------------
 def cmd_contar(filtros: "Filtros", as_json: bool):
-    body = {"size": 0, "track_total_hits": True, "query": montar_query(filtros)}
+    body = RequisicaoBusca(size=0, track_total_hits=True, query=montar_query(filtros)).bruto()
     d = search(body, tribunal=filtros.tribunal)
     total = d.get("hits", {}).get("total", {}).get("value", 0)
     if as_json:
-        print(json.dumps({"tribunal": filtros.tribunal.upper(), "total": total},
-                         ensure_ascii=False))
+        _imprimir(SaidaContagem(tribunal=filtros.tribunal.upper(), total=total))
     else:
         print(f"{total} processo(s) em {filtros.tribunal.upper()} para o filtro.")
     return 0
@@ -715,21 +797,18 @@ FACET_FIELD = {
 
 def cmd_facetas(filtros: "Filtros", por: str, limite: int, as_json: bool):
     campo = FACET_FIELD[por]
-    body = {
-        "size": 0,
-        "track_total_hits": True,
-        "query": montar_query(filtros),
-        "aggs": {"f": {"terms": {"field": campo, "size": limite}}},
-    }
+    body = RequisicaoBusca(
+        size=0, track_total_hits=True, query=montar_query(filtros),
+        aggs={"f": {"terms": {"field": campo, "size": limite}}},
+    ).bruto()
     d = search(body, tribunal=filtros.tribunal)
     total = d.get("hits", {}).get("total", {}).get("value", 0)
     buckets = d.get("aggregations", {}).get("f", {}).get("buckets", [])
     if as_json:
-        print(json.dumps({"tribunal": filtros.tribunal.upper(), "total": total,
-                          "por": por,
-                          "buckets": [{"chave": b["key"], "qtd": b["doc_count"]}
-                                      for b in buckets]},
-                         ensure_ascii=False, indent=2))
+        _imprimir(SaidaFacetas(
+            tribunal=filtros.tribunal.upper(), total=total, por=por,
+            buckets=[Faceta(chave=b["key"], qtd=b["doc_count"]) for b in buckets],
+        ))
         return 0
     print(f"Panorama por {por} — {filtros.tribunal.upper()} "
           f"(total no filtro: {total})")
@@ -749,16 +828,16 @@ def cmd_codigos(termo: str, por: str, tribunal: str, limite: int, as_json: bool)
     else:
         campo_cod, campo_nome = "assuntos.codigo", "assuntos.nome.keyword"
         match_field = "assuntos.nome"
-    body = {
-        "size": 0,
-        "query": {"match": {match_field: termo}},
-        "aggs": {
+    body = RequisicaoBusca(
+        size=0,
+        query={"match": {match_field: termo}},
+        aggs={
             "nomes": {
                 "terms": {"field": campo_nome, "size": limite},
                 "aggs": {"cod": {"terms": {"field": campo_cod, "size": 1}}},
             }
         },
-    }
+    ).bruto()
     d = search(body, tribunal=tribunal)
     buckets = d.get("aggregations", {}).get("nomes", {}).get("buckets", [])
     # a agregacao lista TODOS os nomes dos processos que casaram (em assunto, um
@@ -774,10 +853,9 @@ def cmd_codigos(termo: str, por: str, tribunal: str, limite: int, as_json: bool)
         linhas.append((cod, b["key"], b["doc_count"]))
     linhas.sort(key=lambda x: -x[2])
     if as_json:
-        print(json.dumps({"por": por, "termo": termo,
-                          "itens": [{"codigo": c, "nome": n, "qtd": q}
-                                    for c, n, q in linhas]},
-                         ensure_ascii=False, indent=2))
+        _imprimir(SaidaCodigos(por=por, termo=termo, itens=[
+            CodigoEncontrado(codigo=c, nome=n, qtd=q) for c, n, q in linhas
+        ]))
         return 0
     print(f"Codigos de {por} contendo \"{termo}\" em {tribunal.upper()}")
     print("=" * 92)
@@ -907,9 +985,8 @@ def cmd_lote(arquivo: Path, saida: Path | None, trabalhadores: int,
 # ----------------------------------------------------------------------------
 # CLI
 # ----------------------------------------------------------------------------
-@dataclass
-class Filtros:
-    """Filtros comuns aos modos de busca/contagem/agregacao."""
+class Filtros(BaseModel):
+    """Filtros comuns aos modos de busca/contagem/agregacao (entrada da CLI)."""
 
     tribunal: str = DEFAULT_TRIBUNAL
     """sigla do indice (padrao tjro). Ex.: stj, trf1, tjsp, tre-ro (o STF nao tem indice)."""
@@ -1087,14 +1164,44 @@ def codigos(
 
 @app.command
 def banco(*, json: AsJson = False) -> int:
-    """Estatisticas do SQLite persistente, sem acessar a API."""
+    """Linhas por tabela do acervo SQLite, sem acessar a API.
+
+    Parameters
+    ----------
+    json
+        emite `Estatisticas` em JSON.
+    """
     dados = store.estatisticas()
     if json:
-        print(json_dumps(dados, ensure_ascii=False, indent=2))
+        _imprimir(dados)
     else:
-        print(f"SQLite: {dados['banco']}")
-        print(f"{dados['consultas']} consultas; {dados['versoes']} versoes "
-              f"imutaveis; {dados['observacoes']} observacoes")
+        print(f"SQLite: {dados.banco}")
+        for tabela, linhas in dados.tabelas.items():
+            print(f"  {tabela:24} {linhas:>9}")
+        print(f"  {dados.observacoes_com_mudanca} observacoes com mudanca; "
+              f"{dados.consultas_com_erro} consultas com erro")
+    return 0
+
+
+@app.command
+def migrar(*, json: AsJson = False) -> int:
+    """Decompoe nas tabelas relacionais o acervo da versao anterior (#125).
+
+    Roda sozinho antes de qualquer escrita ou leitura do acervo; o comando
+    existe para fazer a migracao (dezenas de segundos em milhares de
+    documentos) num momento escolhido. Idempotente.
+
+    Parameters
+    ----------
+    json
+        emite `ResultadoMigracao` em JSON.
+    """
+    resultado = store.migrar()
+    if json:
+        _imprimir(resultado)
+    else:
+        print(f"{resultado.migradas} observacoes migradas agora; "
+              f"{resultado.legado} no legado.")
     return 0
 
 
@@ -1103,17 +1210,86 @@ def historico(
     numero: str,
     *,
     limite: int = 100,
+    detalhar: bool = False,
     json: AsJson = False,
 ) -> int:
-    """Consulta o historico local de versoes, sem acessar a API."""
-    linhas = store.historico(numero, limite=limite)
+    """Mudancas observadas de cada registro do processo, sem acessar a API.
+
+    Parameters
+    ----------
+    numero
+        numero do processo (com ou sem mascara CNJ).
+    limite
+        mudancas por registro, das mais recentes (padrao 100).
+    detalhar
+        lista os movimentos e assuntos que entraram e sairam.
+    json
+        emite `HistoricoProcesso` em JSON.
+    """
+    saida = store.historico(numero, limite=limite, detalhar=detalhar)
     if json:
-        print(json_dumps(linhas, ensure_ascii=False, indent=2))
-    else:
-        print(f"{len(linhas)} versoes registradas de {cnj(numero)}")
-        for item in linhas:
-            print(f"  {item['ultima_vista']} {item['tribunal']} {item['grau']} "
-                  f"sha256={item['sha256'][:12]} observacoes={item['observacoes']}")
+        _imprimir(saida)
+        return 0
+    print(f"{len(saida.registros)} registro(s) de {cnj(numero)} no acervo local")
+    for item in saida.registros:
+        r = item.registro
+        print(f"\n### {r.tribunal.upper()} {r.grau or ''}: {item.observacoes} observacoes, "
+              f"de {item.primeira_vista[:19]} a {item.ultima_vista[:19]}")
+        for m in item.mudancas:
+            marcas = "primeira observacao" if m.primeira else (
+                f"+{m.entraram} -{m.sairam}" + (" capa nova" if m.capa_nova else ""))
+            print(f"  {m.observado_em[:19]}  {marcas}")
+            for i in m.itens:
+                sinal = "+" if i.evento == "entrou" else "-"
+                quando = fmt_data_iso(i.data_hora) if i.data_hora else ""
+                print(f"      {sinal} {i.tipo} {quando} ({i.codigo}) {i.nome or ''}")
+    return 0
+
+
+@app.command
+def estado(
+    numero: str,
+    *,
+    em: str | None = None,
+    movimentos: bool = False,
+    json: AsJson = False,
+) -> int:
+    """O processo como o acervo local o conhecia, sem acessar a API.
+
+    Parameters
+    ----------
+    numero
+        numero do processo (com ou sem mascara CNJ).
+    em
+        data (AAAA-MM-DD, ate o fim do dia em UTC) ou instante ISO; omitido,
+        o estado mais recente observado.
+    movimentos
+        lista todos os movimentos vigentes (sem a flag, so os cinco ultimos).
+    json
+        emite `EstadoProcesso` em JSON.
+    """
+    saida = store.estado(numero, em=em)
+    if json:
+        _imprimir(saida)
+        return 0 if saida.registros else 1
+    if not saida.registros:
+        ate = f" ate {saida.em}" if saida.em else ""
+        print(f"{cnj(numero)} nao foi observado{ate} no acervo local.", file=sys.stderr)
+        return 1
+    for item in saida.registros:
+        r, capa = item.registro, item.capa
+        print(f"### {r.tribunal.upper()} · {grau_label(r.grau)} — observado em {item.observado_em[:19]}")
+        if capa:
+            c = capa.capa
+            print(f"    classe:   {c.classe_nome} ({c.classe_codigo})")
+            print(f"    orgao:    {capa.orgao.nome if capa.orgao else '—'}")
+            print(f"    ajuizado: {fmt_data_ajuiz(c.data_ajuizamento)}")
+        print(f"    assuntos: {', '.join(a.nome or str(a.codigo) for a in item.assuntos) or '—'}")
+        lista = item.movimentos if movimentos else item.movimentos[-5:]
+        print(f"    {len(item.movimentos)} movimento(s) vigente(s)"
+              f"{'' if movimentos else '; os ultimos:'}")
+        for mv in lista:
+            print(f"      {fmt_data_iso(mv.movimento.data_hora)}  ({mv.tipo.codigo}) {mv.tipo.nome}")
     return 0
 
 
