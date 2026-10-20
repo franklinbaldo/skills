@@ -149,14 +149,14 @@ O modelo é **somente de acréscimo**, inclusive quando o processo muda:
    corpo da requisição, status e metadados completos da resposta. Retorna 0
    hits? A consulta e o recorte continuam registrados. Falha HTTP/ES? Registra
    erro, jamais presume ausência.
-2. versoes_documento: cada documento DataJud (_source completo, _index,
-   _id) possui identidade lógica e SHA-256 do conteúdo. Se idêntico à versão
+2. versoes_documento: cada documento DataJud (\_source completo, \_index,
+   \_id) possui identidade lógica e SHA-256 do conteúdo. Se idêntico à versão
    anterior, não duplica. Se retificado, **nova linha** com outro hash; a
    versão anterior não é apagada.
 3. observacoes_documento: **uma linha nova em cada nova observação** de cada
    documento, apontando para a versão correspondente e a consulta que a
    encontrou, mesmo quando o conteúdo está idêntico. Atributos de busca
-   transitórios, como _score, ficam na observação.
+   transitórios, como \_score, ficam na observação.
 
 Triggers SQLite impedem UPDATE e DELETE nas três tabelas. Nenhuma consulta
 reescreve uma versão histórica. A data do **registro de um movimento no
