@@ -32,3 +32,7 @@ jobs:
       - uses: astral-sh/ruff-action@v3
         with:
           args: check --output-format=github
+      - name: Ruff diff (temporary review)
+        if: always()
+        run: |
+          ruff check --fix --diff datajud/scripts/datajud.py datajud/tests/test_datajud_sqlite.py || true
