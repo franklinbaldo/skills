@@ -186,7 +186,8 @@ def datajud_processo(
         }
     consultados = item.consultados
     falhas = [f.model_dump() for f in item.falhas]
-    completo = not bool(falhas)
+    # Sem indice consultado (numero do STF, por exemplo) nada foi observado: nao e ausencia.
+    completo = bool(consultados) and not falhas
     tribunal = tribunal or item.origem or dj.DEFAULT_TRIBUNAL
     onde = ", ".join(c.upper() for c in consultados) or "nenhum índice (número sem tribunal deduzível)"
     if not item.encontrado:

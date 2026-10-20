@@ -190,3 +190,49 @@ def test_roteamento_df_e_justica_militar():
     assert "tre-dft" in dj.familia_do_cnj("0000001-00.2024.8.07.0001")
     assert "tre-df" not in dj.familia_do_cnj("0000001-00.2024.8.07.0001")
     assert dj.tribunal_do_cnj("0000001-00.2024.7.01.0001") == "stm"
+
+
+def test_recorte_de_campos_nao_vira_versao_do_documento_completo(tmp_path):
+    """`buscar` pede só a capa; consultar depois por `processo` não pode criar 'nova versão'."""
+    banco = tmp_path / "datajud.sqlite"
+    completo = {"query": {"terms": {"numeroProcesso": [NUMERO]}}}
+    capa = {"query": {"match": {"numeroProcesso": NUMERO}}, "_source": ["numeroProcesso", "grau"]}
+    so_capa = hit()
+    so_capa["_source"] = {"numeroProcesso": NUMERO, "grau": "G1"}
+
+    store.registrar_resposta("tjro", completo, resposta(hit()), banco=banco)
+    store.registrar_resposta("tjro", capa, resposta(so_capa), banco=banco)
+    store.registrar_resposta("tjro", completo, resposta(hit()), banco=banco)
+
+    linhas = store.historico(NUMERO, banco=banco)
+    completas = [x for x in linhas if "|projecao:" not in x["identidade"]]
+    recortes = [x for x in linhas if "|projecao:" in x["identidade"]]
+    assert len(completas) == 1 and completas[0]["observacoes"] == 2, "documento completo: uma versão"
+    assert len(recortes) == 1, "o recorte fica em linhagem própria"
+
+
+def test_numero_sem_indice_nao_e_ausencia_confirmada(monkeypatch, tmp_path, capsys):
+    """Número do STF: nenhum índice consultado, logo nada foi observado."""
+    import datajud_mcp as mod
+
+    monkeypatch.setenv("DATAJUD_SQLITE", str(tmp_path / "datajud.sqlite"))
+    monkeypatch.setattr(dj, "search", lambda *a, **k: pytest.fail("não deveria consultar"))
+    saida = mod.datajud_processo("0126778-57.2022.1.00.0000")
+    assert saida["encontrado"] is False and saida["completo"] is False
+
+    assert dj.cmd_processo("0126778-57.2022.1.00.0000", None, False, False) == 1
+    assert "incompleta" in capsys.readouterr().err
+
+
+def test_falha_de_indice_nao_vira_nenhum_encontrado(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("DATAJUD_SQLITE", str(tmp_path / "datajud.sqlite"))
+
+    def search(body, tribunal="tjro", **_):
+        if tribunal == "stj":
+            raise RuntimeError("HTTP 504: NSX LB")
+        return {"hits": {"total": {"value": 0}, "hits": []}}
+
+    monkeypatch.setattr(dj, "search", search)
+    assert dj.cmd_processo("7009511-71.2024.8.22.0001", None, False, False) == 1
+    erro = capsys.readouterr().err
+    assert "incompleta" in erro and "Nenhum processo" not in erro

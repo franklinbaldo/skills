@@ -578,7 +578,11 @@ def cmd_processo(numero: str, tribunal: str | None, movimentos: bool, as_json: b
     for f in item.falhas:
         print(f"Aviso: {f.indice.upper()} nao respondeu ({f.erro}).", file=sys.stderr)
     if not item.encontrado:
-        print(f"Nenhum processo {cnj(nr)} encontrado em {onde}.", file=sys.stderr)
+        if item.falhas or not item.consultados:
+            print(f"Consulta incompleta de {cnj(nr)} ({onde}): ausencia nao confirmada.",
+                  file=sys.stderr)
+        else:
+            print(f"Nenhum processo {cnj(nr)} encontrado em {onde}.", file=sys.stderr)
         return 1
 
     if as_json:
