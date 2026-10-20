@@ -571,3 +571,44 @@ def test_cli_novidades_emite_o_modelo(monkeypatch, tmp_path, capsys):
     assert saida.processos[0].processo_novo
     assert dj.app(result_action="return_value", tokens=["novidades", "2000-01-01"]) == 0
     assert "primeira observacao" in capsys.readouterr().out
+
+
+def _v2_em_troca(banco):
+    with closing(sqlite3.connect(banco)) as con, con:
+        for sql in _V2:
+            con.execute(sql)
+        con.execute(f"PRAGMA user_version = {store.EM_TROCA}")
+
+
+def test_escrita_durante_a_troca_espera_o_arquivo_novo(tmp_path, monkeypatch):
+    """Antigo ja copiado e carimbado: quem chega nao grava nele, espera o novo."""
+    import threading
+    import time
+
+    banco = tmp_path / "acervo.sqlite"
+    _v2_em_troca(banco)
+    novo = tmp_path / "novo.sqlite"
+    store._abrir(novo, novo=True).close()
+
+    def trocar():
+        time.sleep(0.5)
+        banco.replace(tmp_path / "backup.sqlite")
+        novo.replace(banco)
+
+    threading.Thread(target=trocar).start()
+    registrar(banco, hit())
+    assert tabelas(banco)["consultas"] == 1, "a escrita foi para o arquivo novo"
+    with closing(sqlite3.connect(tmp_path / "backup.sqlite")) as con:
+        assert con.execute("SELECT COUNT(*) FROM consultas").fetchone()[0] == 0, "nada no antigo"
+    with pytest.raises(store._ArquivoTrocado):
+        store._abrir(tmp_path / "backup.sqlite")
+
+
+def test_troca_que_morreu_no_meio_e_refeita(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "ESPERA_TROCA", 0.3)
+    banco = tmp_path / "acervo.sqlite"
+    _v2_em_troca(banco)
+    registrar(banco, hit())
+    dados = store.estatisticas(banco=banco)
+    assert dados.versao == store.VERSAO and dados["consultas"] == 1
+    assert list(tmp_path.glob("acervo-antes-v3-*.sqlite")), "o antigo ficou como backup"
