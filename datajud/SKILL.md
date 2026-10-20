@@ -165,13 +165,13 @@ essas duas dimensões separadas.
 
 Exemplo SQL para auditar um número CNJ (20 dígitos):
 
-~~~sql
+```sql
 SELECT v.tribunal, v.grau, v.sha256, o.observado_em, v.conteudo_json
 FROM observacoes_documento AS o
 JOIN versoes_documento AS v ON v.id = o.versao_id
 WHERE v.numero_processo = '70095117120248220001'
 ORDER BY o.observado_em DESC, o.id DESC;
-~~~
+```
 
 O SQLite é um **histórico de observações**, não espelho vivo. Processos
 podem receber novos atos, correções ou até remoções na fonte. Para obter
