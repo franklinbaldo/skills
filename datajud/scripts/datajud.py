@@ -92,7 +92,8 @@ def _endpoint(tribunal):
 def _is_es_rejection(d):
     if not isinstance(d, dict) or "error" not in d:
         return False
-    rc = d.get("error", {}).get("root_cause", [])
+    erro = d.get("error")
+    rc = erro.get("root_cause", []) if isinstance(erro, dict) else []
     return any("rejected_execution" in (c.get("type", "")) for c in rc)
 
 
