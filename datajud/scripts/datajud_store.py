@@ -73,6 +73,7 @@ import sqlite3
 import threading
 import time as relogio
 import types
+import uuid
 import zlib
 from collections import Counter
 from collections.abc import Iterator
@@ -562,9 +563,9 @@ def _conexao(banco: Path | None = None) -> sqlite3.Connection:
         if versao == EM_TROCA and relogio.monotonic() < prazo:
             relogio.sleep(0.2)
             continue
-        if versao is not None and versao != VERSAO:
-            _ULTIMA_MIGRACAO = _migrar_arquivo(caminho)
         try:
+            if versao is not None and versao != VERSAO:
+                _ULTIMA_MIGRACAO = _migrar_arquivo(caminho, troca_morta=versao == EM_TROCA)
             return _abrir(caminho)
         except _ArquivoTrocado:
             if relogio.monotonic() >= prazo:
@@ -572,7 +573,7 @@ def _conexao(banco: Path | None = None) -> sqlite3.Connection:
             relogio.sleep(0.2)
 
 
-def _migrar_arquivo(caminho: Path) -> ResultadoMigracao:
+def _migrar_arquivo(caminho: Path, *, troca_morta: bool = False) -> ResultadoMigracao:
     """Constroi o banco v3 num arquivo novo a partir do antigo, e troca os dois.
 
     Nada se apaga: o antigo fica ao lado. A conversao le as tabelas antigas, sem
@@ -583,14 +584,25 @@ def _migrar_arquivo(caminho: Path) -> ResultadoMigracao:
     trava de escrita do antigo fica com a conversao durante a copia; antes de
     solta-la, o antigo e carimbado `EM_TROCA`, e quem o abrir depois (inclusive
     quem esperava a trava) recusa e espera o novo.
+
+    Dois processos podem decidir converter ao mesmo tempo: a trava vem antes
+    de qualquer arquivo ser tocado, a versao e conferida de novo sob ela, e cada
+    conversao constroi num temporario so seu (achado em pge-iperon/judicial#659).
+    `troca_morta`: o antigo ficou `EM_TROCA` alem do prazo, e se converte de novo.
     """
-    temporario = caminho.with_name(caminho.stem + ".v3-em-construcao.sqlite")
-    for resto in (temporario, Path(f"{temporario}-wal"), Path(f"{temporario}-shm")):
-        resto.unlink(missing_ok=True)
     trava = sqlite3.connect(caminho, timeout=30, isolation_level=None)
     trava.execute("PRAGMA busy_timeout = 30000")
     trava.execute("BEGIN IMMEDIATE")
     original = trava.execute("PRAGMA user_version").fetchone()[0]
+    tabelas = _tabelas_existentes(trava) - {"sqlite_sequence"}
+    if original == VERSAO or not tabelas or (original == EM_TROCA and not troca_morta):
+        # Outro processo converteu (ou esta trocando) enquanto esperavamos a trava.
+        trava.execute("ROLLBACK")
+        trava.close()
+        raise _ArquivoTrocado(original)
+    if original == EM_TROCA:
+        original = 0
+    temporario = caminho.with_name(f"{caminho.stem}.v3-em-construcao-{uuid.uuid4().hex[:12]}.sqlite")
     try:
         resultado = _construir(caminho, temporario)
         trava.execute(f"PRAGMA user_version = {EM_TROCA}")
@@ -598,13 +610,24 @@ def _migrar_arquivo(caminho: Path) -> ResultadoMigracao:
     except BaseException:
         trava.execute("ROLLBACK")
         trava.close()
-        temporario.unlink(missing_ok=True)
+        for resto in (temporario, Path(f"{temporario}-wal"), Path(f"{temporario}-shm")):
+            resto.unlink(missing_ok=True)
         raise
     trava.close()
     carimbo = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup = caminho.with_name(f"{caminho.stem}-antes-v3-{carimbo}{caminho.suffix}")
     try:
-        caminho.replace(backup)
+        # No Windows, quem esperava a trava ainda segura o arquivo por um instante:
+        # ao ver `EM_TROCA` ele o solta, e a troca tenta de novo.
+        prazo = relogio.monotonic() + 10
+        while True:
+            try:
+                caminho.replace(backup)
+                break
+            except PermissionError:
+                if relogio.monotonic() >= prazo:
+                    raise
+                relogio.sleep(0.2)
     except PermissionError as erro:
         # No Windows, arquivo aberto noutro processo nao se renomeia: o antigo volta
         # a versao que tinha, e a conversao se repete na proxima abertura.

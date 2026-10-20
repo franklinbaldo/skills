@@ -612,3 +612,22 @@ def test_troca_que_morreu_no_meio_e_refeita(tmp_path, monkeypatch):
     dados = store.estatisticas(banco=banco)
     assert dados.versao == store.VERSAO and dados["consultas"] == 1
     assert list(tmp_path.glob("acervo-antes-v3-*.sqlite")), "o antigo ficou como backup"
+
+
+def test_dois_processos_convertendo_o_mesmo_banco(tmp_path):
+    """So um converte; o outro espera e abre o novo. Nunca some o acervo."""
+    import subprocess
+
+    banco = tmp_path / "v1.sqlite"
+    _legado(banco, [("2026-10-01T00:00:00.000000+00:00", hit())])
+    scripts = Path(store.__file__).parent
+    codigo = (f"import sys; sys.path.insert(0, {str(scripts)!r}); import datajud_store as s; "
+              f"from pathlib import Path; print(s.migrar(banco=Path({str(banco)!r})).origem)")
+    processos = [subprocess.Popen([sys.executable, "-c", codigo], stdout=subprocess.PIPE, text=True)
+                 for _ in range(2)]
+    origens = sorted(p.communicate(timeout=120)[0].strip() for p in processos)
+    assert all(p.returncode == 0 for p in processos)
+    assert origens == ["legado", "nada"], "um converteu, o outro achou pronto"
+    assert banco.exists() and store.estatisticas(banco=banco).versao == store.VERSAO
+    assert len(list(tmp_path.glob("v1-antes-v3-*.sqlite"))) == 1
+    assert not list(tmp_path.glob("*em-construcao*")), "nenhum temporario sobra"
