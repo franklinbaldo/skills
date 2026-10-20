@@ -21,7 +21,6 @@ import datajud_store as store  # noqa: E402
 
 import datajud as dj  # noqa: E402
 
-
 NUMERO = "70095117120248220001"
 
 
