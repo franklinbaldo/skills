@@ -160,60 +160,67 @@ falso para os códigos de `RUIDO`), capas novas e processos que apareceram
 noutro tribunal ou grau. A primeira observação de um registro é linha de base:
 os movimentos que ele já trazia viram contagem, e não novidade.
 
-O documento do DataJud é **decomposto em tabelas**, e só o que mudou ganha
-linha. Andamento novo é uma linha em `movimentos` e uma em
-`presencas_movimento`, e não uma cópia do histórico. Medido em 2026-10-19, o
-acervo de 3.448 processos (4.820 documentos, 406 mil movimentos) ocupa 60 MB,
-contra 100 MB no formato anterior, e cada nova passada sem mudança acrescenta
-só as observações. No formato anterior, cada passada copiava de novo o
-documento inteiro, porque a reindexação do CNJ muda `@timestamp`.
+O documento do DataJud é **decomposto em tabelas**, e só se guarda o que não
+se deduz. Andamento novo é uma linha em `movimentos`, e não uma cópia do
+histórico. Processo visto sem mudança é uma linha de dois inteiros em `vistas`.
+Medido em 2026-10-20 sobre o acervo real (3.477 processos, 4.847 documentos,
+408 mil movimentos, três passadas): 29,8 MB, contra 165,6 MB das duas versões
+anteriores no mesmo arquivo. A conversão levou 3,6 s.
 
-| Tabela                                      | Uma linha por…                                                             |
-| ------------------------------------------- | -------------------------------------------------------------------------- |
-| `consultas`                                 | requisição à API, com sucesso ou erro (erro nunca vira ausência)           |
-| `registros`                                 | documento: índice + `_id` (um grau de um processo num tribunal)            |
-| `capas`                                     | versão da capa (classe, órgão, sistema, formato, sigilo, ajuizamento)      |
-| `assuntos`, `movimentos`                    | item do registro, identificado pelo hash do conteúdo e pela ocorrência     |
-| `tipos_movimento`, `orgaos`, `complementos` | catálogo do que se repete entre os itens                                   |
-| `movimento_complementos`                    | complemento tabelado de um movimento                                       |
-| `observacoes`                               | registro visto numa consulta; guarda os campos voláteis e o recorte pedido |
-| `presencas_movimento`, `presencas_assunto`  | item que **entrou** ou **saiu** do registro naquela observação             |
-| `fontes_brutas`                             | hit cru comprimido, só nas observações em que algo mudou                   |
+| Tabela                                      | Uma linha por…                                                                |
+| ------------------------------------------- | ----------------------------------------------------------------------------- |
+| `consultas`                                 | requisição à API, com sucesso ou erro; corpo comprimido e recorte `_source`   |
+| `registros`                                 | documento: índice + `_id` (um grau de um processo num tribunal)               |
+| `capas`                                     | versão da capa (classe, órgão, sistema, formato, sigilo, ajuizamento)         |
+| `assuntos`, `movimentos`                    | item do registro (hash do conteúdo + ocorrência), com a observação de entrada |
+| `tipos_movimento`, `orgaos`, `complementos` | catálogo do que se repete entre os itens                                      |
+| `movimento_complementos`                    | complemento tabelado de um movimento                                          |
+| `observacoes`                               | registro visto **com mudança**, com os campos voláteis                        |
+| `vistas`                                    | registro visto **sem mudança** numa consulta                                  |
+| `presencas_movimento`, `presencas_assunto`  | item que **saiu** ou **voltou** (retificação na fonte)                        |
 
 Regras que o desenho garante:
 
 - **Volátil não é mudança.** `@timestamp`, `dataHoraUltimaAtualizacao` e
-  `_score` ficam na observação, e não criam versão.
+  `_score` não criam observação: só se guardam junto de uma mudança.
 - **Retificação não apaga.** Movimento corrigido na fonte sai e o corrigido
   entra; os dois ficam, com a data em que trocaram.
 - **Repetição é dado.** O mesmo movimento idêntico aparece repetido no mesmo
   documento (9.308 vezes no acervo medido), e cada ocorrência tem linha própria.
 - **Recorte não é ausência.** Campo fora do `_source` pedido (o `buscar` pede só
-  a capa) não foi observado, e não gera "saiu".
+  a capa) não foi observado, e não gera "saiu". O `estado` diz quando cada
+  coleção veio pela última vez (`movimentos_observados_em`) e devolve `null`, e
+  não lista vazia, para a coleção que nenhuma consulta trouxe.
+- **Data do movimento em segundos.** `movimentos.instante` guarda a `dataHora`
+  em segundos UTC, e `data_hora` a refaz exata. Texto em outra forma fica em
+  `data_hora_texto`, como veio.
 - Cada tabela tem um modelo Pydantic (`Linha*` em `datajud_store.py`), e o DDL
   é gerado dele. A resposta da API também tem modelos (`datajud_modelos.py`),
   com campo extra aceito: campo novo do CNJ não derruba a consulta.
 - Triggers impedem UPDATE e DELETE em todas as tabelas.
 
-Banco do formato anterior (`versoes_documento`, `observacoes_documento`):
-as tabelas antigas ficam só para leitura, e as observações delas são
-decompostas nas tabelas novas antes da primeira escrita ou leitura. Os 4.820
-documentos levaram 36 s e foram reconstruídos idênticos. `uv run scripts/datajud.py migrar` faz isso num momento escolhido.
+Banco de versão anterior (#125, documento inteiro por versão; #128, primeira
+versão relacional): na primeira abertura, o acervo é convertido num arquivo
+novo, a partir das tabelas antigas e sem consultar a API. O antigo fica ao lado
+como `acervo-antes-v3-<instante>.sqlite`, para conferência; apague-o quando não
+precisar mais. `uv run scripts/datajud.py migrar` faz isso num momento
+escolhido. Com o banco aberto noutro processo, a conversão espera a próxima
+abertura e diz isso.
 
-A data do **registro de um movimento no tribunal** (`movimentos.data_hora`)
+A data do **registro de um movimento no tribunal** (`movimentos.instante`)
 não é a data da **observação pela skill** (`observacoes.observado_em`).
-Mantenha as duas separadas. Exemplo SQL, os movimentos que entraram de um
-processo, com a data em que a skill os viu:
+Mantenha as duas separadas. Exemplo SQL, os movimentos de um processo, com a
+data em que a skill os viu entrar:
 
 ```sql
-SELECT r.tribunal, r.grau, m.data_hora, t.codigo, t.nome, o.observado_em
+SELECT r.tribunal, r.grau, datetime(m.instante, 'unixepoch') AS data_hora,
+       t.codigo, t.nome, o.observado_em AS visto_em
 FROM registros AS r
 JOIN movimentos AS m ON m.registro_id = r.id
 JOIN tipos_movimento AS t ON t.id = m.tipo_id
-JOIN presencas_movimento AS p ON p.movimento_id = m.id AND p.evento = 'entrou'
-JOIN observacoes AS o ON o.id = p.observacao_id
+JOIN observacoes AS o ON o.id = m.observacao_id
 WHERE r.numero_processo = '70095117120248220001'
-ORDER BY m.data_hora;
+ORDER BY m.instante;
 ```
 
 O SQLite é um **histórico de observações**, não espelho vivo. Processos
@@ -241,7 +248,7 @@ uv run scripts/datajud.py lote numeros.txt --saida .cache/datajud     # JSON leg
   (oito índices para um número do TJRO), não o custo por processo.
 - Por padrão, todas as respostas vão para o SQLite, sem criar milhares de JSONs.
   Rodar novamente observa a fonte de novo e registra nova data/hora; o que não
-  mudou rende só a observação.
+  mudou rende só uma vista.
 - `--saida` é compatibilidade opcional: exporta também JSON por processo e
   mantém a retomada antiga nesse diretório. A história canônica é o SQLite.
 - Índice sem resposta (504, rede etc.) registra um evento de falha, nunca

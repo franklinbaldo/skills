@@ -1199,21 +1199,20 @@ def banco(*, json: AsJson = False) -> int:
     if json:
         _imprimir(dados)
     else:
-        print(f"SQLite: {dados.banco}")
+        print(f"SQLite: {dados.banco} (versao {dados.versao})")
         for tabela, linhas in dados.tabelas.items():
             print(f"  {tabela:24} {linhas:>9}")
-        print(f"  {dados.observacoes_com_mudanca} observacoes com mudanca; "
-              f"{dados.consultas_com_erro} consultas com erro")
+        print(f"  {dados.consultas_com_erro} consultas com erro")
     return 0
 
 
 @app.command
 def migrar(*, json: AsJson = False) -> int:
-    """Decompoe nas tabelas relacionais o acervo da versao anterior (#125).
+    """Converte para a versao atual o acervo de versao anterior (#125, #128).
 
-    Roda sozinho antes de qualquer escrita ou leitura do acervo; o comando
-    existe para fazer a migracao (dezenas de segundos em milhares de
-    documentos) num momento escolhido. Idempotente.
+    Roda sozinho na primeira abertura do banco; o comando existe para fazer a
+    conversao (dezenas de segundos em milhares de documentos) num momento
+    escolhido. O arquivo antigo fica ao lado, como backup. Idempotente.
 
     Parameters
     ----------
@@ -1224,8 +1223,11 @@ def migrar(*, json: AsJson = False) -> int:
     if json:
         _imprimir(resultado)
     else:
-        print(f"{resultado.migradas} observacoes migradas agora; "
-              f"{resultado.legado} no legado.")
+        if resultado.origem == "nada":
+            print("Acervo ja esta na versao atual.")
+        else:
+            print(f"Convertido de {resultado.origem}: {resultado.observacoes} observacoes; "
+                  f"o arquivo anterior ficou em {resultado.backup}")
     return 0
 
 
@@ -1308,10 +1310,16 @@ def estado(
             print(f"    classe:   {c.classe_nome} ({c.classe_codigo})")
             print(f"    orgao:    {capa.orgao.nome if capa.orgao else '—'}")
             print(f"    ajuizado: {fmt_data_ajuiz(c.data_ajuizamento)}")
-        print(f"    assuntos: {', '.join(a.nome or str(a.codigo) for a in item.assuntos) or '—'}")
+        if item.assuntos is None:
+            print("    assuntos: nunca vieram numa consulta (recorte de campos)")
+        else:
+            print(f"    assuntos: {', '.join(a.nome or str(a.codigo) for a in item.assuntos) or '—'}")
+        if item.movimentos is None:
+            print("    movimentos: nunca vieram numa consulta (recorte de campos)")
+            continue
         lista = item.movimentos if movimentos else item.movimentos[-5:]
-        print(f"    {len(item.movimentos)} movimento(s) vigente(s)"
-              f"{'' if movimentos else '; os ultimos:'}")
+        print(f"    {len(item.movimentos)} movimento(s) vigente(s), vistos em "
+              f"{item.movimentos_observados_em[:19]}{'' if movimentos else '; os ultimos:'}")
         for mv in lista:
             print(f"      {fmt_data_iso(mv.movimento.data_hora)}  ({mv.tipo.codigo}) {mv.tipo.nome}")
     return 0
