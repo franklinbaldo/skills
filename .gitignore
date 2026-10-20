@@ -6,3 +6,9 @@ __pycache__/
 node_modules/
 suno-profile/scripts/.chrome-login-profile/
 .cache/
+
+# Bancos locais do DataJud nao sao artefatos de codigo
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db

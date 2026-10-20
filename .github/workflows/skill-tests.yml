@@ -47,3 +47,5 @@ jobs:
           uv run --quiet convert-to-pdfa/scripts/test_subprocess_decoding.py
           uv run --quiet pdf-to-markdown/scripts/test_convert_pdf.py
           uv run --quiet consulta-dare-sefin/scripts/test_consultar_dare.py
+      - name: Run DataJud SQLite regression tests
+        run: uv run --with pytest --with fastmcp --with cyclopts --with pydantic --with rich -- pytest -q datajud/tests

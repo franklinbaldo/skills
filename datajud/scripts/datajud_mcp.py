@@ -186,6 +186,7 @@ def datajud_processo(
         }
     consultados = item.consultados
     falhas = [f.model_dump() for f in item.falhas]
+    completo = not bool(falhas)
     tribunal = tribunal or item.origem or dj.DEFAULT_TRIBUNAL
     onde = ", ".join(c.upper() for c in consultados) or "nenhum índice (número sem tribunal deduzível)"
     if not item.encontrado:
@@ -195,7 +196,12 @@ def datajud_processo(
             "consultados": consultados,
             "falhas": falhas,
             "encontrado": False,
-            "resumo": f"Nenhum registro de {dj.cnj(numero)} em {onde}.",
+            "completo": completo,
+            "sqlite": str(dj.store.caminho_banco()),
+            "resumo": (f"Consulta incompleta de {dj.cnj(numero)} em {onde}: "
+                       "ha indices sem resposta; nao afirmar ausencia."
+                       if not completo else
+                       f"Nenhum registro de {dj.cnj(numero)} em {onde}."),
             "next_actions": [
                 {
                     "tool": "datajud_processo",
@@ -249,12 +255,19 @@ def datajud_processo(
         else f"{dj.cnj(numero)} — {achados} — sem marcos registrados."
     )
 
+    if not completo:
+        resumo += (" Consulta PARCIAL: nao responderam " +
+                   ", ".join(f["indice"].upper() for f in falhas) +
+                   "; o ultimo marco nao garante o estado atual.")
+
     saida: dict[str, Any] = {
         "processo": dj.cnj(numero),
         "tribunal": tribunal.upper(),
         "consultados": consultados,
         "falhas": falhas,
         "encontrado": True,
+        "completo": completo,
+        "sqlite": str(dj.store.caminho_banco()),
         "resumo": resumo,
         "documentos": documentos,
     }
@@ -390,7 +403,7 @@ def processo(
         print(jsonlib.dumps(resultado, ensure_ascii=False, indent=2))
     else:
         _render_human(resultado, incluir_movimentos=incluir_movimentos)
-    return 0 if resultado.get("encontrado") else 1
+    return 0 if resultado.get("encontrado") and resultado.get("completo", True) else 1
 
 
 @app.default
