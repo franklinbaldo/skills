@@ -1104,13 +1104,11 @@ def registrar_resposta(
             raise ValueError("hit nao contem _source valido")
     RespostaBusca.model_validate(resposta)
     projecao = RequisicaoBusca.model_validate(requisicao).source
-    observado_em = _agora()
     with _LOCK:
         prazo = relogio.monotonic() + ESPERA_TROCA
         while True:
             try:
-                return _gravar(banco, tribunal, requisicao, resposta, hits, projecao, observado_em,
-                               resultado, erro)
+                return _gravar(banco, tribunal, requisicao, resposta, hits, projecao, resultado, erro)
             except _ArquivoTrocado:
                 # A conexao abriu o arquivo antigo pouco antes da troca: reabre o novo.
                 if relogio.monotonic() >= prazo:
@@ -1119,12 +1117,15 @@ def registrar_resposta(
 
 
 def _gravar(banco: Path | None, tribunal: str, requisicao: dict[str, Any], resposta: dict[str, Any],
-            hits: list[dict[str, Any]], projecao: Any, observado_em: str,
+            hits: list[dict[str, Any]], projecao: Any,
             resultado: str, erro: str | None) -> RespostaRegistrada:
     con = _conexao(banco)
     try:
         with _transacao(con):
             _conferir_versao(con)
+            # O carimbo nasce sob a trava: a ordem dos ids e a ordem do tempo, e a
+            # ultima transicao por id e a mais recente (achado em pge-iperon/judicial#659).
+            observado_em = _agora()
             consulta_id = _inserir(con, LinhaConsulta(
                 observado_em=observado_em, tribunal=tribunal,
                 requisicao_zlib=zlib.compress(_json(requisicao).encode("utf-8"), 9),

@@ -652,3 +652,18 @@ def test_troca_que_falha_deixa_o_antigo_no_lugar(tmp_path, monkeypatch):
 
     monkeypatch.undo()
     assert store.migrar(banco=banco).origem == "legado", "a proxima abertura converte"
+
+
+def test_carimbo_acompanha_a_ordem_das_gravacoes(tmp_path):
+    """Gravacoes concorrentes: id maior nunca tem horario anterior."""
+    import threading
+
+    banco = tmp_path / "a.sqlite"
+    linhas = [threading.Thread(target=registrar, args=(banco, hit())) for _ in range(8)]
+    for linha in linhas:
+        linha.start()
+    for linha in linhas:
+        linha.join()
+    with closing(sqlite3.connect(banco)) as con:
+        horarios = [h for (h,) in con.execute("SELECT observado_em FROM consultas ORDER BY id")]
+    assert len(horarios) == 8 and horarios == sorted(horarios)
