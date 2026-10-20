@@ -153,6 +153,7 @@ def datajud_processo(
     cnj: str,
     tribunal: str | None = None,
     incluir_movimentos: bool = False,
+    so_origem: bool = False,
 ) -> dict[str, Any]:
     """Estado atual de um processo no DataJud: capa, marcos e último ato.
 
@@ -170,6 +171,8 @@ def datajud_processo(
     - ``incluir_movimentos``: quando ``True``, acrescenta a lista completa de
       movimentos, inclusive o ruído. Use só quando o marco procurado não
       aparecer entre os marcos — é payload grande.
+    - ``so_origem``: quando ``True`` (e sem ``tribunal``), consulta só o
+      tribunal de origem deduzido do número, sem a família.
 
     Marcos são todos os movimentos **menos** os de rotina listados em ``RUIDO``
     (decurso de prazo, publicação, DJE, expedição de documento, juntada,
@@ -177,7 +180,7 @@ def datajud_processo(
     """
     numero = dj.so_digitos(cnj)
     try:
-        item = dj.consultar_um(cnj, tribunal=tribunal)
+        item = dj.consultar_um(cnj, tribunal=tribunal, so_origem=so_origem)
     except dj.ValidationError:
         return {
             "processo": cnj,
@@ -380,6 +383,7 @@ def processo(
     numero: str,
     *,
     tribunal: str | None = None,
+    so_origem: bool = False,
     incluir_movimentos: bool = False,
     json: bool = False,
 ) -> int:
@@ -390,7 +394,9 @@ def processo(
     numero
         número do processo (com ou sem máscara CNJ).
     tribunal
-        sigla do índice; omitida, sai do número CNJ (e tjro se não der).
+        consulta só este índice; omitido, a busca cobre a família do número.
+    so_origem
+        consulta só o tribunal de origem deduzido do número, sem a família.
     incluir_movimentos
         inclui a linha completa de movimentação. Na visão humana, mostra a
         tabela integral; use apenas quando necessário.
@@ -398,7 +404,7 @@ def processo(
         imprime o payload MCP integral em JSON, sem decoração Rich.
     """
     resultado = datajud_processo(
-        numero, tribunal=tribunal, incluir_movimentos=incluir_movimentos
+        numero, tribunal=tribunal, incluir_movimentos=incluir_movimentos, so_origem=so_origem
     )
     if json:
         print(jsonlib.dumps(resultado, ensure_ascii=False, indent=2))
