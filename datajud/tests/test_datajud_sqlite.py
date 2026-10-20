@@ -667,3 +667,36 @@ def test_carimbo_acompanha_a_ordem_das_gravacoes(tmp_path):
     with closing(sqlite3.connect(banco)) as con:
         horarios = [h for (h,) in con.execute("SELECT observado_em FROM consultas ORDER BY id")]
     assert len(horarios) == 8 and horarios == sorted(horarios)
+
+
+def test_checkpoint_incompleto_desiste_com_tudo_intacto(tmp_path, monkeypatch):
+    """Leitor segurando o WAL: nada se apaga, nada se troca, a versao volta."""
+    banco = tmp_path / "v1.sqlite"
+    _legado(banco, [("2026-10-01T00:00:00.000000+00:00", hit())])
+    monkeypatch.setattr(store, "_consolidar_wal", lambda *_a, **_k: False)
+    with pytest.raises(RuntimeError, match="se repete na proxima abertura"):
+        store.migrar(banco=banco)
+    with closing(sqlite3.connect(banco)) as con:
+        assert con.execute("PRAGMA user_version").fetchone()[0] == 0
+        assert con.execute("SELECT COUNT(*) FROM observacoes_documento").fetchone()[0] == 1
+    assert sorted(x.name for x in tmp_path.iterdir() if x.suffix == ".sqlite") == ["v1.sqlite"]
+    monkeypatch.undo()
+    assert store.migrar(banco=banco).origem == "legado"
+
+
+def test_consolidar_wal_detecta_leitor_segurando(tmp_path):
+    banco = tmp_path / "w.sqlite"
+    escritor = sqlite3.connect(banco, isolation_level=None)
+    escritor.execute("PRAGMA journal_mode = WAL")
+    escritor.execute("CREATE TABLE t (x)")
+    escritor.execute("INSERT INTO t VALUES (1)")
+    leitor = sqlite3.connect(banco, isolation_level=None)
+    leitor.execute("BEGIN")
+    leitor.execute("SELECT * FROM t").fetchall()
+    escritor.execute("INSERT INTO t VALUES (2)")
+    escritor.execute("PRAGMA busy_timeout = 50")
+    assert store._consolidar_wal(escritor, espera=0.3) is False, "o leitor segura frames"
+    leitor.execute("COMMIT")
+    leitor.close()
+    assert store._consolidar_wal(escritor, espera=1) is True
+    escritor.close()

@@ -615,8 +615,11 @@ def _migrar_arquivo(caminho: Path, *, troca_morta: bool = False) -> ResultadoMig
             resto.unlink(missing_ok=True)
         raise
     # O WAL do antigo entra no arquivo antes do backup e da troca: um -wal velho ao
-    # lado do novo seria aplicado a ele.
-    trava.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    # lado do novo seria aplicado a ele. Leitor demorado deixa o checkpoint
+    # incompleto sem erro (`busy`): confere-se o retorno e, sem consolidacao
+    # integral, desiste-se com tudo intacto (achado em pge-iperon/judicial#659).
+    if not _consolidar_wal(trava):
+        _desistir(caminho, trava, temporario, original)
     trava.close()
     carimbo = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup = caminho.with_name(f"{caminho.stem}-antes-v3-{carimbo}{caminho.suffix}")
@@ -632,6 +635,12 @@ def _migrar_arquivo(caminho: Path, *, troca_morta: bool = False) -> ResultadoMig
     prazo = relogio.monotonic() + 10
     while True:
         try:
+            wal = Path(f"{caminho}-wal")
+            if wal.exists() and wal.stat().st_size:
+                # Algo gravou depois do checkpoint (versao antiga da skill?): apagar o
+                # WAL perderia essas transacoes.
+                backup.unlink(missing_ok=True)
+                _desistir(caminho, None, temporario, original)
             for sufixo in ("-wal", "-shm"):
                 Path(f"{caminho}{sufixo}").unlink(missing_ok=True)
             os.replace(temporario, caminho)
@@ -655,6 +664,33 @@ def _migrar_arquivo(caminho: Path, *, troca_morta: bool = False) -> ResultadoMig
     for sufixo in ("-wal", "-shm"):
         Path(f"{temporario}{sufixo}").unlink(missing_ok=True)
     return resultado.model_copy(update={"backup": str(backup)})
+
+
+def _consolidar_wal(con: sqlite3.Connection, espera: float = 10.0) -> bool:
+    """`wal_checkpoint(TRUNCATE)` ate consolidar tudo; False se um leitor nao deixar."""
+    prazo = relogio.monotonic() + espera
+    while True:
+        ocupado, quadros, consolidados = con.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        if not ocupado and quadros == consolidados:
+            return True
+        if relogio.monotonic() >= prazo:
+            return False
+        relogio.sleep(0.2)
+
+
+def _desistir(caminho: Path, trava: sqlite3.Connection | None, temporario: Path, original: int) -> None:
+    """O antigo fica como estava (versao restaurada), e o temporario sai."""
+    if trava is not None:
+        trava.close()
+    restaura = sqlite3.connect(caminho, timeout=30)
+    restaura.execute(f"PRAGMA user_version = {original}")
+    restaura.commit()
+    restaura.close()
+    for resto in (temporario, Path(f"{temporario}-wal"), Path(f"{temporario}-shm")):
+        resto.unlink(missing_ok=True)
+    raise RuntimeError(
+        f"{caminho} tem leitura ou escrita em curso noutro processo; a conversao para a versao "
+        f"{VERSAO} se repete na proxima abertura (uv run scripts/datajud.py migrar)")
 
 
 def _construir(caminho: Path, temporario: Path) -> ResultadoMigracao:
