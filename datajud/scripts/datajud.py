@@ -35,7 +35,6 @@ Rode `python datajud.py -h` ou `python datajud.py <modo> -h` para detalhes.
 """
 
 import json
-from json import dumps as json_dumps
 import re
 import sqlite3
 import sys
@@ -44,6 +43,7 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from json import dumps as json_dumps
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
