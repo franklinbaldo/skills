@@ -69,6 +69,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sqlite3
 import threading
 import time as relogio
@@ -613,37 +614,44 @@ def _migrar_arquivo(caminho: Path, *, troca_morta: bool = False) -> ResultadoMig
         for resto in (temporario, Path(f"{temporario}-wal"), Path(f"{temporario}-shm")):
             resto.unlink(missing_ok=True)
         raise
+    # O WAL do antigo entra no arquivo antes do backup e da troca: um -wal velho ao
+    # lado do novo seria aplicado a ele.
+    trava.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     trava.close()
     carimbo = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup = caminho.with_name(f"{caminho.stem}-antes-v3-{carimbo}{caminho.suffix}")
+    # O backup nasce antes da troca (link fisico; copia onde o sistema de arquivos
+    # nao tem link), e a troca e um `os.replace` so: o caminho principal nunca fica
+    # vazio, nem se o processo morrer no meio (achado em pge-iperon/judicial#659).
     try:
-        # No Windows, quem esperava a trava ainda segura o arquivo por um instante:
-        # ao ver `EM_TROCA` ele o solta, e a troca tenta de novo.
-        prazo = relogio.monotonic() + 10
-        while True:
-            try:
-                caminho.replace(backup)
-                break
-            except PermissionError:
-                if relogio.monotonic() >= prazo:
-                    raise
+        os.link(caminho, backup)
+    except OSError:
+        shutil.copy2(caminho, backup)
+    # No Windows, quem esperava a trava ainda segura o arquivo por um instante: ao
+    # ver `EM_TROCA` ele o solta, e a troca tenta de novo.
+    prazo = relogio.monotonic() + 10
+    while True:
+        try:
+            for sufixo in ("-wal", "-shm"):
+                Path(f"{caminho}{sufixo}").unlink(missing_ok=True)
+            os.replace(temporario, caminho)
+            break
+        except PermissionError as erro:
+            if relogio.monotonic() < prazo:
                 relogio.sleep(0.2)
-    except PermissionError as erro:
-        # No Windows, arquivo aberto noutro processo nao se renomeia: o antigo volta
-        # a versao que tinha, e a conversao se repete na proxima abertura.
-        restaura = sqlite3.connect(caminho, timeout=30)
-        restaura.execute(f"PRAGMA user_version = {original}")
-        restaura.commit()
-        restaura.close()
-        temporario.unlink(missing_ok=True)
-        raise RuntimeError(
-            f"{caminho} esta aberto noutro processo; feche-o para converter o acervo para a versao "
-            f"{VERSAO} (uv run scripts/datajud.py migrar)") from erro
-    for sufixo in ("-wal", "-shm"):
-        anexo = Path(f"{caminho}{sufixo}")
-        if anexo.exists():
-            anexo.replace(Path(f"{backup}{sufixo}"))
-    temporario.replace(caminho)
+                continue
+            # O antigo segue no lugar: volta a versao que tinha, e a conversao se
+            # repete na proxima abertura.
+            restaura = sqlite3.connect(caminho, timeout=30)
+            restaura.execute(f"PRAGMA user_version = {original}")
+            restaura.commit()
+            restaura.close()
+            backup.unlink(missing_ok=True)
+            for resto in (temporario, Path(f"{temporario}-wal"), Path(f"{temporario}-shm")):
+                resto.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"{caminho} esta aberto noutro processo; feche-o para converter o acervo para a versao "
+                f"{VERSAO} (uv run scripts/datajud.py migrar)") from erro
     for sufixo in ("-wal", "-shm"):
         Path(f"{temporario}{sufixo}").unlink(missing_ok=True)
     return resultado.model_copy(update={"backup": str(backup)})
