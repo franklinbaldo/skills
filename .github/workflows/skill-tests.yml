@@ -49,3 +49,9 @@ jobs:
           uv run --quiet consulta-dare-sefin/scripts/test_consultar_dare.py
       - name: Run DataJud SQLite regression tests
         run: uv run --with pytest --with fastmcp --with cyclopts --with pydantic --with rich -- pytest -q datajud/tests
+      - name: Show proposed formatting changes
+        if: always()
+        run: |
+          uv run --with ruff -- ruff check --fix --diff datajud/scripts/datajud.py datajud/tests/test_datajud_sqlite.py || true
+          uv run scripts/check_markdown_format.py --fix --files datajud/SKILL.md
+          git diff -- datajud/SKILL.md
