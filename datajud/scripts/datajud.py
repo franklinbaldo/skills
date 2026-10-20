@@ -35,7 +35,9 @@ Rode `python datajud.py -h` ou `python datajud.py <modo> -h` para detalhes.
 """
 
 import json
+from json import dumps as json_dumps
 import re
+import sqlite3
 import sys
 import time
 import urllib.error
@@ -48,6 +50,8 @@ from typing import Annotated, Any, Literal
 import cyclopts
 from cyclopts import Parameter
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
+
+import datajud_store as store
 
 BASE = "https://api-publica.datajud.cnj.jus.br"
 # Chave PUBLICA do CNJ — a mesma para todo mundo, documentada na wiki do DataJud.
@@ -92,6 +96,20 @@ def _is_es_rejection(d):
     return any("rejected_execution" in (c.get("type", "")) for c in rc)
 
 
+def _guardar(tribunal, body, resposta=None, *, erro=None):
+    """Toda resposta e toda falha de rede viram eventos duraveis no SQLite."""
+    try:
+        if resposta is None:
+            store.registrar_erro(tribunal, body, erro or "erro sem descricao")
+        else:
+            store.registrar_resposta(
+                tribunal, body, resposta, resultado="erro" if erro else "ok",
+                erro=erro,
+            )
+    except (OSError, sqlite3.Error, ValueError, TypeError) as e:
+        raise RuntimeError(f"falha ao persistir a observacao no SQLite: {e}") from e
+
+
 def search(body, tribunal=DEFAULT_TRIBUNAL, timeout=90, tentativas=5):
     url = _endpoint(tribunal)
     data = json.dumps(body).encode("utf-8")
@@ -107,23 +125,44 @@ def search(body, tribunal=DEFAULT_TRIBUNAL, timeout=90, tentativas=5):
         )
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
-                d = json.loads(r.read().decode("utf-8"))
-            if _is_es_rejection(d):
-                ultimo_erro = "es_rejected_execution_exception (fila do ES cheia)"
+                resposta_bytes = r.read()
+            try:
+                d = json.loads(resposta_bytes.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as e:
+                ultimo_erro = f"resposta HTTP sem JSON valido: {e}"
+                _guardar(tribunal, body, erro=ultimo_erro)
                 if n < tentativas:
                     time.sleep(espera)
                     espera = min(espera * 2, 30)
                     continue
+                raise RuntimeError(ultimo_erro) from e
+
+            if not isinstance(d, dict):
+                _guardar(tribunal, body, erro="resposta nao e objeto JSON")
+                raise RuntimeError("resposta DataJud sem formato JSON esperado")
+            if "error" in d:
+                ultimo_erro = f"DataJud: {str(d['error'])[:300]}"
+                _guardar(tribunal, body, d, erro=ultimo_erro)
+                if _is_es_rejection(d) and n < tentativas:
+                    time.sleep(espera)
+                    espera = min(espera * 2, 30)
+                    continue
                 raise RuntimeError(ultimo_erro)
+            if not isinstance(d.get("hits"), dict):
+                _guardar(tribunal, body, d, erro="resposta sem hits")
+                raise RuntimeError("resposta DataJud sem hits: nao interpretar como ausencia")
+
+            _guardar(tribunal, body, d)
             return d
         except urllib.error.HTTPError as e:
             corpo = ""
             try:
-                corpo = e.read().decode("utf-8", "replace")[:200]
+                corpo = e.read().decode("utf-8", "replace")[:500]
             except Exception:
                 pass
+            ultimo_erro = f"HTTP {e.code}: {corpo}"
+            _guardar(tribunal, body, erro=ultimo_erro)
             if e.code == 429 and n < tentativas:
-                ultimo_erro = f"HTTP 429 (rate limit): {corpo}"
                 time.sleep(espera)
                 espera = min(espera * 2, 30)
                 continue
@@ -132,9 +171,10 @@ def search(body, tribunal=DEFAULT_TRIBUNAL, timeout=90, tentativas=5):
                     "HTTP 401: a chave publica provavelmente foi trocada pelo CNJ. "
                     "Pegue a atual em https://datajud-wiki.cnj.jus.br/api-publica/acesso/ "
                     "e atualize APIKEY no topo deste script.") from e
-            raise RuntimeError(f"HTTP {e.code}: {corpo}") from e
-        except urllib.error.URLError as e:
-            ultimo_erro = f"rede: {e.reason}"
+            raise RuntimeError(ultimo_erro) from e
+        except (urllib.error.URLError, TimeoutError) as e:
+            ultimo_erro = f"rede: {e}"
+            _guardar(tribunal, body, erro=ultimo_erro)
             if n < tentativas:
                 time.sleep(espera)
                 espera = min(espera * 2, 30)
@@ -193,6 +233,10 @@ def _tj(uf):
     return "tjdft" if uf == "df" else f"tj{uf}"
 
 
+def _tre(uf):
+    return "tre-dft" if uf == "df" else f"tre-{uf}"
+
+
 def tribunal_do_cnj(n):
     """Indice DataJud do tribunal de ORIGEM do numero CNJ, ou None se nao der.
 
@@ -208,7 +252,9 @@ def tribunal_do_cnj(n):
     if j == "8" and uf:
         return _tj(uf)
     if j == "6" and uf:
-        return f"tre-{uf}"
+        return _tre(uf)
+    if j == "7" and 1 <= tr <= 12:
+        return "stm"
     if j == "9" and uf in _TJM:
         return f"tjm{uf}"
     if j == "5" and tr in _TRT_UFS:
@@ -239,7 +285,7 @@ def familia_do_cnj(n):
         return []
     indices = [origem]
     for uf in _ufs_do_cnj(d):
-        indices += [_tj(uf), f"tre-{uf}"]
+        indices += [_tj(uf), _tre(uf)]
         indices += [f"trt{r}" for r, ufs in _TRT_UFS.items() if uf in ufs]
         indices += [f"trf{r}" for r, ufs in _TRF_UFS.items() if uf in ufs]
         if uf in _TJM:
@@ -752,7 +798,7 @@ def _arquivo_lote(saida: Path, numero: str) -> Path:
 
 
 def ler_processo(saida: Path, numero: str) -> ProcessoConsultado | None:
-    """O `ProcessoConsultado` gravado pelo `lote`, ou None se nao ha (ou nao e valido)."""
+    """Le o legado de JSON individual, se houver (SQLite e a fonte primaria)."""
     arquivo = _arquivo_lote(saida, numero)
     if not arquivo.exists():
         return None
@@ -772,7 +818,14 @@ def _ja_baixado(saida: Path, numero: str, so_origem: bool) -> bool:
 _CNJ = TypeAdapter(NumeroCNJ)
 
 
-def cmd_lote(arquivo: Path, saida: Path, trabalhadores: int, so_origem: bool, as_json: bool):
+def cmd_lote(arquivo: Path, saida: Path | None, trabalhadores: int,
+             so_origem: bool, as_json: bool):
+    """SQLite e o padrao: cada execucao observa novamente a fonte.
+
+    --saida preserva a exportacao JSON antiga, com a semantica antiga de pular
+    JSONs ja completos. Em ambos os casos, cada chamada real a search() registra
+    todas as respostas no SQLite append-only.
+    """
     numeros, invalidos = [], []
     for linha in arquivo.read_text(encoding="utf-8").splitlines():
         if not linha.strip():
@@ -783,26 +836,44 @@ def cmd_lote(arquivo: Path, saida: Path, trabalhadores: int, so_origem: bool, as
             invalidos.append(linha.strip())
     numeros = list(dict.fromkeys(numeros))
     sem_tribunal = [n for n in numeros if tribunal_do_cnj(n) is None]
-    pendentes = [n for n in numeros
-                 if tribunal_do_cnj(n) and not _ja_baixado(saida, n, so_origem)]
+    pendentes = [
+        n for n in numeros
+        if tribunal_do_cnj(n) and (
+            saida is None or not _ja_baixado(saida, n, so_origem)
+        )
+    ]
     print(f"{len(numeros)} processos; {len(pendentes)} a consultar"
-          f"{' (so na origem)' if so_origem else ' (familia: estado de origem + superiores)'}",
+          f"{' (so na origem)' if so_origem else ' (familia: origem + outros + superiores)'}",
           file=sys.stderr)
-    resultado = consultar(ConsultaLote(numeros=pendentes, so_origem=so_origem,
-                                       trabalhadores=trabalhadores))
-    resumo = ResumoLote(processos=len(numeros), em_disco=0, encontrados=0,
-                        sem_tribunal=sem_tribunal, invalidos=invalidos, saida=str(saida))
+    resultado = consultar(ConsultaLote(
+        numeros=pendentes, so_origem=so_origem, trabalhadores=trabalhadores
+    ))
+    destino_descr = str(saida or store.caminho_banco())
+    resumo = ResumoLote(
+        processos=len(numeros), em_disco=0, encontrados=0,
+        sem_tribunal=sem_tribunal, invalidos=invalidos, saida=destino_descr,
+    )
+    validos = {}
     for item in resultado.values():
         if item.falhas:
-            # Indice que nao respondeu nao e ausencia: nada vai a disco, a proxima execucao refaz.
-            resumo.falhas.append(FalhaLote(processo=item.processo,
-                                           indices=[f.indice for f in item.falhas]))
+            resumo.falhas.append(FalhaLote(
+                processo=item.processo, indices=[f.indice for f in item.falhas]
+            ))
             continue
-        destino = _arquivo_lote(saida, item.processo)
-        destino.parent.mkdir(parents=True, exist_ok=True)
-        destino.write_text(item.para_disco(), encoding="utf-8")
+        validos[so_digitos(item.processo)] = item
+        if saida is not None:
+            # Compatibilidade: exporta JSON apenas quando solicitado; cada
+            # observacao vinda da rede ja foi armazenada no banco imutavel.
+            destino = _arquivo_lote(saida, item.processo)
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            temporario = destino.with_suffix(".json.tmp")
+            temporario.write_text(item.para_disco(), encoding="utf-8")
+            temporario.replace(destino)
     for n in numeros:
-        gravado = ler_processo(saida, n) if tribunal_do_cnj(n) else None
+        if tribunal_do_cnj(n) is None:
+            continue
+        gravado = (ler_processo(saida, n) if saida is not None
+                   else validos.get(so_digitos(n)))
         if gravado is None:
             continue
         resumo.em_disco += 1
@@ -810,22 +881,22 @@ def cmd_lote(arquivo: Path, saida: Path, trabalhadores: int, so_origem: bool, as
         outros = [t for t in gravado.tribunais if t != gravado.origem]
         if outros:
             resumo.tambem_em_outro_tribunal.append(
-                PresencaForaDaOrigem(processo=gravado.processo, tambem_em=outros))
+                PresencaForaDaOrigem(processo=gravado.processo, tambem_em=outros)
+            )
     if as_json:
         print(resumo.model_dump_json(indent=2))
     else:
-        print(f"{resumo.processos} processos; {resumo.em_disco} em disco "
-              f"({resumo.encontrados} encontrados no DataJud) em {saida}")
+        print(f"{resumo.processos} processos; {resumo.em_disco} observados e "
+              f"{resumo.encontrados} encontrados no DataJud, em {destino_descr}")
         if resumo.tambem_em_outro_tribunal:
-            print(f"  {len(resumo.tambem_em_outro_tribunal)} tambem em outro tribunal "
-                  "(superior ou outro ramo do estado)")
+            print(f"  {len(resumo.tambem_em_outro_tribunal)} tambem em outro tribunal")
         if resumo.sem_tribunal:
-            print("  sem tribunal deduzivel pelo numero (malformado ou STF, fora da API): "
-                  f"{', '.join(resumo.sem_tribunal)}")
+            print(f"  {len(resumo.sem_tribunal)} sem indice deduzivel")
         if resumo.invalidos:
-            print(f"  linhas que nao sao numero CNJ: {', '.join(resumo.invalidos)}")
+            print(f"  {len(resumo.invalidos)} linhas invalidas")
         if resumo.falhas:
-            print(f"  {len(resumo.falhas)} processo(s) com indice que nao respondeu — rode de novo")
+            print(f"  {len(resumo.falhas)} processos com indice sem resposta — "
+                  "nao interpretados como ausentes")
     return 1 if resumo.falhas else 0
 
 
@@ -898,25 +969,24 @@ def processo(
 def lote(
     arquivo: Path,
     *,
-    saida: Path = Path("datajud"),
+    saida: Path | None = None,
     trabalhadores: int = 4,
     so_origem: bool = False,
     json: AsJson = False,
 ) -> int:
-    """Baixa muitos processos de uma vez e guarda a resposta crua de cada um.
+    """Observa muitos processos e acrescenta resultados ao SQLite append-only.
 
-    Cada numero e procurado na sua familia (origem, tribunais do estado de
-    origem e superiores), em consultas de ate 100 processos por indice. Grava
-    `<saida>/<origem>/<numero>.json` com os indices consultados e os registros
-    achados em qualquer deles (cada um com `_index`), e pula o que ja esta em
-    disco; indice que nao responde nao grava nada, entao rodar de novo retoma.
+    Cada numero e procurado na familia (origem, estado, superiores) em lotes
+    de ate 100 numeros por indice. O padrao nao cria JSON e reconsulta a API
+    para registrar a data/hora de cada nova observacao; as versoes anteriores
+    nunca sao sobrescritas. --saida habilita exportacao JSON legada.
 
     Parameters
     ----------
     arquivo
         texto com um numero de processo por linha (com ou sem mascara).
     saida
-        diretorio dos JSON (padrao ./datajud).
+        exporta tambem JSONs nesse diretorio (opcional; legado).
     trabalhadores
         consultas simultaneas (padrao 4).
     so_origem
@@ -1009,6 +1079,38 @@ def codigos(
         emite JSON em vez do relatorio legivel.
     """
     return cmd_codigos(termo, por, tribunal, limite, json)
+
+
+@app.command
+def banco(*, json: AsJson = False) -> int:
+    """Estatisticas do SQLite persistente, sem acessar a API."""
+    dados = store.estatisticas()
+    if json:
+        print(json_dumps(dados, ensure_ascii=False, indent=2))
+    else:
+        print(f"SQLite: {dados['banco']}")
+        print(f"{dados['consultas']} consultas; {dados['versoes']} versoes "
+              f"imutaveis; {dados['observacoes']} observacoes")
+    return 0
+
+
+@app.command
+def historico(
+    numero: str,
+    *,
+    limite: int = 100,
+    json: AsJson = False,
+) -> int:
+    """Consulta o historico local de versoes, sem acessar a API."""
+    linhas = store.historico(numero, limite=limite)
+    if json:
+        print(json_dumps(linhas, ensure_ascii=False, indent=2))
+    else:
+        print(f"{len(linhas)} versoes registradas de {cnj(numero)}")
+        for item in linhas:
+            print(f"  {item['ultima_vista']} {item['tribunal']} {item['grau']} "
+                  f"sha256={item['sha256'][:12]} observacoes={item['observacoes']}")
+    return 0
 
 
 def main(tokens=None) -> int:
