@@ -48,10 +48,9 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import cyclopts
+import datajud_store as store
 from cyclopts import Parameter
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
-
-import datajud_store as store
 
 BASE = "https://api-publica.datajud.cnj.jus.br"
 # Chave PUBLICA do CNJ — a mesma para todo mundo, documentada na wiki do DataJud.
