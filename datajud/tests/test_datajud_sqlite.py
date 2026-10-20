@@ -631,3 +631,24 @@ def test_dois_processos_convertendo_o_mesmo_banco(tmp_path):
     assert banco.exists() and store.estatisticas(banco=banco).versao == store.VERSAO
     assert len(list(tmp_path.glob("v1-antes-v3-*.sqlite"))) == 1
     assert not list(tmp_path.glob("*em-construcao*")), "nenhum temporario sobra"
+
+
+def test_troca_que_falha_deixa_o_antigo_no_lugar(tmp_path, monkeypatch):
+    """O caminho principal nunca fica vazio: falhou a troca, o antigo segue intacto."""
+    banco = tmp_path / "v1.sqlite"
+    _legado(banco, [("2026-10-01T00:00:00.000000+00:00", hit())])
+
+    def recusa(*_a, **_k):
+        raise PermissionError("aberto")
+
+    monkeypatch.setattr(store.os, "replace", recusa)
+    monkeypatch.setattr(store.relogio, "monotonic", iter(range(0, 10_000, 100)).__next__)
+    with pytest.raises(RuntimeError, match="aberto noutro processo"):
+        store.migrar(banco=banco)
+    with closing(sqlite3.connect(banco)) as con:
+        assert con.execute("PRAGMA user_version").fetchone()[0] == 0, "versao restaurada"
+        assert con.execute("SELECT COUNT(*) FROM observacoes_documento").fetchone()[0] == 1
+    assert sorted(x.name for x in tmp_path.iterdir() if x.suffix == ".sqlite") == ["v1.sqlite"]
+
+    monkeypatch.undo()
+    assert store.migrar(banco=banco).origem == "legado", "a proxima abertura converte"
