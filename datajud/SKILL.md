@@ -50,7 +50,8 @@ registrado, não o que o ato fundamentou.
    **uma distribuição**.
 2. Use o modo mais barato que resolve a pergunta. **Mais de um processo é sempre
    `lote`**, nunca um laço de `processo`: a API cobra por requisição, não por
-   processo (seção "Lote é o padrão").
+   processo (seção "Lote é o padrão"). Todas as respostas recebidas são
+   acrescentadas automaticamente ao SQLite append-only.
 3. Não puxe movimentos completos quando capa/último estado bastarem.
 4. Quando o próximo passo depender do conteúdo de um ato, pare e roteie para a
    fonte de teor.
@@ -127,6 +128,56 @@ Cada registro devolvido carrega o tribunal onde foi achado (`_index` no cru,
 `tribunal` na saída), e a resposta lista os índices **consultados** — ausência
 só significa algo para quem foi consultado e respondeu.
 
+## Acervo SQLite: observações imutáveis por padrão
+
+**Toda chamada real à API** passa por datajud.search(), incluindo a tool MCP,
+processo, lote, buscar, contar, facetas e codigos. O transporte registra
+automaticamente a resposta em um único banco SQLite persistente:
+
+- Padrão: diretório de dados do usuário (Linux: ~/.local/share/datajud/acervo.sqlite;
+  Windows: %LOCALAPPDATA%/datajud/acervo.sqlite).
+- Para usar outro local persistente: variável de ambiente DATAJUD_SQLITE.
+- O banco NÃO deve ir para o Git nem para caches efêmeros. Preserve-o com backup
+  privado; metadados processuais podem exigir controle de acesso.
+- Execute uv run scripts/datajud.py banco para mostrar caminho e totais.
+- Execute uv run scripts/datajud.py historico NUMERO --json para consultar
+  versões locais sem acessar a API. O agente também pode consultar o SQLite.
+
+O modelo é **somente de acréscimo**, inclusive quando o processo muda:
+
+1. consultas: um evento por tentativa/resposta, com instante UTC, tribunal,
+   corpo da requisição, status e metadados completos da resposta. Retorna 0
+   hits? A consulta e o recorte continuam registrados. Falha HTTP/ES? Registra
+   erro, jamais presume ausência.
+2. versoes_documento: cada documento DataJud (_source completo, _index,
+   _id) possui identidade lógica e SHA-256 do conteúdo. Se idêntico à versão
+   anterior, não duplica. Se retificado, **nova linha** com outro hash; a
+   versão anterior não é apagada.
+3. observacoes_documento: **uma linha nova em cada nova observação** de cada
+   documento, apontando para a versão correspondente e a consulta que a
+   encontrou, mesmo quando o conteúdo está idêntico. Atributos de busca
+   transitórios, como _score, ficam na observação.
+
+Triggers SQLite impedem UPDATE e DELETE nas três tabelas. Nenhuma consulta
+reescreve uma versão histórica. A data do **registro de um movimento no
+tribunal** pode ser anterior à data de **observação pela skill**; mantenha
+essas duas dimensões separadas.
+
+Exemplo SQL para auditar um número CNJ (20 dígitos):
+
+~~~sql
+SELECT v.tribunal, v.grau, v.sha256, o.observado_em, v.conteudo_json
+FROM observacoes_documento AS o
+JOIN versoes_documento AS v ON v.id = o.versao_id
+WHERE v.numero_processo = '70095117120248220001'
+ORDER BY o.observado_em DESC, o.id DESC;
+~~~
+
+O SQLite é um **histórico de observações**, não espelho vivo. Processos
+podem receber novos atos, correções ou até remoções na fonte. Para obter
+nova observação, volte a consultar o DataJud; uma consulta feita no mês
+passado não prova a situação atual.
+
 ## Lote é o padrão
 
 Cada requisição ao DataJud leva de segundos a dezenas de segundos (medido em
@@ -136,27 +187,28 @@ para 3.448 processos só na origem. Sempre que houver **mais de um processo**,
 use-o:
 
 ```bash
-uv run scripts/datajud.py lote numeros.txt --saida .cache/datajud
-uv run scripts/datajud.py lote numeros.txt --saida .cache/datajud --so-origem   # mais rápido, sem família
+uv run scripts/datajud.py lote numeros.txt                           # SQLite, nova observação
+uv run scripts/datajud.py lote numeros.txt --so-origem                # só índice de origem
+uv run scripts/datajud.py lote numeros.txt --saida .cache/datajud     # JSON legado opcional
 ```
 
 - `numeros.txt` tem um CNJ por linha, com ou sem máscara; duplicatas caem.
 - Cada índice da família vai em consultas `terms` de até 100 processos, em
   paralelo (`--trabalhadores`, padrão 4). A família multiplica as consultas
   (oito índices para um número do TJRO), não o custo por processo.
-- A resposta **crua** de cada processo fica em `<saida>/<origem>/<numero>.json`:
-  os índices consultados e os registros achados em qualquer deles (capa e
-  movimentos de todos os graus), inclusive o vazio de quem não foi encontrado.
-- Rodar de novo pula o que já está em disco. Índice que não responde (504 do
-  balanceador, rede) **não grava nada** daquele processo: a falha não vira
-  "não encontrado", e a próxima execução refaz.
-- Não jogue a resposta fora: guardada, ela responde as perguntas seguintes
-  (situação, instância, último marco, passagem por superior) sem nova
-  requisição. Ponha a saída em diretório de cache fora do controle de versão.
+- Por padrão, todas as respostas vão para o SQLite, sem criar milhares de JSONs.
+  Rodar novamente observa a fonte de novo e registra nova data/hora; se o
+  documento estiver igual, apenas a observação é acrescentada.
+- `--saida` é compatibilidade opcional: exporta também JSON por processo e
+  mantém a retomada antiga nesse diretório. A história canônica é o SQLite.
+- Índice sem resposta (504, rede etc.) registra um evento de falha, nunca
+  ausência do processo. Versões e observações anteriores permanecem intactas.
+- Use os resultados acumulados para análises posteriores com SQL, sem novas
+  requisições desnecessárias. Para atualizar a informação, faça nova consulta.
 
-O resumo final diz quantos estão em disco, quantos foram encontrados, quais
-apareceram também em outro tribunal, quais números não revelam o tribunal e
-quais processos ficaram com índice sem resposta (código de saída 1).
+O resumo final diz quantos foram observados e encontrados, quais aparecem
+em outro tribunal, quais números não revelam índice e quais tiveram índice
+sem resposta (código de saída 1). Uma nova execução registra nova observação.
 
 ## Movimento e documento envelhecem em ritmos diferentes
 
@@ -209,7 +261,7 @@ uv run scripts/datajud.py facetas --por classe
 uv run scripts/datajud.py facetas --classe 1116 --por orgao --limite 10
 ```
 
-Em `buscar`, `contar`, `facetas` e `codigos`, use `--tribunal stj|stf|trf1|tjsp|...`
+Em `buscar`, `contar`, `facetas` e `codigos`, use `--tribunal stj|trf1|tjsp|...`
 quando necessário; o padrão é TJRO. Em `processo` e `lote`, a busca cobre a
 família do número CNJ.
 
