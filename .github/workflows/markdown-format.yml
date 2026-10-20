@@ -34,8 +34,3 @@ jobs:
         # No --base flag: the script reads GITHUB_ACTIONS/GITHUB_BASE_REF
         # itself and picks the right diff base for pull_request vs push.
         run: uv run scripts/check_markdown_format.py
-      - name: Format diff (temporary review)
-        if: always()
-        run: |
-          uv run scripts/check_markdown_format.py --fix --files datajud/SKILL.md
-          git diff -- datajud/SKILL.md
