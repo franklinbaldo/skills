@@ -17,8 +17,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-import datajud as dj  # noqa: E402
 import datajud_store as store  # noqa: E402
+import datajud as dj  # noqa: E402
 
 
 NUMERO = "70095117120248220001"
