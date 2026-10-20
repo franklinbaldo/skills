@@ -140,6 +140,18 @@ def _identidade(hit: dict[str, Any], tribunal: str) -> str:
     )
 
 
+def _projecao(requisicao: dict[str, Any]) -> str | None:
+    """Assinatura do recorte de campos pedido (`_source`), ou None se veio o documento inteiro.
+
+    `buscar` pede so a capa; gravar esse recorte como versao do documento faria
+    a mesma fonte parecer ter mudado ao ser consultada depois por `processo`.
+    """
+    recorte = requisicao.get("_source") if isinstance(requisicao, dict) else None
+    if recorte is None or recorte is True:
+        return None
+    return _sha(_json(recorte))[:16]
+
+
 def _envelope(resposta: dict[str, Any]) -> dict[str, Any]:
     """Tudo da resposta exceto hits.hits, guardados com deduplicacao por documento."""
     envelope = dict(resposta)
@@ -175,6 +187,7 @@ def registrar_resposta(
     if not isinstance(hits, list):
         raise ValueError("hits.hits deve ser uma lista")
     observado_em = _agora()
+    projecao = _projecao(requisicao)
     with _LOCK:
         con = _conexao(banco)
         try:
@@ -197,6 +210,9 @@ def registrar_resposta(
                         {"_index": indice, "_id": hit.get("_id"), "_source": fonte}
                     )
                     identidade = _identidade(hit, tribunal)
+                    if projecao:
+                        # Recorte tem linhagem propria: nunca vira versao do documento completo.
+                        identidade = f"{identidade}|projecao:{projecao}"
                     digest = _sha(conteudo)
                     con.execute(
                         "INSERT OR IGNORE INTO versoes_documento "

@@ -166,3 +166,20 @@ def test_mcp_procura_na_familia_e_marca_o_tribunal(monkeypatch):
     vistos.clear()
     mod.datajud_processo("0000774-14.2019.4.01.4102", tribunal="trf1")
     assert vistos == ["trf1"], "tribunal explícito consulta só ele"
+
+
+def test_mcp_so_origem_consulta_so_o_tribunal_de_origem(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("DATAJUD_SQLITE", str(tmp_path / "datajud.sqlite"))
+    vistos: list[str] = []
+
+    def search(body, tribunal="tjro", **_):
+        vistos.append(tribunal)
+        return {"hits": {"total": {"value": 0}, "hits": []}}
+
+    monkeypatch.setattr(dj, "search", search)
+    mod.datajud_processo("0000774-14.2019.4.01.4102", so_origem=True)
+    assert vistos == ["trf1"]
+
+    vistos.clear()
+    mod.app(["processo", "0000774-14.2019.4.01.4102", "--so-origem", "--json"], result_action="return_value")
+    assert vistos == ["trf1"], "a CLI da MCP aceita --so-origem, como a SKILL.md promete"
