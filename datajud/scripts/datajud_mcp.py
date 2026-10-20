@@ -403,7 +403,7 @@ def processo(
         print(jsonlib.dumps(resultado, ensure_ascii=False, indent=2))
     else:
         _render_human(resultado, incluir_movimentos=incluir_movimentos)
-    return 0 if resultado.get("encontrado") and resultado.get("completo") else 1
+    return 0 if resultado.get("encontrado") and resultado.get("completo", True) else 1
 
 
 @app.default
