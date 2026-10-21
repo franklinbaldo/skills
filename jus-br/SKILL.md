@@ -47,6 +47,32 @@ O fluxo implementado conecta-se diretamente à infraestrutura da PDPJ/CNJ sem ne
 5. O usuário copia a URL final da barra de endereços e a insere no prompt da CLI.
 6. A CLI valida o parâmetro `state` e tenta trocar o `authorization_code` no Token Endpoint via TLS. O sucesso depende da confirmação do cliente OIDC e do callback cadastrados no provedor.
 
+### Conector Bookmarklet (Captura Instantânea de Sessão)
+
+O conector Bookmarklet permite sincronizar a sessão de um navegador já autenticado (via Gov.br ou Certificado Digital) com o terminal, com **zero digitação de senhas**:
+
+1. **Instalação via Página Estática (Recomendada):**
+   Execute no terminal:
+
+   ```powershell
+   uv run jus-br/cli.py auth bookmarklet
+   ```
+
+   Isso abrirá a página estática local `bookmarklet.html`. Nela, basta arrastar o botão **⭐ ⚖️ Capturar Sessão Jus.br / PDPJ** diretamente para a barra de favoritos. A página também pode ser servida estaticamente via GitHub Pages.
+
+2. **Instalação Manual no Navegador:**
+   Crie um novo favorito no seu navegador (Chrome, Edge, Firefox, Brave) com o nome `⚖️ Conectar PDPJ` e cole o código abaixo no campo **URL**:
+
+   ```javascript
+   javascript:(function(){try{function notificar(msg,ok){var id='jusbr-toast';var old=document.getElementById(id);if(old)old.remove();var d=document.createElement('div');d.id=id;d.style.cssText='position:fixed;top:24px;right:24px;z-index:99999999;background:'+(ok?'#065f46':'#1e293b')+';color:#ffffff;padding:16px 22px;border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,0.35);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:14px;max-width:380px;line-height:1.5;transition:all 0.3s;border-left:5px solid '+(ok?'#10b981':'#38bdf8')+';';d.innerHTML=msg;document.body.appendChild(d);if(ok){setTimeout(function(){if(d&&d.parentNode)d.remove();},6000);}}function salvarToken(token){if(!token)return false;var clean=token.trim();if(clean.toLowerCase().indexOf('bearer ')===0)clean=clean.substring(7).trim();if(clean.indexOf('eyJ')!==0)return false;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(clean).then(function(){notificar('<strong>✓ Sessão PDPJ capturada com sucesso!</strong><br>O token foi copiado para a Área de Transferência. Retorne ao seu terminal PowerShell.',true);}).catch(function(){prompt('Copie o token abaixo (Ctrl+C) e cole no terminal:',clean);});}else{prompt('Copie o token abaixo (Ctrl+C) e cole no terminal:',clean);}return true;}function varrerTokens(){if(window.keycloak&&window.keycloak.token)return window.keycloak.token;if(window.kc&&window.kc.token)return window.kc.token;if(window.__keycloak&&window.__keycloak.token)return window.__keycloak.token;for(var i=0;i<localStorage.length;i++){var v=localStorage.getItem(localStorage.key(i));if(v&&v.indexOf('eyJ')!==-1){var m=v.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(m)return m[0];}}for(var j=0;j<sessionStorage.length;j++){var sv=sessionStorage.getItem(sessionStorage.key(j));if(sv&&sv.indexOf('eyJ')!==-1){var sm=sv.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(sm)return sm[0];}}if(document.cookie&&document.cookie.indexOf('eyJ')!==-1){var cm=document.cookie.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(cm)return cm[0];}for(var k in window){try{var obj=window[k];if(obj&&typeof obj==='object'){if(typeof obj.token==='string'&&obj.token.indexOf('eyJ')===0)return obj.token;if(typeof obj.idToken==='string'&&obj.idToken.indexOf('eyJ')===0)return obj.idToken;if(typeof obj.accessToken==='string'&&obj.accessToken.indexOf('eyJ')===0)return obj.accessToken;}}catch(e){}}return null;}var achado=varrerTokens();if(achado&&salvarToken(achado)){return;}if(!window.__jusbr_listener_active){window.__jusbr_listener_active=true;var origFetch=window.fetch;if(origFetch){window.fetch=function(url,opts){try{if(opts&&opts.headers){var h=opts.headers;var a=null;if(typeof h.get==='function'){a=h.get('Authorization')||h.get('authorization');}else if(typeof h==='object'){a=h.Authorization||h.authorization;}if(a&&typeof a==='string'){var m=a.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(m)salvarToken(m[0]);}}catch(err){}return origFetch.apply(this,arguments);};}var origOpen=XMLHttpRequest.prototype.open;var origSetHeader=XMLHttpRequest.prototype.setRequestHeader;XMLHttpRequest.prototype.setRequestHeader=function(header,value){try{if(header&&header.toLowerCase()==='authorization'&&value){var m=value.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(m)salvarToken(m[0]);}}catch(err){}return origSetHeader.apply(this,arguments);};}notificar('<strong>⚖️ Conector Jus.br Ativado!</strong><br>Dê um clique em qualquer botão ou menu da página (ex: Consultar) para capturar a sessão automaticamente.',false);}catch(ex){alert('Erro no conector Jus.br: '+ex.message);}})();
+   ```
+
+3. **Como Utilizar no Dia a Dia:**
+
+   - Acesse o [Portal de Serviços da PDPJ](https://portaldeservicos.pdpj.jus.br) ou [Jus.br](https://www.jus.br) com seu certificado ou Gov.br.
+   - Clique no favorito: uma notificação visual verde aparecerá confirmando a cópia (ou ativará o monitor inteligente de cliques na tela).
+   - Retorne ao terminal PowerShell onde a CLI estiver aguardando: a sessão é detectada e gravada automaticamente no Windows Credential Manager.
+
 ### Armazenamento Protegido (Windows Credential Manager / Keyring)
 
 - Os tokens nunca são gravados em arquivos de texto plano ou variáveis de ambiente.
