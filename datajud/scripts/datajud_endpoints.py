@@ -13,10 +13,12 @@ import datetime
 import hashlib
 import json
 import os
-from pathlib import Path
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
+
+import cyclopts
 
 BASE = "https://api-publica.datajud.cnj.jus.br"
 UFS = ("ac", "al", "ap", "am", "ba", "ce", "df", "es", "go", "ma",
