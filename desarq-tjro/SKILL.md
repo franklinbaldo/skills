@@ -66,7 +66,7 @@ Depois clicar em "Minhas solicitações" (dispara chamadas à API) e usar `fetch
 | GET    | `guia/existeSolicitacao/{numero}` | `true`/`false` (pedido deste usuário em andamento)                                                                                                                                                                                                                                  |
 | GET    | `guia/valortaxa`                  | número em texto (ex.: `153.1`)                                                                                                                                                                                                                                                      |
 
-**Duplicidade:** `processo/numero` pode trazer 2+ registros do mesmo processo (ids diferentes, mesmos dados — cadastro duplicado no arquivo, ou volumes distintos). O front usa `[0]`. No pré-voo, sinalizar quando houver mais de um, mostrando `id`, `volume` e `caixa`; se os volumes diferirem, perguntar se pede todos.
+**Duplicidade:** `processo/numero` pode trazer 2+ registros do mesmo processo (ids diferentes, mesmos dados — cadastro duplicado no arquivo, ou volumes distintos). O front usa `[0]`. No pré-voo, sinalizar quando houver mais de um, mostrando `id`, `volume` e `caixa`; se os volumes diferirem, perguntar se pede todos. Persistir a **seleção explícita de pares número/ID**. Atenção: `existeSolicitacao/{numero}` consulta por número, não volume; após criar o primeiro volume, pode bloquear os outros do mesmo processo. **Nunca contornar a proteção de duplicidade automaticamente**: suspender e verificar com o DESARQ se pedidos por volume são permitidos.
 
 ### Criar solicitação
 
@@ -116,30 +116,84 @@ Corpo de `guiadispensada` (GuiaModel do front):
 2. Pedir uma vez: telefone, modo (padrão Digitalizado), e qual pedido anterior fornece o comprovante (ou um PDF novo).
 3. Pré-voo (só GETs): para cada número, `existeSolicitacao` + `processo/numero`. Tabela para o usuário: número, encontrado?, registros (duplicidade), vara, ação, partes, caixa, já existe pedido?
 4. Esperar confirmação explícita do lote. Criar solicitação é ato com efeito externo.
-5. Enviar o PRIMEIRO item, conferir a resposta e o pedido em `desarquivamento/busca?andamento=pendentes`; só então o resto, com `sleep 2` entre itens.
+5. Registrar **cada volume autorizado** no arquivo `selecionados.tsv` (`numero<TAB>idProcesso`), uma linha por volume, na ordem escolhida. Não inferir seleção a partir de `.[0]`; não incluir registros não autorizados nem IDs repetidos.
+6. Executar `FASE=primeiro` para **uma única solicitação**. Qualquer erro HTTP, falha de transporte ou ausência de confirmação na busca de pendentes bloqueia o lote. Mesmo com sucesso, a execução termina aqui.
+7. Conferir manualmente a solicitação criada (processo, volume/`idProcesso`, status, natureza e ausência de duplicidade) na busca de pendentes. Só após essa conferência, e com confirmação humana expressa, executar `FASE=restante PRIMEIRO_VALIDADO=sim`. Sem essa confirmação não continuar.
+8. Relatório por volume selecionado: processo, `idProcesso`, volume, resultado (criada / já existia / não encontrado / erro HTTP + `mensagem`). O arquivo de seleção deve refletir o pré-voo já aprovado; não usar resultado novo da API para ampliar o lote.
 6. Relatório: processo, vara, resultado (criada / já existia / não encontrado / erro HTTP + `mensagem`).
 
 ```bash
-set -u; desarq_token
-ME=$(curl -sS "${H[@]}" "$API/api/usuarios/me")
-PDF=$(curl -sS "${H[@]}" "$API/desarquivamento/comprovante/$ID_BASE")   # ou: "data:application/pdf;base64,$(base64 -w0 arquivo.pdf)"
-printf %s "$PDF" > /tmp/desarq_pdf.txt
+# Entrada aprovada no pré-voo: selecionados.tsv (numero<TAB>idProcesso),
+# UMA linha por volume escolhido, inclusive múltiplos volumes do mesmo processo.
+# FASE=primeiro: envia somente a primeira linha e TERMINA.
+# FASE=restante PRIMEIRO_VALIDADO=sim: apenas após verificação humana do primeiro POST.
+set -euo pipefail
+: "${TELEFONE:?Informe o telefone}"
+: "${ID_BASE:?Informe o pedido-base autorizado}"
+: "${DESARQ_RT:?Autentique-se na sessão do usuário}"
+: "${API:=https://desarquivamento-back.tjro.jus.br/back}"
+: "${FASE:=primeiro}"
+[[ "$FASE" == primeiro || "$FASE" == restante ]] || { echo "FASE inválida" >&2; exit 1; }
+if [[ "$FASE" == restante && "${PRIMEIRO_VALIDADO:-}" != sim ]]; then
+  echo "BLOQUEADO: confira o primeiro POST e o registro em pendentes antes de continuar" >&2
+  exit 1
+fi
+[[ -s selecionados.tsv ]] || { echo "Falta seleção aprovada de volumes" >&2; exit 1; }
+# Rejeitar duplicidades e linhas malformadas; não transmitir dados não selecionados.
+awk -F '\t' 'NF!=2 || $1 !~ /^[0-9]+$/ || $2 !~ /^[0-9]+$/ || seen[$1 FS $2]++ {exit 1}' selecionados.tsv ||
+  { echo "Seleção inválida/duplicada" >&2; exit 1; }
+desarq_token
+ME=$(curl -fsS "${H[@]}" "$API/api/usuarios/me")
+PDF=$(curl -fsS "${H[@]}" "$API/desarquivamento/comprovante/$ID_BASE")
+[[ "$PDF" == data:application/pdf\;base64,* ]] || { echo "Comprovante inválido" >&2; exit 1; }
 MODO=${MODO:-Digitalizado}
-while read -r raw; do
-  n=$(tr -cd '0-9' <<<"$raw"); [ -z "$n" ] && continue
+[[ "$MODO" == Digitalizado || "$MODO" == Físico ]] || exit 1
+if [[ "$FASE" == primeiro ]]; then
+  linhas=$(head -n 1 selecionados.tsv)
+else
+  linhas=$(tail -n +2 selecionados.tsv)
+fi
+while IFS=$'\t' read -r n pid; do
+  [[ -n "$n" ]] || continue
   desarq_token
-  [ "$(curl -sS "${H[@]}" "$API/guia/existeSolicitacao/$n")" = "true" ] && { echo "$n;JA_EXISTE"; continue; }
-  P=$(curl -sS "${H[@]}" "$API/processo/numero/$n")
-  [ "$(jq 'length' <<<"$P" 2>/dev/null || echo 0)" = "0" ] && { echo "$n;NAO_ENCONTRADO"; continue; }
-  body=$(jq -n --argjson me "$ME" --argjson p "$(jq '.[0]' <<<"$P")" --arg n "$n" --arg tel "$TELEFONE" \
-    --arg modo "$MODO" --rawfile pdf /tmp/desarq_pdf.txt '{
+  # Confere a seleção contra o cadastro real, sem escolher automaticamente o primeiro volume.
+  P=$(curl -fsS "${H[@]}" "$API/processo/numero/$n") || exit 1
+  p=$(jq -ce --argjson id "$pid" '[.[] | select(.id == $id)] | if length == 1 then .[0] else error("volume ausente ou ambíguo") end' <<<"$P") || exit 1
+  # A API existeSolicitacao é por número; bloqueia duplicidade, inclusive durante o lote.
+  existe=$(curl -fsS "${H[@]}" "$API/guia/existeSolicitacao/$n") || exit 1
+  if [[ "$existe" == true ]]; then
+    echo "$n;$pid;JA_EXISTE_OU_PENDENTE"
+    # Para múltiplos volumes do mesmo número, não pular silenciosamente: exigir verificação.
+    exit 1
+  fi
+  [[ "$existe" == false ]] || { echo "Resposta de duplicidade inesperada" >&2; exit 1; }
+  body=$(jq -n --argjson me "$ME" --argjson p "$p" --arg n "$n" --arg tel "$TELEFONE" \
+    --arg modo "$MODO" --arg pdf "$PDF" '{
       login:$me.login, cpfCNPJ:$me.cpfCNPJ, tipoSolicitante:$me.origemAutenticacao,
       solicitante:$me.nome, pagador:$me.nome, email:$me.email, telefone:$tel,
       valor:0, pessoaEncontrada:true, tipo:$modo, idProcesso:$p.id,
       numeroProcesso:$n, natureza:($p.destino // ""), pdf_gratuidade:$pdf, pdf_procuracao:""}')
-  code=$(curl -sS -o /tmp/desarq_resp -w '%{http_code}' "${H[@]}" -X POST "$API/guia/guiadispensada" --data-binary "$body")
-  echo "$n;$code;$(head -c 200 /tmp/desarq_resp)"; sleep 2
-done < processos.txt | tee desarq_resultado.csv
+  # Não imprima o corpo: contém dados pessoais e comprovante.
+  resp=$(mktemp)
+  code=$(curl -sS -o "$resp" -w '%{http_code}' "${H[@]}" -X POST "$API/guia/guiadispensada" --data-binary "$body") ||
+    { rm -f "$resp"; echo "POST: erro de transporte" >&2; exit 1; }
+  if [[ ! "$code" =~ ^2[0-9][0-9]$ ]]; then
+    echo "$n;$pid;HTTP_$code;$(jq -r '.mensagem // .message // "sem mensagem"' "$resp" 2>/dev/null || echo erro)" >&2
+    rm -f "$resp"; exit 1
+  fi
+  rm -f "$resp"
+  # Validação independente: procura pedido pendente com o ID de volume selecionado.
+  pendentes=$(curl -fsS "${H[@]}" "$API/desarquivamento/busca?page=0&size=100&andamento=pendentes") || exit 1
+  if ! jq -e --arg n "$n" --argjson id "$pid"       'any(.content[]?; (.idProcesso == $id) and ((.numeroProcesso | tostring) == $n))' <<<"$pendentes" >/dev/null; then
+    echo "$n;$pid;SEM_CONFIRMACAO_EM_PENDENTES — PARE E INVESTIGUE" >&2; exit 1
+  fi
+  echo "$n;$pid;CRIADA_CONFIRMADA_EM_PENDENTES"
+  if [[ "$FASE" == primeiro ]]; then
+    echo "PARADA OBRIGATÓRIA: conferir pedido, volume e status no DESARQ antes de liberar restante" >&2
+    break
+  fi
+  sleep 2
+done <<<"$linhas"
 ```
 
 ## 4. Onde rodar
