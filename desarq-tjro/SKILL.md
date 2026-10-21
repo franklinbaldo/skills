@@ -23,9 +23,33 @@ Device flow desabilitado no client. O grant `refresh_token` é aceito para `desa
 
 ## 1. Autenticação
 
-Nunca digitar senha nem fazer login pelo usuário. Ele entra no navegador; o token sai da sessão dele. Não gravar tokens em arquivo versionado, memória ou log, nem imprimi-los.
+Nunca digitar senha nem fazer login pelo usuário. O usuário autentica no navegador oficial (gov.br ou CNJ); o token é trocado via PKCE e armazenado com segurança no Windows Credential Manager / keyring local. Nenhum token é impresso ou versionado.
 
-### Opção A — curl (Jatobá ou terminal)
+### Opção Principal — CLI nativa (PKCE S256 + Loopback Callback + Keyring)
+
+A CLI gerencia o fluxo OIDC completo com PKCE RFC 7636, servidor de callback temporário na porta 18274 e armazenamento seguro no Windows Credential Manager:
+
+```powershell
+# Iniciar login interativo (abre o navegador no gov.br e captura o callback local)
+uv run desarq-tjro/cli.py auth login
+
+# Verificar status da sessão no keyring
+uv run desarq-tjro/cli.py auth status
+
+# Renovar access token manualmente via refresh token
+uv run desarq-tjro/cli.py auth refresh
+
+# Consultar dados do usuário logado (GET api/usuarios/me)
+uv run desarq-tjro/cli.py usuario obter
+
+# Listar solicitações cadastradas (GET desarquivamento/busca)
+uv run desarq-tjro/cli.py solicitacoes listar --page 0 --size 10
+
+# Encerrar sessão e limpar credenciais do keyring
+uv run desarq-tjro/cli.py auth logout
+```
+
+### Opção A — curl manual (legada)
 
 1. O usuário entra no DESARQ.
 2. DevTools → Network → filtro `token` → `POST .../openid-connect/token` → Response → copiar `refresh_token`.

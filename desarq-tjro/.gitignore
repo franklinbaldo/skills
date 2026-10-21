@@ -6,3 +6,9 @@ selecionados.tsv
 *.sqlite-shm
 *.csv
 *.log
+*.token
+*.tokens
+*.key
+*.env
+*.env.*
+.tokens/
