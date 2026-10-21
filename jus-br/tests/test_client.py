@@ -6,10 +6,12 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from client import JusBrClient
+from errors import ExperimentalServiceUnavailableError
 from models import PeticionamentoRequest, TokenResponse
 
 
@@ -18,6 +20,7 @@ def mock_auth_service():
     service = MagicMock()
     service.ensure_valid_tokens.return_value = TokenResponse(
         access_token="valid_pdpj_token",
+        token_type="Bearer",
         refresh_token="valid_pdpj_refresh",
         expires_in=300,
     )
@@ -61,6 +64,7 @@ def test_client_handles_401_with_refresh_and_retry(mock_auth_service):
     mock_http = httpx.Client(transport=httpx.MockTransport(handle_request))
     refreshed_tokens = TokenResponse(
         access_token="refreshed_at",
+        token_type="Bearer",
         refresh_token="refreshed_rt",
         expires_in=300,
     )
@@ -68,7 +72,7 @@ def test_client_handles_401_with_refresh_and_retry(mock_auth_service):
     client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
     with patch.object(mock_auth_service, "refresh", return_value=refreshed_tokens):
         mock_auth_service.ensure_valid_tokens.side_effect = [
-            TokenResponse(access_token="initial", expires_in=300),
+            TokenResponse(access_token="initial", token_type="Bearer", expires_in=300),
             refreshed_tokens,
         ]
         resp = client._authenticated_request("GET", "https://api.pdpj.jus.br/processos/1")
@@ -101,20 +105,17 @@ def test_client_buscar_comunicacoes(mock_auth_service):
     assert res.items[0].siglaTribunal == "TJRO"
 
 
-def test_client_peticionar_intercorrente(mock_auth_service):
-    mock_http = httpx.Client(
-        transport=httpx.MockTransport(
-            lambda req: httpx.Response(
-                200,
-                json={
-                    "protocolo": "PROT-20261021-999",
-                    "data_recebimento": "2026-10-21T10:00:00Z",
-                    "numero_processo": "70012345620248220001",
-                    "status": "RECEBIDO",
-                },
-            )
-        )
-    )
+@pytest.mark.parametrize("payload", [{}, {"status": "success"}, {"status": "error", "count": 0, "items": []}])
+def test_client_rejects_incomplete_or_unsuccessful_communication_contract(mock_auth_service, payload):
+    mock_http = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200, json=payload)))
+    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
+    with pytest.raises(ValidationError):
+        client.buscar_comunicacoes()
+
+
+def test_unconfirmed_petition_endpoint_is_disabled_without_auth_or_network(mock_auth_service):
+    sent = []
+    mock_http = httpx.Client(transport=httpx.MockTransport(lambda req: sent.append(req)))
     client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
 
     req = PeticionamentoRequest(
@@ -125,120 +126,46 @@ def test_client_peticionar_intercorrente(mock_auth_service):
         nome_arquivo="manifestacao.pdf",
         hash_sha256="abc123sha256",
     )
-    resp = client.peticionar_intercorrente(req)
-    assert resp.protocolo == "PROT-20261021-999"
-    assert resp.status == "RECEBIDO"
+    with pytest.raises(ExperimentalServiceUnavailableError, match="nenhum protocolo foi transmitido"):
+        client.peticionar_intercorrente(req)
+    assert sent == []
+    mock_auth_service.ensure_valid_tokens.assert_not_called()
 
 
-def test_client_consultar_processo_sucesso(mock_auth_service):
-    mock_http = httpx.Client(
-        transport=httpx.MockTransport(
-            lambda req: httpx.Response(
-                200,
-                json={
-                    "numero": "70012345620248220001",
-                    "classe": "Ação Civil Pública",
-                    "tribunal": "TJRO",
-                    "orgao_julgador": "2ª Vara Cível",
-                },
-            )
-        )
-    )
+def test_unconfirmed_process_endpoint_is_disabled_without_auth_or_network(mock_auth_service):
+    sent = []
+    mock_http = httpx.Client(transport=httpx.MockTransport(lambda req: sent.append(req)))
     client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
-    proc = client.consultar_processo("70012345620248220001")
-    assert proc.numero == "70012345620248220001"
-    assert proc.classe == "Ação Civil Pública"
-
-
-def test_client_consultar_processo_falha_nao_simula_dados(mock_auth_service):
-    from errors import JusBrApiError
-
-    mock_http = httpx.Client(
-        transport=httpx.MockTransport(lambda req: httpx.Response(404, text="Processo não localizado no barramento"))
-    )
-    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
-
-    with pytest.raises(JusBrApiError, match="Erro na API da PDPJ"):
+    with pytest.raises(ExperimentalServiceUnavailableError, match="não foi confirmado"):
         client.consultar_processo("70012345620248220001")
+    assert sent == []
+    mock_auth_service.ensure_valid_tokens.assert_not_called()
 
 
-def test_client_peticionar_intercorrente_falha_nao_fabrica_recibo(mock_auth_service):
+def test_client_consultar_processo_is_disabled_without_network(mock_auth_service):
+    sent = []
+    mock_http = httpx.Client(transport=httpx.MockTransport(lambda req: sent.append(req)))
+    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
+
+    with pytest.raises(ExperimentalServiceUnavailableError):
+        client.consultar_processo("70012345620248220001")
+    assert sent == []
+
+
+def test_authenticated_request_timeout_propagates_without_success(mock_auth_service):
+    mock_http = httpx.Client(
+        transport=httpx.MockTransport(lambda req: (_ for _ in ()).throw(httpx.ReadTimeout("slow response")))
+    )
+    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
+    with pytest.raises(httpx.ReadTimeout):
+        client._authenticated_request("GET", "https://example.invalid")
+
+
+@pytest.mark.parametrize("status", [403, 404, 429, 500, 503])
+def test_authenticated_request_http_failures_raise(status, mock_auth_service):
     from errors import JusBrApiError
 
-    mock_http = httpx.Client(
-        transport=httpx.MockTransport(lambda req: httpx.Response(500, text="Falha de conexão com o tribunal destino"))
-    )
+    mock_http = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(status, text="service error")))
     client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
-
-    req = PeticionamentoRequest(
-        numero_processo="70012345620248220001",
-        tipo_peticao="Manifestação",
-        sigla_tribunal="TJRO",
-        arquivo_base64="ZHVtbXk=",
-        nome_arquivo="manifestacao.pdf",
-    )
-    # Garante categoricamente que JAMAIS fabrica PROT-<timestamp> em caso de erro!
-    with pytest.raises(JusBrApiError, match="Erro na API da PDPJ"):
-        client.peticionar_intercorrente(req)
-
-
-def test_client_post_no_retry_on_401_prevents_duplicate_filing(mock_auth_service):
-    from errors import JusBrUnauthorizedError
-
-    attempts = 0
-
-    def handle_request(req):
-        nonlocal attempts
-        attempts += 1
-        return httpx.Response(401, json={"error": "token_expired"})
-
-    mock_http = httpx.Client(transport=httpx.MockTransport(handle_request))
-    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
-
-    req = PeticionamentoRequest(
-        numero_processo="70012345620248220001",
-        tipo_peticao="Manifestação",
-        sigla_tribunal="TJRO",
-        arquivo_base64="ZHVtbXk=",
-        nome_arquivo="manifestacao.pdf",
-        hash_sha256="abc123sha256",
-    )
-
-    with pytest.raises(JusBrUnauthorizedError, match="não foi repetida automaticamente para garantir a não-duplicação"):
-        client.peticionar_intercorrente(req)
-
-    # Garante que houve APENAS 1 tentativa de envio, sem repetição perigosa de POST!
-    assert attempts == 1
-
-
-def test_client_peticionar_intercorrente_idempotency_headers(mock_auth_service):
-    captured_headers = {}
-
-    def handle_request(req):
-        captured_headers.update(dict(req.headers))
-        return httpx.Response(
-            200,
-            json={
-                "protocolo": "PROT-1234",
-                "data_recebimento": "2026-10-21T12:00:00Z",
-                "numero_processo": "70012345620248220001",
-                "status": "SUBMETIDO",
-            },
-        )
-
-    mock_http = httpx.Client(transport=httpx.MockTransport(handle_request))
-    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
-
-    req = PeticionamentoRequest(
-        numero_processo="70012345620248220001",
-        tipo_peticao="Manifestação",
-        sigla_tribunal="TJRO",
-        arquivo_base64="ZHVtbXk=",
-        nome_arquivo="manifestacao.pdf",
-        hash_sha256="fake_sha256_hash",
-    )
-    client.peticionar_intercorrente(req)
-
-    expected_key = "70012345620248220001:fake_sha256_hash"
-    assert captured_headers.get("idempotency-key") == expected_key
-    assert captured_headers.get("x-idempotency-key") == expected_key
+    with pytest.raises(JusBrApiError, match=f"{status}"):
+        client._authenticated_request("GET", "https://example.invalid")
