@@ -229,3 +229,21 @@ def test_truncamento_divide_lote_sem_omitir_hits(monkeypatch):
     resultado = dj.consultar(dj.ConsultaLote(numeros=numeros, so_origem=True, trabalhadores=1))
     assert len(chamadas) == 3
     assert all(len(item.registros) == 1 and not item.falhas for item in resultado.values())
+
+
+def test_truncamento_parcial_preserva_metade_valida(monkeypatch):
+    numeros = ["70095117120248220001", "70000000020248220001"]
+
+    def search(body, tribunal="tjro", **_):
+        ds = body["query"]["terms"]["numeroProcesso"]
+        if len(ds) > 1:
+            return {"hits": {"total": {"value": 3}, "hits": []}}
+        if ds[0] == numeros[1]:
+            return {"hits": {"total": {"value": 2}, "hits": [_hit(ds[0], tribunal)]}}
+        return {"hits": {"total": {"value": 1}, "hits": [_hit(ds[0], tribunal)]}}
+
+    monkeypatch.setattr(dj, "search", search)
+    result = dj.consultar(dj.ConsultaLote(numeros=numeros, so_origem=True, trabalhadores=1))
+    assert len(result[numeros[0]].registros) == 1
+    assert not result[numeros[0]].falhas
+    assert result[numeros[1]].falhas
