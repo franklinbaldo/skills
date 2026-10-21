@@ -1,7 +1,12 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["pytest>=8"]
+# ///
 """Testes offline: nunca fazem requisicoes a API do CNJ."""
 import importlib.util
 from pathlib import Path
 from unittest.mock import patch
+
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "datajud_endpoints.py"
@@ -32,16 +37,15 @@ def test_alias_desconhecido_nao_produz_url(alias):
 
 def test_inventario_offline_nao_acessa_rede(capsys):
     with patch.object(mod.urllib.request, "urlopen", side_effect=AssertionError("rede")):
-        assert mod.main([]) == 0
+        assert mod.executar() == 0
     assert '"total": 91' in capsys.readouterr().out
 
 
 def test_probe_sem_chave_nao_acessa_rede(monkeypatch):
     monkeypatch.delenv("DATAJUD_API_KEY", raising=False)
     with patch.object(mod.urllib.request, "urlopen", side_effect=AssertionError("rede")):
-        with pytest.raises(SystemExit) as err:
-            mod.main(["--probe", "--alias", "tjro"])
-    assert err.value.code == 2
+        with pytest.raises(ValueError, match="DATAJUD_API_KEY"):
+            mod.executar(probe=True, alias="tjro")
 
 
 def test_feature_matrix():
@@ -63,8 +67,7 @@ def test_journal_append_only_e_resume(tmp_path):
 
 
 def test_probe_feature_e_corpo_minimo():
-    import io
-    from unittest.mock import MagicMock
+     from unittest.mock import MagicMock
 
     resposta = MagicMock()
     resposta.status = 200
@@ -100,4 +103,4 @@ def test_resume_pula_sucesso_sem_rede(monkeypatch, tmp_path):
     mod._append_event(path, {"key": key, "ok": True})
     monkeypatch.setenv("DATAJUD_API_KEY", "fake-key")
     with patch.object(mod, "probe", side_effect=AssertionError("rede")):
-        assert mod.main(["--probe", "--alias", "tjro", "--journal", str(path), "--resume"]) == 0
+        assert mod.executar(probe=True, alias="tjro", journal=path, resume=True) == 0
