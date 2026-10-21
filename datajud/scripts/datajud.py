@@ -63,7 +63,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter, 
 BASE = "https://api-publica.datajud.cnj.jus.br"
 # Chave PUBLICA do CNJ — a mesma para todo mundo, documentada na wiki do DataJud.
 # Se der 401, pegue a atualizada em https://datajud-wiki.cnj.jus.br/api-publica/acesso/
-APIKEY = os.environ.get("DATAJUD_API_KEY", "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==")
+APIKEY = os.environ.get("DATAJUD_API_KEY", "")
 UA = "Mozilla/5.0 (datajud skill)"
 
 DEFAULT_TRIBUNAL = "tjro"
@@ -143,6 +143,12 @@ def _guardar(tribunal, body, resposta=None, *, erro=None):
 
 def search(body, tribunal=DEFAULT_TRIBUNAL, timeout=90, tentativas=5):
     url = _endpoint(tribunal)
+    key = os.environ.get("DATAJUD_API_KEY") or APIKEY
+    if not key:
+        raise RuntimeError(
+            "DATAJUD_API_KEY ausente: obtenha a chave publica vigente em "
+            "https://datajud-wiki.cnj.jus.br/api-publica/acesso/"
+        )
     data = json.dumps(body).encode("utf-8")
     espera = 2.0
     ultimo_erro = None
@@ -151,7 +157,7 @@ def search(body, tribunal=DEFAULT_TRIBUNAL, timeout=90, tentativas=5):
             url, data=data, method="POST",
             headers={"Content-Type": "application/json",
                      "Accept": "application/json",
-                     "Authorization": f"APIKey {APIKEY}",
+                     "Authorization": f"APIKey {key}",
                      "User-Agent": UA},
         )
         try:
@@ -201,7 +207,7 @@ def search(body, tribunal=DEFAULT_TRIBUNAL, timeout=90, tentativas=5):
                 raise RuntimeError(
                     "HTTP 401: a chave publica provavelmente foi trocada pelo CNJ. "
                     "Pegue a atual em https://datajud-wiki.cnj.jus.br/api-publica/acesso/ "
-                    "e atualize APIKEY no topo deste script.") from e
+                    "e configure DATAJUD_API_KEY no ambiente.") from e
             raise RuntimeError(ultimo_erro) from e
         except (urllib.error.URLError, TimeoutError) as e:
             ultimo_erro = f"rede: {e}"
@@ -542,7 +548,14 @@ def consultar(entrada: ConsultaLote) -> dict[str, ProcessoConsultado]:
         hits = d.get("hits", {}).get("hits", [])
         total = d.get("hits", {}).get("total", {}).get("value", 0)
         if total > len(hits):
-            raise RuntimeError(f"resposta truncada em {i}: {len(hits)} de {total}")
+            if len(ds) > 1:
+                # Divisao adaptativa garante completude sem paginacao instavel.
+                meio = len(ds) // 2
+                return rodar((i, ds[:meio])) + rodar((i, ds[meio:]))
+            raise RuntimeError(
+                f"processo {ds[0]} em {i}: resposta truncada ({len(hits)} de {total}); "
+                "resultado incompleto nao pode ser considerado ausencia"
+            )
         return [Registro.model_validate(h) for h in hits]
 
     with ThreadPoolExecutor(entrada.trabalhadores) as pool:
@@ -921,7 +934,11 @@ def _ja_baixado(saida: Path, numero: str, so_origem: bool) -> bool:
     """Em disco e consultado em todos os indices pedidos agora."""
     gravado = ler_processo(saida, numero)
     pedidos = [tribunal_do_cnj(numero)] if so_origem else familia_do_cnj(numero)
-    return gravado is not None and set(pedidos) <= set(gravado.consultados)
+    return (
+        gravado is not None
+        and not gravado.falhas
+        and set(pedidos) <= set(gravado.consultados)
+    )
 
 
 _CNJ = TypeAdapter(NumeroCNJ)
@@ -968,7 +985,7 @@ def cmd_lote(arquivo: Path, saida: Path | None, trabalhadores: int,
             resumo.falhas.append(FalhaLote(
                 processo=item.processo, indices=[f.indice for f in item.falhas]
             ))
-            continue
+        # A parte bem-sucedida nao e descartada por falhas de outros indices.
         validos[so_digitos(item.processo)] = item
         if saida is not None:
             # Compatibilidade: exporta JSON apenas quando solicitado; cada
