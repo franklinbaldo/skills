@@ -9,14 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from cli import app
-from models import (
-    ComunicacaoItem,
-    ComunicacaoResponse,
-    PeticionamentoResponse,
-    ProcessoConsultaItem,
-    TokenResponse,
-    UsuarioJusBr,
-)
+from models import ComunicacaoItem, ComunicacaoResponse, TokenResponse, UsuarioJusBr
 
 
 @pytest.fixture
@@ -51,6 +44,7 @@ def test_cli_auth_status_not_authenticated(mock_client_and_auth, capsys):
 def test_cli_auth_status_authenticated(mock_client_and_auth, capsys):
     tokens = TokenResponse(
         access_token="valid_at_123",
+        token_type="Bearer",
         refresh_token="valid_rt_456",
         expires_in=300,
         refresh_expires_in=1800,
@@ -72,7 +66,7 @@ def test_cli_auth_status_authenticated(mock_client_and_auth, capsys):
 
 
 def test_cli_auth_refresh(mock_client_and_auth, capsys):
-    tokens = TokenResponse(access_token="at_new", refresh_token="rt_new", expires_in=300)
+    tokens = TokenResponse(access_token="at_new", token_type="Bearer", refresh_token="rt_new", expires_in=300)
     mock_client_and_auth["auth"].refresh.return_value = tokens
 
     app(["auth", "refresh"], exit_on_error=False, result_action=None)
@@ -104,6 +98,7 @@ def test_cli_usuario_obter(mock_client_and_auth, capsys):
 
 def test_cli_comunicacoes_buscar(mock_client_and_auth, capsys):
     mock_client_and_auth["client"].buscar_comunicacoes.return_value = ComunicacaoResponse(
+        status="success",
         count=1,
         items=[
             ComunicacaoItem(
@@ -123,46 +118,40 @@ def test_cli_comunicacoes_buscar(mock_client_and_auth, capsys):
     assert "TJRO" in captured.out
 
 
-def test_cli_processo_consultar(mock_client_and_auth, capsys):
-    mock_client_and_auth["client"].consultar_processo.return_value = ProcessoConsultaItem(
-        numero="70012345620248220001",
-        tribunal="TJRO",
-        orgao_julgador="Vara de Fazenda",
-        classe="Execução Fiscal",
+def test_cli_processo_consultar_never_presents_unconfirmed_endpoint_as_supported(mock_client_and_auth, capsys):
+    from errors import ExperimentalServiceUnavailableError
+
+    mock_client_and_auth["client"].consultar_processo.side_effect = ExperimentalServiceUnavailableError(
+        "endpoint não confirmado"
     )
-
-    app(["processo", "consultar", "70012345620248220001"], exit_on_error=False, result_action=None)
+    with pytest.raises(SystemExit):
+        app(["processo", "consultar", "70012345620248220001"], exit_on_error=False, result_action=None)
     captured = capsys.readouterr()
-    assert "70012345620248220001" in captured.out
-    assert "Vara de Fazenda" in captured.out
+    assert "endpoint não confirmado" in captured.out
+    assert "Vara de Fazenda" not in captured.out
 
 
-def test_cli_peticionamento_intercorrente(mock_client_and_auth, tmp_path, capsys):
+def test_cli_peticionamento_is_disabled_without_reading_or_sending_file(mock_client_and_auth, tmp_path, capsys):
     dummy_pdf = tmp_path / "peticao.pdf"
     dummy_pdf.write_bytes(b"%PDF-1.4 dummy")
-
-    mock_client_and_auth["client"].peticionar_intercorrente.return_value = PeticionamentoResponse(
-        protocolo="PROT-TEST-1234",
-        data_recebimento="2026-10-21T12:00:00Z",
-        numero_processo="70012345620248220001",
-        status="RECEBIDO",
-    )
-
-    app(
-        [
-            "peticionamento",
-            "intercorrente",
-            "--processo",
-            "70012345620248220001",
-            "--tribunal",
-            "TJRO",
-            "--arquivo",
-            str(dummy_pdf),
-        ],
-        exit_on_error=False,
-        result_action=None,
-    )
+    with patch("pathlib.Path.read_bytes", side_effect=AssertionError("file must not be read")):
+        with pytest.raises(SystemExit) as exc:
+            app(
+                [
+                    "peticionamento",
+                    "intercorrente",
+                    "--processo",
+                    "70012345620248220001",
+                    "--tribunal",
+                    "TJRO",
+                    "--arquivo",
+                    str(dummy_pdf),
+                ],
+                exit_on_error=False,
+                result_action=None,
+            )
     captured = capsys.readouterr()
-    assert "PROT-TEST-1234" in captured.out
-    assert "Recibo de submissão emitido pelo barramento da PDPJ" in captured.out
-    assert "SHA-256" in captured.out
+    assert exc.value.code == 2
+    assert "nenhum arquivo foi lido ou transmitido" in captured.out
+    assert "nenhum protocolo foi gerado" in captured.out
+    mock_client_and_auth["client"].peticionar_intercorrente.assert_not_called()
