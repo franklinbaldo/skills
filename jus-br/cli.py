@@ -90,10 +90,19 @@ def _aguardar_callback_url(expected_state: str, prompt_text: str) -> str:
             if stop_event.is_set():
                 break
             text = _obter_clipboard_texto()
-            if text and text != initial_clipboard and expected_state in text and "code=" in text:
-                console.print("\n[bold cyan]✓ Nova URL detectada na Área de Transferência![/bold cyan]")
-                result_queue.put(text)
-                return
+            if text and text != initial_clipboard:
+                # Caso 1: Token JWT direto ou payload do bookmarklet
+                if "eyJ" in text or (text.startswith("{") and "storage" in text):
+                    console.print(
+                        "\n[bold cyan]✓ Sessão Jus.br / Token detectado na Área de Transferência![/bold cyan]"
+                    )
+                    result_queue.put(text)
+                    return
+                # Caso 2: URL de callback com state esperado
+                if expected_state and expected_state in text and "code=" in text:
+                    console.print("\n[bold cyan]✓ Nova URL de callback detectada na Área de Transferência![/bold cyan]")
+                    result_queue.put(text)
+                    return
 
     t_clip = threading.Thread(target=_monitor_clipboard, daemon=True)
     t_clip.start()
@@ -121,8 +130,9 @@ def _aguardar_callback_url(expected_state: str, prompt_text: str) -> str:
 @auth_app.command(name="login")
 def auth_login(
     force: Annotated[bool, Parameter(help="Forçar novo login mesmo se já houver sessão ativa.")] = False,
-    callback_url: Annotated[str, Parameter(help="URL final redirecionada contendo o parâmetro code.")] = "",
+    callback_url: Annotated[str, Parameter(help="URL final redirecionada ou token JWT direto.")] = "",
     no_browser: Annotated[bool, Parameter(help="Não abrir o navegador automaticamente.")] = False,
+    bookmarklet: Annotated[bool, Parameter(help="Abrir a página do Bookmarklet para captura via favoritos.")] = False,
 ) -> None:
     """Inicia autenticação com a conta gov.br / certificado digital no Keycloak da PDPJ/CNJ."""
     store = CredentialStore()
@@ -143,33 +153,46 @@ def auth_login(
         except Exception as exc:
             console.print(f"[yellow]Sessão anterior da PDPJ não pôde ser reaproveitada: {exc}[/yellow]")
 
+    if bookmarklet:
+        auth_bookmarklet()
+
     auth_url, verifier, state = auth.start_login()
 
     console.print(
         Panel(
             "[bold cyan]Autenticação Jus.br (PDPJ/CNJ)[/bold cyan]\n\n"
-            "1. O navegador será aberto no Keycloak oficial da PDPJ/CNJ.\n"
-            "2. Autentique-se com sua conta [bold]Gov.br[/bold] ou [bold]Certificado Digital[/bold] e conclua o MFA.\n"
-            "3. Ao finalizar, o navegador redirecionará para [cyan]https://www.jus.br/callback?code=...&state=...[/cyan]\n"
-            "4. [bold green]DICA RÁPIDA:[/bold green] Basta selecionar a barra de endereços e dar [bold]Ctrl+C[/bold]!\n"
-            "   A CLI detectará a URL copiada [bold underline]instantaneamente[/bold underline] antes de expirar.",
+            "• [bold green]OPÇÃO A (Recomendada - Bookmarklet):[/bold green]\n"
+            "  Se já estiver logado em [cyan]www.jus.br[/cyan], use o favorito [bold]'Capturar Sessão Jus.br'[/bold].\n"
+            "  (Para instalar o favorito, execute [yellow]jusbr auth bookmarklet[/yellow]).\n\n"
+            "• [bold blue]OPÇÃO B (Navegador SSO CNJ):[/bold blue]\n"
+            "  O navegador abrirá a autenticação Gov.br / Certificado no Keycloak.\n"
+            "  Ao redirecionar para [cyan]www.jus.br[/cyan], dê [bold]Ctrl+C[/bold] na URL.\n\n"
+            "✓ [dim]A CLI detectará automaticamente tanto o Token do Bookmarklet quanto a URL de callback![/dim]",
             title="Login Único Jus.br",
             border_style="cyan",
         )
     )
 
-    if not no_browser:
+    if not no_browser and not bookmarklet:
         webbrowser.open(auth_url)
 
     target_input = callback_url
     if not target_input:
         target_input = _aguardar_callback_url(
             expected_state=state,
-            prompt_text="\n[bold yellow]Cole a URL redirecionada aqui (ou dê Ctrl+C nela no navegador): [/bold yellow]",
+            prompt_text="\n[bold yellow]Cole a URL redirecionada ou o Token aqui (ou dê Ctrl+C no navegador): [/bold yellow]",
         )
 
     try:
-        tokens = auth.complete_login(target_input, code_verifier=verifier, state=state)
+        if (
+            "eyJ" in target_input
+            or (target_input.startswith("{") and "storage" in target_input)
+            or target_input.strip().lower().startswith("bearer ")
+        ):
+            tokens = auth.import_session(target_input)
+        else:
+            tokens = auth.complete_login(target_input, code_verifier=verifier, state=state)
+
         perfil = client.obter_perfil()
         console.print("[bold green]Autenticação concluída com sucesso![/bold green]")
         console.print(
@@ -183,6 +206,60 @@ def auth_login(
         sys.exit(1)
     except Exception as exc:
         console.print(f"[bold red]Erro inesperado:[/bold red] {exc}")
+        sys.exit(1)
+
+
+@auth_app.command(name="bookmarklet")
+def auth_bookmarklet() -> None:
+    """Abre no navegador a página do Bookmarklet para captura instantânea de sessão no www.jus.br."""
+    bookmarklet_file = _root / "bookmarklet.html"
+    if not bookmarklet_file.exists():
+        console.print("[bold red]Arquivo bookmarklet.html não encontrado.[/bold red]")
+        sys.exit(1)
+
+    url = bookmarklet_file.resolve().as_uri()
+    console.print(
+        Panel(
+            "[bold cyan]Conector Bookmarklet Jus.br[/bold cyan]\n\n"
+            "1. Arraste o botão [bold]⭐ ⚖️ Capturar Sessão Jus.br[/bold] da página que vai se abrir para seus [bold]Favoritos[/bold].\n"
+            "2. Acesse [cyan]https://www.jus.br[/cyan] com seu login Gov.br / Certificado ativo.\n"
+            "3. Clique no favorito para copiar a sessão.\n"
+            "4. Execute [green]jusbr auth login[/green] (ou [green]jusbr auth set-token[/green]) para sincronizar com o terminal.",
+            title="Bookmarklet Jus.br",
+            border_style="cyan",
+        )
+    )
+    webbrowser.open(url)
+
+
+@auth_app.command(name="set-token")
+def auth_set_token(
+    token: Annotated[str, Parameter(help="Token Bearer (JWT) ou JSON exportado do bookmarklet.")] = "",
+) -> None:
+    """Salva diretamente no keyring uma sessão ativa obtida via bookmarklet ou DevTools."""
+    store = CredentialStore()
+    auth = AuthService(credential_store=store)
+    client = JusBrClient(auth_service=auth)
+
+    raw_input = token
+    if not raw_input:
+        raw_input = _aguardar_callback_url(
+            expected_state="",
+            prompt_text="\n[bold yellow]Cole o token Bearer (JWT) ou export do bookmarklet aqui: [/bold yellow]",
+        )
+
+    try:
+        tokens = auth.import_session(raw_input)
+        perfil = client.obter_perfil()
+        console.print("[bold green]Sessão importada e salva com sucesso no Keyring![/bold green]")
+        console.print(
+            f"Usuário: [bold]{perfil.name or perfil.preferred_username}[/bold] (CPF: {perfil.cpf_mascarado()})"
+        )
+        console.print(
+            f"[dim]Token Bearer armazenado com segurança no Windows Credential Manager. Validade: {tokens.expires_in}s[/dim]"
+        )
+    except JusBrAuthError as exc:
+        console.print(f"[bold red]Falha ao importar sessão:[/bold red] {exc}")
         sys.exit(1)
 
 

@@ -166,3 +166,26 @@ def test_cli_peticionamento_is_disabled_without_reading_or_sending_file(mock_cli
     assert "nenhum arquivo foi lido ou transmitido" in captured.out
     assert "nenhum protocolo foi gerado" in captured.out
     mock_client_and_auth["client"].peticionar_intercorrente.assert_not_called()
+
+
+def test_cli_auth_set_token(mock_client_and_auth, capsys):
+    tokens = TokenResponse(access_token="sample_jwt_123", token_type="Bearer", expires_in=3600)
+    mock_client_and_auth["auth"].import_session.return_value = tokens
+    mock_client_and_auth["client"].obter_perfil.return_value = UsuarioJusBr(
+        name="Usuario Importado",
+        cpf="12345678900",
+    )
+
+    app(["auth", "set-token", "--token", "sample_jwt_123"], exit_on_error=False, result_action=None)
+    captured = capsys.readouterr()
+    assert "Sessão importada e salva com sucesso" in captured.out
+    assert "Usuario Importado" in captured.out
+    mock_client_and_auth["auth"].import_session.assert_called_once_with("sample_jwt_123")
+
+
+def test_cli_auth_bookmarklet(mock_client_and_auth, capsys):
+    with patch("webbrowser.open") as mock_open:
+        app(["auth", "bookmarklet"], exit_on_error=False, result_action=None)
+        captured = capsys.readouterr()
+        assert "Conector Bookmarklet Jus.br" in captured.out
+        mock_open.assert_called_once()

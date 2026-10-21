@@ -81,8 +81,14 @@ uv run jus-br/cli.py --help
 ### Autenticação (`auth`)
 
 ```powershell
-# Iniciar login interativo via Gov.br / CNJ SSO
+# Abrir o assistente de Bookmarklet para captura instantânea de sessão
+uv run jus-br/cli.py auth bookmarklet
+
+# Iniciar login interativo via Gov.br / CNJ SSO (detecta tanto URL quanto Token do Bookmarklet)
 uv run jus-br/cli.py auth login
+
+# Salvar diretamente um token JWT ou export do bookmarklet no Keyring
+uv run jus-br/cli.py auth set-token --token "<token-jwt>"
 
 # Verificar status da sessão e validade dos tokens
 uv run jus-br/cli.py auth status
@@ -156,6 +162,11 @@ ______________________________________________________________________
 ______________________________________________________________________
 
 ## Real-use postmortem
+
+- **2026-10-21 (Teste end-to-end do SSO vs. Keycloak CNJ):**
+  - **Evidência:** Ao tentar trocar o authorization code via PKCE direto no Token Endpoint do Keycloak CNJ (`sso.cloud.pje.jus.br/auth/realms/pje/protocol/openid-connect/token`), o servidor retornou `invalid_grant: Code not valid`.
+  - **Causa raiz:** O `/.well-known/openid-configuration` do realm `pje` só suporta métodos de cliente com credenciais (`client_secret_basic`, `client_secret_post`, `private_key_jwt`). Não há suporte a cliente público sem segredo (`none`). O `client_id=jusbr` é confidencial e sua troca de token ocorre no servidor backend WordPress/PHP do Jus.br.
+  - **Solução implementada:** Desenvolvido o assistente Bookmarklet (`jusbr auth bookmarklet` / `jus-br/bookmarklet.html`) e suporte a importação direta de sessão/JWT (`jusbr auth set-token`). O usuário mantém o login Gov.br ativo no seu navegador usual e, com um único clique no favorito na aba do `www.jus.br`, a sessão é extraída e sincronizada com o Windows Credential Manager da CLI.
 
 Após qualquer uso material desta skill, realize uma breve auto-avaliação antes de encerrar a tarefa:
 avalie se o roteamento foi correto, se a skill melhorou, foi neutra ou degradou o resultado, qual

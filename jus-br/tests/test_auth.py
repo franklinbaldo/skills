@@ -254,3 +254,70 @@ def test_logout_remote_success_and_failure():
 
     # Sem refresh token
     assert logout(None) is False
+
+
+def test_decode_jwt_payload_valid_and_invalid():
+    import json
+
+    from auth import decode_jwt_payload
+
+    # JWT sintético válido
+    header = base64.urlsafe_b64encode(b'{"alg":"none"}').decode().rstrip("=")
+    payload_dict = {"sub": "12345678900", "name": "Usuario Teste", "exp": 1900000000}
+    payload = base64.urlsafe_b64encode(json.dumps(payload_dict).encode()).decode().rstrip("=")
+    valid_jwt = f"{header}.{payload}.sig"
+
+    decoded = decode_jwt_payload(valid_jwt)
+    assert decoded["sub"] == "12345678900"
+    assert decoded["name"] == "Usuario Teste"
+
+    # Prefixo Bearer suportado
+    decoded_bearer = decode_jwt_payload(f"Bearer {valid_jwt}")
+    assert decoded_bearer["name"] == "Usuario Teste"
+
+    # Token inválido (menos de 3 partes)
+    with pytest.raises(JusBrAuthError, match="Formato de token inválido"):
+        decode_jwt_payload("token_sem_pontos")
+
+
+def test_parse_session_input_direct_and_bookmarklet_json():
+    import json
+
+    from auth import parse_session_input
+
+    header = base64.urlsafe_b64encode(b'{"alg":"none"}').decode().rstrip("=")
+    payload = base64.urlsafe_b64encode(b'{"sub":"123","name":"Teste","exp":1999999999}').decode().rstrip("=")
+    sample_jwt = f"{header}.{payload}.sig"
+
+    # 1. JWT direto
+    t1 = parse_session_input(sample_jwt)
+    assert t1.access_token == sample_jwt
+    assert t1.token_type == "Bearer"
+    assert t1.expires_in > 0
+
+    # 2. JSON do bookmarklet contendo o token no storage
+    bm_json = json.dumps(
+        {"url": "https://www.jus.br", "storage": {"ls:access_token": sample_jwt, "ss:state": "xyz"}, "cookies": ""}
+    )
+    t2 = parse_session_input(bm_json)
+    assert t2.access_token == sample_jwt
+
+    # 3. Entrada vazia ou sem JWT
+    with pytest.raises(JusBrAuthError, match="Entrada vazia"):
+        parse_session_input("")
+
+    with pytest.raises(JusBrAuthError, match="Nenhum token JWT válido"):
+        parse_session_input("texto qualquer sem jwt")
+
+
+def test_auth_service_import_session():
+    header = base64.urlsafe_b64encode(b'{"alg":"none"}').decode().rstrip("=")
+    payload = base64.urlsafe_b64encode(b'{"sub":"123","name":"Teste","exp":1999999999}').decode().rstrip("=")
+    sample_jwt = f"{header}.{payload}.sig"
+
+    mock_store = MagicMock()
+    service = AuthService(credential_store=mock_store)
+    tokens = service.import_session(sample_jwt)
+
+    assert tokens.access_token == sample_jwt
+    mock_store.save_tokens.assert_called_once_with(tokens)

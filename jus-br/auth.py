@@ -12,9 +12,13 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import logging
+import re
 import secrets
+import time
 import urllib.parse
+from typing import Any
 
 import httpx
 from credentials import CredentialStore
@@ -133,6 +137,74 @@ def parse_callback_input(callback_input: str, expected_state: str) -> str:
     return code
 
 
+def decode_jwt_payload(token: str) -> dict[str, Any]:
+    """Decodifica de forma segura o payload de um token JWT sem validar assinatura."""
+    clean_token = token.strip()
+    if clean_token.lower().startswith("bearer "):
+        clean_token = clean_token[7:].strip()
+
+    parts = clean_token.split(".")
+    if len(parts) != 3:
+        raise JusBrAuthError("Formato de token inválido: esperado um JWT com 3 partes separadas por ponto.")
+
+    payload_b64 = parts[1]
+    padding = "=" * ((4 - len(payload_b64) % 4) % 4)
+    try:
+        payload_bytes = base64.urlsafe_b64decode(payload_b64 + padding)
+        return json.loads(payload_bytes.decode("utf-8"))
+    except Exception as exc:
+        raise JusBrAuthError(f"Falha ao decodificar payload do token JWT: {exc}") from exc
+
+
+def parse_session_input(raw_input: str) -> TokenResponse:
+    """Extrai um TokenResponse de um token JWT direto, Bearer ou payload exportado do bookmarklet."""
+    raw = raw_input.strip()
+    if not raw:
+        raise JusBrAuthError("Entrada vazia. Forneça o token ou payload da sessão.")
+
+    candidate_jwt: str | None = None
+    if raw.startswith("{") and raw.endswith("}"):
+        try:
+            data = json.loads(raw)
+            all_values = []
+            if isinstance(data.get("storage"), dict):
+                all_values.extend(data["storage"].values())
+            all_values.extend(data.values())
+
+            for val in all_values:
+                if isinstance(val, str) and "eyJ" in val:
+                    m = re.search(r"eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+", val)
+                    if m:
+                        candidate_jwt = m.group(0)
+                        break
+        except Exception:
+            pass
+
+    if not candidate_jwt:
+        m = re.search(r"eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+", raw)
+        if m:
+            candidate_jwt = m.group(0)
+
+    if not candidate_jwt:
+        raise JusBrAuthError("Nenhum token JWT válido (iniciado com 'eyJ...') foi encontrado na entrada informada.")
+
+    payload = decode_jwt_payload(candidate_jwt)
+    exp = payload.get("exp")
+    now = time.time()
+    if exp and isinstance(exp, (int, float)):
+        expires_in = max(60, int(exp - now))
+    else:
+        expires_in = 3600
+
+    return TokenResponse(
+        access_token=candidate_jwt,
+        token_type="Bearer",
+        expires_in=expires_in,
+        scope=payload.get("scope"),
+        created_at=now,
+    )
+
+
 def exchange_code_for_tokens(
     code: str,
     code_verifier: str,
@@ -210,26 +282,45 @@ def refresh_access_token(
 
 
 def get_userinfo(access_token: str, http_client: httpx.Client | None = None) -> UsuarioJusBr:
-    """Consulta dados do perfil do usuário autenticado no UserInfo endpoint."""
+    """Consulta dados do perfil do usuário autenticado no UserInfo endpoint, com fallback para claims do JWT."""
     client = http_client or httpx.Client(timeout=15.0)
     headers = {"Authorization": f"Bearer {access_token}"}
     try:
         resp = client.get(USERINFO_ENDPOINT, headers=headers)
-    except httpx.RequestError as exc:
-        raise JusBrAuthError(f"Falha ao conectar ao UserInfo da PDPJ: {exc}") from exc
+        if resp.status_code == 200:
+            data = resp.json()
+            return UsuarioJusBr(
+                sub=data.get("sub"),
+                name=data.get("name"),
+                preferred_username=data.get("preferred_username"),
+                cpf=data.get("cpf") or data.get("preferred_username"),
+                email=data.get("email"),
+                roles=data.get("roles", []),
+            )
+    except Exception:
+        pass
 
-    if resp.status_code == 200:
-        data = resp.json()
-        return UsuarioJusBr(
-            sub=data.get("sub"),
-            name=data.get("name"),
-            preferred_username=data.get("preferred_username"),
-            cpf=data.get("cpf") or data.get("preferred_username"),
-            email=data.get("email"),
-            roles=data.get("roles", []),
-        )
+    # Fallback resiliente: extrai dados de perfil diretamente das claims do JWT se o endpoint falhar
+    try:
+        claims = decode_jwt_payload(access_token)
+        if claims.get("name") or claims.get("preferred_username") or claims.get("sub"):
+            roles = claims.get("roles") or []
+            if not roles and isinstance(claims.get("realm_access"), dict):
+                roles = claims.get("realm_access", {}).get("roles", [])
+            return UsuarioJusBr(
+                sub=claims.get("sub"),
+                name=claims.get("name"),
+                preferred_username=claims.get("preferred_username"),
+                cpf=claims.get("cpf") or claims.get("preferred_username"),
+                email=claims.get("email"),
+                roles=roles if isinstance(roles, list) else [],
+            )
+    except Exception:
+        pass
 
-    raise JusBrAuthError(f"Erro ao consultar UserInfo ({resp.status_code}): {resp.text}")
+    raise JusBrAuthError(
+        f"Erro ao consultar UserInfo ({resp.status_code if 'resp' in locals() else 'conexão'}): falha na API e sem claims no token."
+    )
 
 
 def logout(refresh_token: str | None = None, http_client: httpx.Client | None = None) -> bool:
@@ -315,6 +406,12 @@ class AuthService:
             code_verifier=code_verifier,
             http_client=self.http_client,
         )
+        self.store.save_tokens(tokens)
+        return tokens
+
+    def import_session(self, raw_input: str) -> TokenResponse:
+        """Importa e persiste uma sessão diretamente a partir de um JWT ou payload do bookmarklet."""
+        tokens = parse_session_input(raw_input)
         self.store.save_tokens(tokens)
         return tokens
 

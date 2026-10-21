@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jus.br — Conector de Sessão (Bookmarklet)</title>
+    <style>
+        :root {
+            --primary: #0c326f;
+            --primary-hover: #07214a;
+            --accent: #1351b4;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --muted: #64748b;
+            --border: #e2e8f0;
+            --success: #16a34a;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+            max-width: 650px;
+            width: 100%;
+            padding: 36px;
+        }
+        .header {
+            border-bottom: 2px solid #e0f2fe;
+            padding-bottom: 20px;
+            margin-bottom: 24px;
+        }
+        h1 {
+            color: var(--primary);
+            font-size: 24px;
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .subtitle {
+            color: var(--muted);
+            font-size: 15px;
+            margin: 0;
+        }
+        .steps {
+            list-style: none;
+            padding: 0;
+            margin: 24px 0;
+        }
+        .steps li {
+            position: relative;
+            padding-left: 42px;
+            margin-bottom: 20px;
+            line-height: 1.5;
+            font-size: 15px;
+        }
+        .step-num {
+            position: absolute;
+            left: 0;
+            top: -2px;
+            width: 28px;
+            height: 28px;
+            background-color: #e0f2fe;
+            color: var(--accent);
+            font-weight: 700;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .bookmarklet-box {
+            background: #f1f5f9;
+            border: 2px dashed #cbd5e1;
+            border-radius: 10px;
+            padding: 24px;
+            text-align: center;
+            margin: 28px 0;
+        }
+        .bookmarklet-btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #0c326f, #1351b4);
+            color: #ffffff !important;
+            font-weight: 600;
+            font-size: 16px;
+            padding: 14px 28px;
+            border-radius: 8px;
+            text-decoration: none !important;
+            box-shadow: 0 4px 12px rgba(12, 50, 111, 0.25);
+            cursor: grab;
+            transition: transform 0.15s, box-shadow 0.15s;
+            user-select: none;
+        }
+        .bookmarklet-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(12, 50, 111, 0.35);
+        }
+        .bookmarklet-btn:active {
+            cursor: grabbing;
+        }
+        .tip {
+            font-size: 13px;
+            color: var(--muted);
+            margin-top: 10px;
+        }
+        .footer {
+            font-size: 13px;
+            color: var(--muted);
+            border-top: 1px solid var(--border);
+            padding-top: 18px;
+            margin-top: 28px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="header">
+            <h1>⚖️ Jus.br — Conector de Sessão</h1>
+            <p class="subtitle">Conexão segura e direta com o portal oficial www.jus.br</p>
+        </div>
+
+        <ol class="steps">
+            <li>
+                <span class="step-num">1</span>
+                <strong>Arraste o botão abaixo</strong> para a sua <strong>Barra de Favoritos</strong> do navegador (pressione <code>Ctrl + Shift + B</code> se a barra estiver oculta).
+            </li>
+            <li>
+                <span class="step-num">2</span>
+                Abra a aba do portal <a href="https://www.jus.br" target="_blank" rel="noopener"><strong>www.jus.br</strong></a> onde você já se encontra autenticado com sua conta Gov.br ou Certificado Digital.
+            </li>
+            <li>
+                <span class="step-num">3</span>
+                Na aba do Jus.br, <strong>clique no favorito</strong> que você acabou de criar. Ele copiará sua sessão com segurança para a Área de Transferência.
+            </li>
+            <li>
+                <span class="step-num">4</span>
+                <strong>Retorne ao terminal PowerShell:</strong> a CLI detectará o token automaticamente e salvará no Windows Credential Manager!
+            </li>
+        </ol>
+
+        <div class="bookmarklet-box">
+            <a class="bookmarklet-btn" href="javascript:(function(){try{var res={url:window.location.href,timestamp:new Date().toISOString(),storage:{},cookies:document.cookie||''};for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);res.storage['ls:'+k]=localStorage.getItem(k);}for(var j=0;j<sessionStorage.length;j++){var sk=sessionStorage.key(j);res.storage['ss:'+sk]=sessionStorage.getItem(sk);}var token=null;for(var key in res.storage){var val=res.storage[key];if(typeof val==='string'&amp;&amp;val.indexOf('eyJ')!==-1){var m=val.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(m){token=m[0];break;}}}if(!token&amp;&amp;res.cookies){var cm=res.cookies.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(cm){token=cm[0];}}var exportData=token?token:JSON.stringify(res);if(navigator.clipboard&amp;&amp;navigator.clipboard.writeText){navigator.clipboard.writeText(exportData).then(function(){alert('✓ Sessão Jus.br copiada com sucesso para a Área de Transferência!\n\nAgora retorne ao terminal PowerShell para concluir.');}).catch(function(){prompt('Copie a sessão abaixo (Ctrl+C) e cole no terminal:',exportData);});}else{prompt('Copie a sessão abaixo (Ctrl+C) e cole no terminal:',exportData);}}catch(e){alert('Erro ao extrair sessão do Jus.br: '+e.message);}})();">⭐ ⚖️ Capturar Sessão Jus.br</a>
+            <div class="tip">Clique e arraste o botão acima para sua barra de favoritos do navegador.</div>
+        </div>
+
+        <div class="footer">
+            <span>PDPJ-Br &bull; Conselho Nacional de Justiça (CNJ)</span>
+            <span>Uso exclusivo com sessão oficial</span>
+        </div>
+    </div>
+</body>
+</html>
