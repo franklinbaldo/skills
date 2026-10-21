@@ -331,7 +331,10 @@ def auth_status() -> None:
     try:
         perfil = client.obter_perfil()
         table.add_row("Estado", "[bold green]Sessão Ativa e Operacional[/bold green]")
-        table.add_row("Usuário", f"{perfil.name or perfil.preferred_username} ({perfil.cpf_mascarado()})")
+        user_desc = f"{perfil.name or perfil.preferred_username} ({perfil.cpf_mascarado()})"
+        if perfil.oab:
+            user_desc += f" [cyan]OAB {perfil.oab}[/cyan]"
+        table.add_row("Usuário", user_desc)
         if perfil.email:
             table.add_row("E-mail", perfil.email)
     except Exception as exc:
@@ -389,6 +392,8 @@ def usuario_obter() -> None:
     table.add_row("Nome", perfil.name or "-")
     table.add_row("Login / Usuário", perfil.preferred_username or "-")
     table.add_row("CPF", perfil.cpf_mascarado())
+    if perfil.oab:
+        table.add_row("OAB", perfil.oab)
     table.add_row("E-mail", perfil.email or "-")
     table.add_row("Perfis / Papéis", ", ".join(perfil.roles) if perfil.roles else "Padrão")
 

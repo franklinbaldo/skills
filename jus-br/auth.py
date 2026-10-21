@@ -38,8 +38,8 @@ AUTH_ENDPOINT = f"{KEYCLOAK_BASE}/protocol/openid-connect/auth"
 TOKEN_ENDPOINT = f"{KEYCLOAK_BASE}/protocol/openid-connect/token"
 LOGOUT_ENDPOINT = f"{KEYCLOAK_BASE}/protocol/openid-connect/logout"
 USERINFO_ENDPOINT = f"{KEYCLOAK_BASE}/protocol/openid-connect/userinfo"
-CLIENT_ID = "jusbr"
-DEFAULT_REDIRECT_URI = "https://www.jus.br/callback"
+CLIENT_ID = "portalexterno-frontend"
+DEFAULT_REDIRECT_URI = "https://portaldeservicos.pdpj.jus.br/consulta"
 
 
 def generate_pkce() -> tuple[str, str]:
@@ -74,8 +74,8 @@ def build_authorization_url(
     return f"{AUTH_ENDPOINT}?{urllib.parse.urlencode(params)}"
 
 
-ALLOWED_CALLBACK_HOSTS = ("www.jus.br",)
-EXPECTED_CALLBACK_PATH = "/callback"
+ALLOWED_CALLBACK_HOSTS = ("portaldeservicos.pdpj.jus.br", "www.jus.br")
+EXPECTED_CALLBACK_PATHS = ("/consulta", "/callback")
 
 
 def parse_callback_input(callback_input: str, expected_state: str) -> str:
@@ -83,8 +83,8 @@ def parse_callback_input(callback_input: str, expected_state: str) -> str:
 
     Exige:
     1. URL HTTPS completa iniciando com 'https://'.
-    2. Host pertencente à lista autorizada de domínios oficiais ('www.jus.br' ou 'jus.br').
-    3. Path exato de redirecionamento ('/callback').
+    2. Host pertencente à lista autorizada de domínios oficiais ('portaldeservicos.pdpj.jus.br' ou 'www.jus.br').
+    3. Path autorizado de redirecionamento ('/consulta' ou '/callback').
     4. Parâmetro 'state' obrigatoriamente presente e estritamente idêntico ao expected_state (anti-CSRF).
     5. Parâmetro 'code' obrigatoriamente presente.
     Fragmentos parciais, URLs HTTP inseguras ou códigos isolados são sumariamente rejeitados.
@@ -96,7 +96,7 @@ def parse_callback_input(callback_input: str, expected_state: str) -> str:
     if not raw.startswith("https://"):
         raise JusBrAuthError(
             "Entrada inválida: é obrigatório fornecer a URL HTTPS completa gerada no redirecionamento "
-            "(exemplo: https://www.jus.br/callback?code=...&state=...). Entradas parciais ou inseguras não são permitidas."
+            "(exemplo: https://portaldeservicos.pdpj.jus.br/consulta?code=...&state=...). Entradas parciais ou inseguras não são permitidas."
         )
 
     parsed = urllib.parse.urlparse(raw)
@@ -109,8 +109,10 @@ def parse_callback_input(callback_input: str, expected_state: str) -> str:
             f"Esperado domínio oficial: {', '.join(ALLOWED_CALLBACK_HOSTS)}"
         )
 
-    if parsed.path != EXPECTED_CALLBACK_PATH:
-        raise JusBrAuthError(f"Caminho de callback inválido: '{parsed.path}'. Esperado: '{EXPECTED_CALLBACK_PATH}'")
+    if parsed.path not in EXPECTED_CALLBACK_PATHS:
+        raise JusBrAuthError(
+            f"Caminho de callback inválido: '{parsed.path}'. Esperado um dos: {', '.join(EXPECTED_CALLBACK_PATHS)}"
+        )
     if parsed.fragment:
         raise JusBrAuthError("Fragmentos não são aceitos na URL de callback.")
 
@@ -281,6 +283,18 @@ def refresh_access_token(
     raise JusBrAuthError(f"Erro ao renovar token da PDPJ ({resp.status_code}): {err_desc}")
 
 
+def _extract_oab(data: dict[str, Any]) -> str | None:
+    """Extrai número de inscrição da OAB se presente no perfil ou vínculo corporativo."""
+    if data.get("oab"):
+        return str(data["oab"])
+    corp = data.get("corporativo")
+    if isinstance(corp, list):
+        for item in corp:
+            if isinstance(item, dict) and item.get("oab"):
+                return str(item["oab"])
+    return None
+
+
 def get_userinfo(access_token: str, http_client: httpx.Client | None = None) -> UsuarioJusBr:
     """Consulta dados do perfil do usuário autenticado no UserInfo endpoint, com fallback para claims do JWT."""
     client = http_client or httpx.Client(timeout=15.0)
@@ -289,13 +303,18 @@ def get_userinfo(access_token: str, http_client: httpx.Client | None = None) -> 
         resp = client.get(USERINFO_ENDPOINT, headers=headers)
         if resp.status_code == 200:
             data = resp.json()
+            try:
+                claims = decode_jwt_payload(access_token)
+            except Exception:
+                claims = {}
             return UsuarioJusBr(
                 sub=data.get("sub"),
                 name=data.get("name"),
                 preferred_username=data.get("preferred_username"),
                 cpf=data.get("cpf") or data.get("preferred_username"),
                 email=data.get("email"),
-                roles=data.get("roles", []),
+                oab=_extract_oab(data) or _extract_oab(claims),
+                roles=data.get("roles", []) or (claims.get("roles") if isinstance(claims.get("roles"), list) else []),
             )
     except Exception:
         pass
@@ -313,6 +332,7 @@ def get_userinfo(access_token: str, http_client: httpx.Client | None = None) -> 
                 preferred_username=claims.get("preferred_username"),
                 cpf=claims.get("cpf") or claims.get("preferred_username"),
                 email=claims.get("email"),
+                oab=_extract_oab(claims),
                 roles=roles if isinstance(roles, list) else [],
             )
     except Exception:

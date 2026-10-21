@@ -69,6 +69,7 @@ class UsuarioJusBr(BaseModel):
     preferred_username: str | None = None
     cpf: str | None = None
     email: str | None = None
+    oab: str | None = None
     roles: list[str] = Field(default_factory=list)
 
     def cpf_mascarado(self) -> str:

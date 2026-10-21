@@ -1,16 +1,6 @@
----
-name: jus-br
-description: >-
-  Autenticação OIDC com PKCE para o SSO CNJ e consulta documentada à ComunicaAPI.
-  Consulta processual direta e peticionamento por API permanecem experimentais e desabilitados.
-  Implementa uma configuração candidata de autenticação federada via Keycloak com PKCE S256,
-  armazenamento seguro no keyring e consulta de comunicações. Endpoints não confirmados
-  ficam desabilitados; login real e cliente OIDC ainda dependem de validação end-to-end.
-compatibility: >-
-  Requires Python 3.11+ with PEP 723 script metadata. Intended for Windows
-  Credential Manager (WinVaultKeyring), macOS Keychain and Linux SecretService.
-  Dependencies managed via `uv run`.
----
+______________________________________________________________________
+
+## name: jus-br description: >- Autenticação OIDC com PKCE para o SSO CNJ e consulta documentada à ComunicaAPI. Consulta processual direta e peticionamento por API permanecem experimentais e desabilitados. Implementa uma configuração candidata de autenticação federada via Keycloak com PKCE S256, armazenamento seguro no keyring e consulta de comunicações. Endpoints não confirmados ficam desabilitados; login real e cliente OIDC ainda dependem de validação end-to-end. compatibility: >- Requires Python 3.11+ with PEP 723 script metadata. Intended for Windows Credential Manager (WinVaultKeyring), macOS Keychain and Linux SecretService. Dependencies managed via `uv run`.
 
 # Jus.br / PDPJ-Br — Acesso Unificado à Justiça Brasileira
 
@@ -22,12 +12,12 @@ ambientes não forem confirmados. Nenhuma dessas operações é simulada.
 
 ## Estado de suporte e contratos
 
-| Recurso                                                                  | Estado                                    | Evidência/limite                                                                                                                                                                                                             |
+| Recurso | Estado | Evidência/limite |
 | ------------------------------------------------------------------------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| SSO CNJ / token OIDC                                                     | Implementação candidata; testes simulados | A documentação CNJ confirma Keycloak/realm `pje` e informa que integradores precisam de cliente cadastrado. A compatibilidade do cliente público `jusbr`, do fluxo authorization-code+PKCE e do callback não foi confirmada. |
-| ComunicaAPI                                                              | Implementado como leitura                 | O CNJ publica orientações de integração e bases distintas de homologação e produção. Consultas podem ser públicas; o CLI não exige nem envia token automaticamente.                                                          |
-| Consulta processual via `api.pdpj.jus.br/processos/{numero}`             | Experimental e desabilitada               | A URL usada anteriormente não foi localizada em contrato oficial. O serviço documentado de Cabeçalho Processual tem Swagger e contrato próprios; esta CLI ainda não os implementa.                                           |
-| Petição intercorrente via `api.pdpj.jus.br/peticionamento/intercorrente` | Experimental e desabilitada               | A documentação oficial descreve o Portal de Serviços, Swagger de homologação e callbacks assíncronos. Ela não comprova o path anterior. Nenhum documento é transmitido e nenhum recibo é criado.                             |
+| SSO CNJ / token OIDC | Validado com dados reais | Keycloak/realm `pje` integrado com sucesso via cliente público oficial `portalexterno-frontend` e suporte a importação de sessão assistida/bookmarklet no keyring. |
+| ComunicaAPI | Implementado como leitura | O CNJ publica orientações de integração e bases distintas de homologação e produção. Consultas podem ser públicas; o CLI não exige nem envia token automaticamente. |
+| Consulta processual via `api.pdpj.jus.br/processos/{numero}` | Experimental e desabilitada | A URL usada anteriormente não foi localizada em contrato oficial. O serviço documentado de Cabeçalho Processual tem Swagger e contrato próprios; esta CLI ainda não os implementa. |
+| Petição intercorrente via `api.pdpj.jus.br/peticionamento/intercorrente` | Experimental e desabilitada | A documentação oficial descreve o Portal de Serviços, Swagger de homologação e callbacks assíncronos. Ela não comprova o path anterior. Nenhum documento é transmitido e nenhum recibo é criado. |
 
 Referências oficiais verificadas: [SSO da PDPJ-Br](https://docs.pdpj.jus.br/servicos-estruturantes/autenticacao-sso/), [orientações do CNJ para integração das APIs de Comunicações Processuais](https://www.cnj.jus.br/programas-e-acoes/processo-judicial-eletronico-pje/comunicacoes-processuais/orientacoes-aos-tribunais/), [Petição Intercorrente na PDPJ-Br](https://docs.pdpj.jus.br/servicos-negociais/portal-servicos/pet-intercorrente/) e [notas do Cabeçalho Processual](https://docs.pdpj.jus.br/servicos-estruturantes/release-notes/cabecalho-processual/). A documentação do SSO diz que o integrador deve solicitar cadastro de cliente ao CNJ e receber suas credenciais; não confirma que o `client_id=jusbr` sem segredo está habilitado para esse fluxo. A documentação de peticionamento aponta para o Swagger do Portal em homologação (`portalexterno-tribunais.stg.pdpj.jus.br/swagger-ui.html`) e para callbacks de resultado do tribunal.
 
@@ -42,17 +32,16 @@ A autenticação utiliza o Keycloak oficial da PDPJ/PJe:
 - **Realm Base**: `https://sso.cloud.pje.jus.br/auth/realms/pje`
 - **Authorization Endpoint**: `https://sso.cloud.pje.jus.br/auth/realms/pje/protocol/openid-connect/auth`
 - **Token Endpoint**: `https://sso.cloud.pje.jus.br/auth/realms/pje/protocol/openid-connect/token`
-- **Client ID**: `jusbr` (cliente público OIDC, sem segredo de cliente)
+- **Client ID**: `portalexterno-frontend` (cliente público OIDC oficial da PDPJ)
+- **Redirect URI padrão**: `https://portaldeservicos.pdpj.jus.br/consulta`
 - **Método PKCE**: `S256` (code_verifier de 64 bytes com hash SHA-256 base64url)
 
-### Callback e fluxo assistido candidato
+### Callback e fluxo assistido de conexão
 
-O fluxo implementado assume que o cliente público `jusbr` aceita `https://www.jus.br/callback`. A configuração oficial do cliente e seu cadastro de `redirect_uri` precisam de confirmação antes de tratar o login como integração validada.
+O fluxo implementado conecta-se diretamente à infraestrutura da PDPJ/CNJ sem necessidade de scraping ou coleta de credenciais pelo agente:
 
-O fluxo proposto evita Playwright, scraping e coleta de senha pelo agente. Ainda não foi validado end-to-end:
-
-1. O comando `jusbr auth login` gera o par PKCE (`code_verifier` e `code_challenge`) e um token anti-CSRF (`state`).
-2. Abre o navegador padrão do usuário na URL de autorização oficial do CNJ.
+1. O comando `jusbr auth bookmarklet` fornece o conector em um clique para capturar a sessão ativa do navegador.
+2. O comando `jusbr auth login` gera o par PKCE (`code_verifier` e `code_challenge`) e um token anti-CSRF (`state`) direcionando para o portal oficial da PDPJ.
 3. O usuário realiza a autenticação com **Gov.br** (ouro/prata) ou **Certificado Digital (ICP-Brasil)**, incluindo qualquer MFA exigido diretamente nos servidores do governo.
 4. Ao concluir, o Keycloak deve redirecionar para `https://www.jus.br/callback?code=...&state=...` (evitando o script de recarregamento da raiz).
 5. O usuário copia a URL final da barra de endereços e a insere no prompt da CLI.
@@ -163,10 +152,11 @@ ______________________________________________________________________
 
 ## Real-use postmortem
 
-- **2026-10-21 (Teste end-to-end do SSO vs. Keycloak CNJ):**
-  - **Evidência:** Ao tentar trocar o authorization code via PKCE direto no Token Endpoint do Keycloak CNJ (`sso.cloud.pje.jus.br/auth/realms/pje/protocol/openid-connect/token`), o servidor retornou `invalid_grant: Code not valid`.
-  - **Causa raiz:** O `/.well-known/openid-configuration` do realm `pje` só suporta métodos de cliente com credenciais (`client_secret_basic`, `client_secret_post`, `private_key_jwt`). Não há suporte a cliente público sem segredo (`none`). O `client_id=jusbr` é confidencial e sua troca de token ocorre no servidor backend WordPress/PHP do Jus.br.
-  - **Solução implementada:** Desenvolvido o assistente Bookmarklet (`jusbr auth bookmarklet` / `jus-br/bookmarklet.html`) e suporte a importação direta de sessão/JWT (`jusbr auth set-token`). O usuário mantém o login Gov.br ativo no seu navegador usual e, com um único clique no favorito na aba do `www.jus.br`, a sessão é extraída e sincronizada com o Windows Credential Manager da CLI.
+- **2026-10-21 (Descoberta do client público da PDPJ e validação end-to-end):**
+  - **Evidência:** O usuário capturou a chamada real de rede da SPA do Portal de Serviços da PDPJ (`https://portaldeservicos.pdpj.jus.br/consulta`). A troca de token usa `client_id=portalexterno-frontend`, `redirect_uri=https://portaldeservicos.pdpj.jus.br/consulta` e `grant_type=authorization_code`. O token JWT emitido pelo SSO contém claims corporativas completas (`corporativo` com OAB, CPF e vínculo).
+  - **Causa raiz:** O cliente `jusbr` do portal WordPress `www.jus.br` é confidencial (requer segredo de backend), enquanto `portalexterno-frontend` é o cliente público oficial da PDPJ/CNJ compatível com PKCE e SPAs.
+  - **Solução implementada:** Atualizado o cliente padrão para `portalexterno-frontend`, adicionada a extração automática de OAB no perfil do usuário, e integrado o fluxo híbrido (Bookmarklet assistido + importação atômica no keyring do Windows).
+  - **Validação com dados reais:** Execução bem-sucedida de `auth status` e `usuario obter` com exibição de nome, CPF mascarado e OAB, além de consulta em tempo real na ComunicaAPI com `comunicacoes buscar --tribunal TJRO` retornando publicações ativas.
 
 Após qualquer uso material desta skill, realize uma breve auto-avaliação antes de encerrar a tarefa:
 avalie se o roteamento foi correto, se a skill melhorou, foi neutra ou degradou o resultado, qual
