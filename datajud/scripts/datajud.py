@@ -41,6 +41,7 @@ Rode `python datajud.py -h` ou `python datajud.py <modo> -h` para detalhes.
 """
 
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -53,6 +54,7 @@ from typing import Annotated, Any, Literal
 
 import cyclopts
 import datajud_store as store
+from datajud_endpoints import ALIASES, endpoint as endpoint_publico
 from cyclopts import Parameter
 from datajud_modelos import Assunto, Codificado, Movimento, OrgaoJulgador, RequisicaoBusca
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
@@ -60,7 +62,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter, 
 BASE = "https://api-publica.datajud.cnj.jus.br"
 # Chave PUBLICA do CNJ — a mesma para todo mundo, documentada na wiki do DataJud.
 # Se der 401, pegue a atualizada em https://datajud-wiki.cnj.jus.br/api-publica/acesso/
-APIKEY = "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=="
+APIKEY = os.environ.get("DATAJUD_API_KEY", "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==")
 UA = "Mozilla/5.0 (datajud skill)"
 
 DEFAULT_TRIBUNAL = "tjro"
@@ -113,7 +115,7 @@ GRAU_LABEL = {
 # Ambos sao transitorios e pedem backoff.
 # ----------------------------------------------------------------------------
 def _endpoint(tribunal):
-    return f"{BASE}/api_publica_{tribunal.lower()}/_search"
+    return endpoint_publico(tribunal.lower())
 
 
 def _is_es_rejection(d):
@@ -319,7 +321,7 @@ def familia_do_cnj(n):
         if uf in _TJM:
             indices.append(f"tjm{uf}")
     indices += SUPERIORES
-    return list(dict.fromkeys(indices))
+    return [indice for indice in dict.fromkeys(indices) if indice in ALIASES]
 
 
 # ----------------------------------------------------------------------------
