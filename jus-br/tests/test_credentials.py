@@ -132,3 +132,26 @@ def test_transactional_save_preserves_old_tokens_on_failure(mock_keyring):
     # Verifica que a sessão antiga não foi perdida
     assert store.load_tokens() is not None
     assert store.load_tokens().access_token == "old_access_token"
+
+
+def test_roundtrip_verification_failure_aborts_commit(mock_keyring):
+    """Testa que se a releitura/validação após a escrita falhar, o ponteiro não comuta."""
+    store = CredentialStore(service_name="test-jusbr")
+    initial_tokens = TokenResponse(access_token="initial_at", refresh_token="initial_rt", expires_in=300)
+    store.save_tokens(initial_tokens)
+    assert store.load_tokens().access_token == "initial_at"
+
+    new_tokens = TokenResponse(access_token="corrupt_at", refresh_token="corrupt_rt", expires_in=300)
+
+    def failing_get_password(service, username):
+        # Simula corrupção de leitura na verificação de roundtrip da nova geração
+        if "gen_" in username and "active_gen" not in username:
+            return None
+        return mock_keyring.get((service, username))
+
+    with patch("credentials.keyring.get_password", side_effect=failing_get_password):
+        with pytest.raises(KeyringStorageError, match="Verificação de gravação falhou"):
+            store.save_tokens(new_tokens)
+
+    # Garante que a sessão original permaneceu intacta
+    assert store.load_tokens().access_token == "initial_at"

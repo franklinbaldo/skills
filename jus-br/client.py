@@ -32,8 +32,19 @@ class JusBrClient:
         self.auth = auth_service or AuthService()
         self.http = http_client or httpx.Client(timeout=30.0)
 
-    def _authenticated_request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
-        """Executa chamada HTTP com Bearer token e uma tentativa de refresh após 401."""
+    def _authenticated_request(
+        self,
+        method: str,
+        url: str,
+        allow_retry: bool = True,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        """Executa chamada HTTP com Bearer token.
+
+        Para operações de consulta idempotentes (GET), realiza uma tentativa de refresh após 401.
+        Para operações com efeitos externos/mutação judicial (POST/peticionamento), a repetição automática
+        é estritamente desabilitada (allow_retry=False) para evitar protocolo em duplicidade.
+        """
         tokens = self.auth.ensure_valid_tokens()
         headers = kwargs.pop("headers", {})
         headers["Authorization"] = f"Bearer {tokens.access_token}"
@@ -41,7 +52,14 @@ class JusBrClient:
         resp = self.http.request(method, url, headers=headers, **kwargs)
 
         if resp.status_code == 401:
-            logger.info("Recebido HTTP 401 da API da PDPJ. Tentando renovação com refresh_token...")
+            if not allow_retry or method.upper() != "GET":
+                raise JusBrUnauthorizedError(
+                    f"Acesso não autorizado (HTTP 401) na operação {method} {url}. "
+                    "A requisição não foi repetida automaticamente para garantir a não-duplicação de atos processuais. "
+                    "Renove a sessão com 'jusbr auth refresh' e confirme a situação dos autos antes de nova transmissão."
+                )
+
+            logger.info("Recebido HTTP 401 em consulta GET da PDPJ. Tentando renovação com refresh_token...")
             try:
                 new_tokens = self.auth.refresh()
             except Exception as exc:
@@ -114,9 +132,23 @@ class JusBrClient:
     def peticionar_intercorrente(self, request: PeticionamentoRequest) -> PeticionamentoResponse:
         """Submete uma petição intercorrente ao barramento da PDPJ.
 
+        Inclui chave de idempotência vinculada ao número do processo e hash SHA-256 da peça.
+        Desabilita estritamente retry automático em caso de 401 para evitar duplicidade de protocolo judicial.
         Somente retorna sucesso quando um recibo autêntico for emitido e validado pelo barramento da PDPJ.
         Em caso de erro de rede, recusa de protocolo ou rejeição, propaga exceção explicita.
         """
         url = "https://api.pdpj.jus.br/peticionamento/intercorrente"
-        resp = self._authenticated_request("POST", url, json=request.model_dump())
+        headers = {}
+        if request.hash_sha256:
+            idempotency_key = f"{request.numero_processo}:{request.hash_sha256}"
+            headers["Idempotency-Key"] = idempotency_key
+            headers["X-Idempotency-Key"] = idempotency_key
+
+        resp = self._authenticated_request(
+            "POST",
+            url,
+            allow_retry=False,
+            headers=headers,
+            json=request.model_dump(),
+        )
         return PeticionamentoResponse.model_validate(resp.json())

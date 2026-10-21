@@ -348,11 +348,13 @@ def processo_consultar(
         console.print("[bold red]Informe o número do processo.[/bold red]")
         sys.exit(1)
 
+    console.print("[dim cyan]Consultando barramento unificado da PDPJ...[/dim cyan]")
     client = JusBrClient()
     try:
         proc = client.consultar_processo(numero)
     except Exception as exc:
-        console.print(f"[bold red]Erro ao consultar processo:[/bold red] {exc}")
+        console.print(f"[bold red]Falha na consulta ao barramento da PDPJ:[/bold red] {exc}")
+        console.print("[dim yellow]Nota: A consulta federada depende de convênio ativo do tribunal de origem na PDPJ.[/dim yellow]")
         sys.exit(1)
 
     table = Table(title=f"Processo Judicial: {proc.numero}", border_style="magenta")
@@ -399,6 +401,9 @@ def peticionamento_intercorrente(
         hash_sha256=sha256_hash,
     )
 
+    console.print(
+        "[dim cyan]Submetendo petição com chave de idempotência ao barramento da PDPJ...[/dim cyan]"
+    )
     client = JusBrClient()
     try:
         resp = client.peticionar_intercorrente(req)
@@ -415,6 +420,9 @@ def peticionamento_intercorrente(
         )
     except Exception as exc:
         console.print(f"[bold red]Falha ao protocolar petição na PDPJ:[/bold red] {exc}")
+        console.print(
+            "[dim yellow]Nota: O peticionamento via PDPJ requer habilitação no barramento e credenciamento institucional.[/dim yellow]"
+        )
         sys.exit(1)
 
 

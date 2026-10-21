@@ -180,3 +180,65 @@ def test_client_peticionar_intercorrente_falha_nao_fabrica_recibo(mock_auth_serv
     # Garante categoricamente que JAMAIS fabrica PROT-<timestamp> em caso de erro!
     with pytest.raises(JusBrApiError, match="Erro na API da PDPJ"):
         client.peticionar_intercorrente(req)
+
+
+def test_client_post_no_retry_on_401_prevents_duplicate_filing(mock_auth_service):
+    from errors import JusBrUnauthorizedError
+
+    attempts = 0
+
+    def handle_request(req):
+        nonlocal attempts
+        attempts += 1
+        return httpx.Response(401, json={"error": "token_expired"})
+
+    mock_http = httpx.Client(transport=httpx.MockTransport(handle_request))
+    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
+
+    req = PeticionamentoRequest(
+        numero_processo="70012345620248220001",
+        tipo_peticao="Manifestação",
+        sigla_tribunal="TJRO",
+        arquivo_base64="ZHVtbXk=",
+        nome_arquivo="manifestacao.pdf",
+        hash_sha256="abc123sha256",
+    )
+
+    with pytest.raises(JusBrUnauthorizedError, match="não foi repetida automaticamente para garantir a não-duplicação"):
+        client.peticionar_intercorrente(req)
+
+    # Garante que houve APENAS 1 tentativa de envio, sem repetição perigosa de POST!
+    assert attempts == 1
+
+
+def test_client_peticionar_intercorrente_idempotency_headers(mock_auth_service):
+    captured_headers = {}
+
+    def handle_request(req):
+        captured_headers.update(dict(req.headers))
+        return httpx.Response(
+            200,
+            json={
+                "protocolo": "PROT-1234",
+                "data_recebimento": "2026-10-21T12:00:00Z",
+                "numero_processo": "70012345620248220001",
+                "status": "SUBMETIDO",
+            },
+        )
+
+    mock_http = httpx.Client(transport=httpx.MockTransport(handle_request))
+    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
+
+    req = PeticionamentoRequest(
+        numero_processo="70012345620248220001",
+        tipo_peticao="Manifestação",
+        sigla_tribunal="TJRO",
+        arquivo_base64="ZHVtbXk=",
+        nome_arquivo="manifestacao.pdf",
+        hash_sha256="fake_sha256_hash",
+    )
+    client.peticionar_intercorrente(req)
+
+    expected_key = "70012345620248220001:fake_sha256_hash"
+    assert captured_headers.get("idempotency-key") == expected_key
+    assert captured_headers.get("x-idempotency-key") == expected_key

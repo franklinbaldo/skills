@@ -21,6 +21,15 @@ Ela permite que agentes operem serviços judiciais de forma segura e auditável:
 2. **Consulta Processual Unificada**: Dados de processos distribuídos em tribunais integrados à PDPJ.
 3. **Peticionamento Eletrônico Intercorrente**: Protocolo unificado de petições e documentos.
 
+### Matriz de Prontidão Operacional dos Serviços
+
+| Serviço | Endpoint Oficial | Status de Prontidão | Requisitos e Contrato |
+| :--- | :--- | :--- | :--- |
+| **ComunicaAPI** (Publicações e Intimações) | `https://comunicaapi.pje.jus.br/api/v1` | **Operacional em Produção** | API pública aberta/autenticada com dados nacionais em tempo real. |
+| **Keycloak CNJ SSO** (Login Gov.br / Certificado) | `https://sso.cloud.pje.jus.br/auth/realms/pje` | **Operacional em Produção** | Client público `jusbr` OIDC com PKCE S256 e federação Gov.br. |
+| **Consulta Processual PDPJ** | `https://api.pdpj.jus.br/processos` | **Piloto / Prévia de Integração** | Depende de barramento federado e convênio ativo do tribunal de origem. |
+| **Peticionamento Intercorrente** | `https://api.pdpj.jus.br/peticionamento` | **Piloto / Prévia de Integração** | Fluxo assíncrono MNI ([docs.pdpj.jus.br](https://docs.pdpj.jus.br/servicos-negociais/portal-servicos/pet-intercorrente/)); requer credenciamento institucional. |
+
 ---
 
 ## 1. Arquitetura de Autenticação Segura
