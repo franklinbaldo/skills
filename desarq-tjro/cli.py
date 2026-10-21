@@ -204,7 +204,15 @@ def usuario_obter() -> None:
     table.add_row("E-mail", me.email or "-")
     table.add_row("Origem", me.origemAutenticacao or "-")
     table.add_row("Administrador?", "Sim" if me.admin else "Não")
-    table.add_row("Permissões", ", ".join(me.permissoes) if me.permissoes else "Padrão")
+    if isinstance(me.permissoes, dict):
+        perm_str = (
+            ", ".join(f"{k} ({len(v) if isinstance(v, list) else v})" for k, v in me.permissoes.items()) or "Padrão"
+        )
+    elif isinstance(me.permissoes, list):
+        perm_str = ", ".join(me.permissoes) if me.permissoes else "Padrão"
+    else:
+        perm_str = "Padrão"
+    table.add_row("Permissões", perm_str)
 
     console.print(table)
 
@@ -244,13 +252,17 @@ def solicitacoes_listar(
     table.add_column("Caixa")
 
     for item in busca.content:
+        data_str = item.dataCriacao or item.dataUltimoEstado or "-"
+        if len(data_str) >= 10 and "T" in data_str:
+            data_str = data_str.split("T")[0]
+        caixa_str = item.caixa.strip() if item.caixa else "-"
         table.add_row(
             str(item.id),
             item.numeroProcesso,
             item.estado or "-",
             item.tipoDesarquivamento or "-",
-            item.dataCriacao or "-",
-            item.caixa or "-",
+            data_str,
+            caixa_str,
         )
 
     console.print(table)

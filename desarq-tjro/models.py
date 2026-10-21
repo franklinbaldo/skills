@@ -67,7 +67,7 @@ class UsuarioMe(BaseModel):
     origemAutenticacao: str | None = None
     pessoaJuridica: bool = False
     admin: bool = False
-    permissoes: list[str] = Field(default_factory=list)
+    permissoes: dict[str, Any] | list[str] = Field(default_factory=dict)
 
     def cpf_mascarado(self) -> str:
         """Retorna o CPF mascarado para exibição segura."""
@@ -96,7 +96,7 @@ class SolicitacaoBuscaItem(BaseModel):
     caixa: str | None = None
     obsProcesso: str | None = None
     observacao: str | None = None
-    eventos: list[dict[str, Any]] = Field(default_factory=list)
+    eventos: list[dict[str, Any]] | None = None
 
 
 class SolicitacaoBuscaResponse(BaseModel):
