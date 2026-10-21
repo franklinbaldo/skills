@@ -82,6 +82,7 @@ def _aguardar_callback_url(expected_state: str, prompt_text: str) -> str:
     """Aguarda o usuário colar no terminal ou captura automaticamente do clipboard com Ctrl+C."""
     result_queue: queue.Queue[str] = queue.Queue()
     stop_event = threading.Event()
+    initial_clipboard = _obter_clipboard_texto()
 
     def _monitor_clipboard() -> None:
         while not stop_event.is_set():
@@ -89,10 +90,10 @@ def _aguardar_callback_url(expected_state: str, prompt_text: str) -> str:
             if stop_event.is_set():
                 break
             text = _obter_clipboard_texto()
-            if text and ("code=" in text or "session_state=" in text):
-                if expected_state in text or "code=" in text:
-                    result_queue.put(text)
-                    return
+            if text and text != initial_clipboard and expected_state in text and "code=" in text:
+                console.print("\n[bold cyan]✓ Nova URL detectada na Área de Transferência![/bold cyan]")
+                result_queue.put(text)
+                return
 
     t_clip = threading.Thread(target=_monitor_clipboard, daemon=True)
     t_clip.start()
