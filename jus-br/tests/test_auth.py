@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -57,7 +58,7 @@ def test_parse_callback_input_from_full_url():
 
 def test_parse_callback_input_state_mismatch():
     url = "https://www.jus.br/callback?code=code_abc_123&state=attacker_state"
-    with pytest.raises(OAuthStateMismatchError, match="State retornado"):
+    with pytest.raises(OAuthStateMismatchError, match="state retornado"):
         parse_callback_input(url, expected_state="expected_state")
 
 
@@ -95,6 +96,23 @@ def test_parse_callback_input_insecure_http():
         parse_callback_input(url, expected_state="s1")
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.jus.br:443/callback?code=c&state=s1",
+        "https://user@www.jus.br/callback?code=c&state=s1",
+        "https://www.jus.br/other?code=c&state=s1",
+        "https://jus.br/callback?code=c&state=s1",
+        "https://www.jus.br/callback?code=c&state=s1&state=s1",
+        "https://www.jus.br/callback?code=c&code=c&state=s1",
+        "https://www.jus.br/callback?code=c&state=s1#fragment",
+    ],
+)
+def test_parse_callback_rejects_noncanonical_or_ambiguous_urls(url):
+    with pytest.raises(JusBrAuthError):
+        parse_callback_input(url, expected_state="s1")
+
+
 def test_parse_callback_input_with_error():
     url = "https://www.jus.br/callback?error=access_denied&error_description=Cancelado&state=s1"
     with pytest.raises(JusBrAuthError, match="Erro retornado na autorização do CNJ"):
@@ -120,6 +138,22 @@ def test_exchange_code_success():
     assert tokens.refresh_token == "valid_pdpj_rt"
 
 
+def test_exchange_code_timeout_never_creates_session():
+    mock_client = httpx.Client(
+        transport=httpx.MockTransport(lambda req: (_ for _ in ()).throw(httpx.ReadTimeout("slow")))
+    )
+    with pytest.raises(JusBrAuthError, match="Falha de conexão"):
+        exchange_code_for_tokens("code", "verifier", http_client=mock_client)
+
+
+def test_exchange_code_rejects_incomplete_token_contract():
+    mock_client = httpx.Client(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, json={"access_token": "at"}))
+    )
+    with pytest.raises(ValidationError):
+        exchange_code_for_tokens("code", "verifier", http_client=mock_client)
+
+
 def test_refresh_token_revoked():
     fake_error = {"error": "invalid_grant", "error_description": "Session expired"}
     mock_client = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(400, json=fake_error)))
@@ -132,6 +166,7 @@ def test_auth_service_ensure_valid_token_cached():
     mock_store = MagicMock()
     valid_tokens = TokenResponse(
         access_token="at_cached",
+        token_type="Bearer",
         refresh_token="rt_cached",
         expires_in=300,
     )
@@ -147,13 +182,16 @@ def test_auth_service_ensure_valid_token_refreshes_when_expired():
     mock_store = MagicMock()
     expired_tokens = TokenResponse(
         access_token="expired_at",
+        token_type="Bearer",
         refresh_token="valid_rt",
-        expires_in=-10,
+        expires_in=300,
+        created_at=0,
     )
     mock_store.load_tokens.return_value = expired_tokens
 
     new_tokens = TokenResponse(
         access_token="refreshed_at",
+        token_type="Bearer",
         refresh_token="new_rt",
         expires_in=300,
     )
@@ -164,6 +202,25 @@ def test_auth_service_ensure_valid_token_refreshes_when_expired():
         assert res.access_token == "refreshed_at"
         mock_refresh.assert_called_once_with("valid_rt", http_client=None)
         mock_store.save_tokens.assert_called_once_with(new_tokens)
+
+
+def test_refresh_retains_existing_refresh_token_if_server_omits_rotation():
+    mock_store = MagicMock()
+    old = TokenResponse(
+        access_token="old_access",
+        token_type="Bearer",
+        refresh_token="still_valid_refresh",
+        refresh_expires_in=1200,
+        expires_in=300,
+    )
+    mock_store.load_tokens.return_value = old
+    new = TokenResponse(access_token="new_access", token_type="Bearer", expires_in=300)
+    with patch("auth.refresh_access_token", return_value=new):
+        service = AuthService(credential_store=mock_store)
+        saved = service.refresh()
+    assert saved.refresh_token == "still_valid_refresh"
+    assert saved.refresh_expires_in == 1200
+    mock_store.save_tokens.assert_called_once_with(saved)
 
 
 def test_auth_service_raises_when_no_session():
