@@ -114,3 +114,30 @@ def test_tokens_never_leaked_in_repr():
     assert "secret_super_confidential_token_xyz" not in rep
     assert "secret_refresh_token_very_long_abc" not in rep
     assert "..." in rep
+
+
+def test_save_and_load_large_tokens_chunking(mock_keyring):
+    store = CredentialStore(service_name="test-desarq")
+    # Simula access_token longo típico de JWT assinado do Keycloak (3000 chars)
+    long_access_token = "ey" + "a" * 3000
+    tokens = TokenResponse(
+        access_token=long_access_token,
+        refresh_token="rt_" + "b" * 1500,
+        expires_in=300,
+    )
+
+    store.save_tokens(tokens)
+
+    # Verifica que nenhum chunk individual excedeu 512 caracteres
+    for (service, username), value in mock_keyring.items():
+        assert len(value) <= 512, f"Chave {username} excedeu 512 caracteres ({len(value)} bytes)"
+
+    loaded = store.load_tokens()
+    assert loaded is not None
+    assert loaded.access_token == long_access_token
+    assert loaded.refresh_token == tokens.refresh_token
+
+    # Ao deletar, limpa todos os chunks
+    store.delete_tokens()
+    assert len(mock_keyring) == 0
+    assert store.load_tokens() is None
