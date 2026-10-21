@@ -53,9 +53,10 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import cyclopts
-from cyclopts import Parameter
 import datajud_store as store
-from datajud_endpoints import ALIASES, endpoint as endpoint_publico
+from cyclopts import Parameter
+from datajud_endpoints import ALIASES
+from datajud_endpoints import endpoint as endpoint_publico
 from datajud_modelos import Assunto, Codificado, Movimento, OrgaoJulgador, RequisicaoBusca
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
