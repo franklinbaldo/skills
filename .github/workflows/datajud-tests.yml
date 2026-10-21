@@ -12,6 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - name: Show proposed Ruff import corrections
+        run: uvx ruff check --select I --diff datajud/scripts/datajud.py || true
       - name: Compile and test DataJud
         run: |
-          uv run --with pytest --with cyclopts --with pydantic --with rich --with platformdirs pytest -q datajud/tests/
+          uv run --with pytest --with cyclopts --with pydantic --with rich --with platformdirs --with fastmcp pytest -q datajud/tests/
