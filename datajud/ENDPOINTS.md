@@ -47,15 +47,15 @@ conexao nao e usado para inferir ausencia de processos.
 
 Familias catalogadas:
 
-| Familia | Aliases |
-| --- | ---: |
-| Justiça Estadual | 27 |
-| Justiça Eleitoral | 27 |
-| Justiça do Trabalho | 24 |
-| Justiça Federal | 6 |
-| Tribunais Superiores (STJ, TST, TSE, STM) | 4 |
-| Justiça Militar Estadual (MG, RS, SP) | 3 |
-| **Total** | **91** |
+| Familia                                   | Aliases |
+| ----------------------------------------- | ------: |
+| Justiça Estadual                          |      27 |
+| Justiça Eleitoral                         |      27 |
+| Justiça do Trabalho                       |      24 |
+| Justiça Federal                           |       6 |
+| Tribunais Superiores (STJ, TST, TSE, STM) |       4 |
+| Justiça Militar Estadual (MG, RS, SP)     |       3 |
+| **Total**                                 |  **91** |
 
 O STF nao figura entre os aliases publicos catalogados. Toda rota segue
 `POST https://api-publica.datajud.cnj.jus.br/api_publica_{alias}/_search`.
@@ -73,6 +73,7 @@ O STF nao figura entre os aliases publicos catalogados. Toda rota segue
   possuem autorizacoes e semanticas diferentes; nao sao testadas aqui.
 
 Fontes:
+
 - https://datajud-wiki.cnj.jus.br/api-publica/endpoints/
 - https://datajud-wiki.cnj.jus.br/api-publica/acesso/
 - https://datajud-wiki.cnj.jus.br/para-tribunais/orientacoes-rest/envio-xml/envio-rest/
