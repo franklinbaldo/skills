@@ -121,8 +121,11 @@ uv run jus-br/cli.py peticionamento intercorrente `
 
 ---
 
-## 3. Diretrizes de Segurança para Agentes
+## 3. Diretrizes de Segurança e Confiabilidade Forense
 
-1. **Nunca expor tokens:** Não faça log, print ou commit de `access_token`, `refresh_token`, `authorization_code` ou `code_verifier`.
-2. **Tratamento de 401 Unauthorized:** O `JusBrClient` tenta renovar o token automaticamente uma vez ao encontrar erro HTTP 401. Caso o refresh falhe (sessão revogada), instrua o usuário a executar `jusbr auth login`.
-3. **Validação de Hash e Integridade:** Todas as requisições de peticionamento calculam o SHA-256 do arquivo PDF antes do envio para conferência de integridade.
+1. **Tolerância Zero a Dados Fictícios:** O cliente e a CLI **nunca simulam** recibos de protocolo, números de protocolo ou dados processuais. Falhas de conexão, indisponibilidade de serviço ou rejeições de barramento propagam `JusBrApiError` imediatamente. Protocolo somente é confirmado com recibo autêntico emitido pelo tribunal.
+2. **Nunca Expor Credenciais:** Não faça log, print ou commit de `access_token`, `refresh_token`, `authorization_code` ou `code_verifier`.
+3. **Validação Estrita de Callback:** O authorization code só é aceito se acompanhado de `state` idêntico ao gerado para a sessão e se originado do domínio oficial (`www.jus.br`). Códigos isolados sem validação CSRF são expressamente rejeitados.
+4. **Integridade de Peças com SHA-256:** Todas as requisições de peticionamento calculam o hash SHA-256 do arquivo PDF antes do envio, registrando a impressão digital da peça para auditoria e conferência contra o recibo.
+5. **Atualização Transacional no Keyring:** Novos tokens são gravados em chunks atômicos. Chunks antigos só são purgados após a confirmação da escrita da nova sessão, prevenindo corrupção de credenciais em falhas parciais.
+6. **Tratamento de 401 Unauthorized:** O `JusBrClient` tenta renovar o token automaticamente via refresh token uma vez ao encontrar erro HTTP 401. Caso a sessão esteja revogada remotamente, orienta a execução de `jusbr auth login`.

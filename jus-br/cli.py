@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import queue
 import subprocess
 import sys
@@ -254,8 +255,17 @@ def auth_logout() -> None:
     """Encerra a sessão local e revoga tokens no Keycloak do CNJ."""
     store = CredentialStore()
     auth = AuthService(credential_store=store)
-    auth.logout()
-    console.print("[bold green]Sessão encerrada com sucesso.[/bold green] Credenciais removidas do keyring.")
+    remoto_ok = auth.logout()
+    if remoto_ok:
+        console.print(
+            "[bold green]Sessão encerrada com sucesso.[/bold green] "
+            "Tokens revogados no Keycloak do CNJ e removidos do keyring local."
+        )
+    else:
+        console.print(
+            "[yellow]Sessão local removida do keyring.[/yellow] "
+            "[dim](Aviso: Revogação remota no Keycloak não confirmada ou sem conexão)[/dim]"
+        )
 
 
 @usuario_app.command(name="obter")
@@ -375,7 +385,9 @@ def peticionamento_intercorrente(
         console.print(f"[bold red]Arquivo não encontrado:[/bold red] {arquivo}")
         sys.exit(1)
 
-    b64_content = base64.b64encode(path.read_bytes()).decode("ascii")
+    file_bytes = path.read_bytes()
+    sha256_hash = hashlib.sha256(file_bytes).hexdigest()
+    b64_content = base64.b64encode(file_bytes).decode("ascii")
 
     req = PeticionamentoRequest(
         numero_processo=processo,
@@ -384,17 +396,21 @@ def peticionamento_intercorrente(
         descricao=descricao or f"Peticionamento intercorrente: {tipo}",
         arquivo_base64=b64_content,
         nome_arquivo=path.name,
+        hash_sha256=sha256_hash,
     )
 
     client = JusBrClient()
     try:
         resp = client.peticionar_intercorrente(req)
-        console.print("[bold green]Petição transmitida com sucesso ao barramento da PDPJ![/bold green]")
+        console.print("[bold green]Recibo autêntico de protocolo recebido da PDPJ![/bold green]")
         console.print(f"Protocolo: [bold cyan]{resp.protocolo}[/bold cyan]")
         console.print(f"Status: {resp.status}")
         console.print(f"Data: {resp.data_recebimento}")
+        console.print(f"SHA-256: [dim]{sha256_hash}[/dim]")
+        if resp.mensagem:
+            console.print(f"Mensagem: {resp.mensagem}")
     except Exception as exc:
-        console.print(f"[bold red]Falha ao protocolar petição:[/bold red] {exc}")
+        console.print(f"[bold red]Falha ao protocolar petição na PDPJ:[/bold red] {exc}")
         sys.exit(1)
 
 

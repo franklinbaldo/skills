@@ -34,20 +34,75 @@ class CredentialStore:
             raise KeyringUnavailableError(f"Erro ao verificar disponibilidade do keyring: {exc}") from exc
 
     def save_tokens(self, tokens: TokenResponse) -> None:
-        """Salva a resposta de tokens serializada no keyring, usando chunking se exceder CHUNK_SIZE."""
+        """Salva a resposta de tokens serializada no keyring de forma transacional.
+
+        Os dados anteriores somente são expurgados após a gravação completa e bem-sucedida dos novos tokens.
+        Em caso de falha durante a escrita, a sessão anterior é preservada.
+        """
         self.check_availability()
+        payload = tokens.model_dump_json()
+
+        # Descobrir estado prévio
+        old_chunks_count = 0
         try:
-            self.delete_tokens()
-            payload = tokens.model_dump_json()
-            if len(payload) <= CHUNK_SIZE:
+            old_count_str = keyring.get_password(self.service_name, f"{self.username}_chunks")
+            if old_count_str:
+                old_chunks_count = int(old_count_str)
+        except Exception:
+            old_chunks_count = 0
+
+        if len(payload) <= CHUNK_SIZE:
+            # Modo single: grava o payload completo primeiro
+            try:
                 keyring.set_password(self.service_name, self.username, payload)
-            else:
-                chunks = [payload[i : i + CHUNK_SIZE] for i in range(0, len(payload), CHUNK_SIZE)]
+            except Exception as exc:
+                raise KeyringStorageError(f"Falha ao gravar credenciais no keyring: {exc}") from exc
+
+            # Limpa chunks antigos excedentes após sucesso
+            if old_chunks_count > 0:
+                for idx in range(old_chunks_count):
+                    try:
+                        keyring.delete_password(self.service_name, f"{self.username}_chunk_{idx}")
+                    except Exception:
+                        pass
+                try:
+                    keyring.delete_password(self.service_name, f"{self.username}_chunks")
+                except Exception:
+                    pass
+        else:
+            # Modo chunking: grava os novos chunks
+            chunks = [payload[i : i + CHUNK_SIZE] for i in range(0, len(payload), CHUNK_SIZE)]
+            written_chunks = []
+            try:
                 for idx, chunk in enumerate(chunks):
                     keyring.set_password(self.service_name, f"{self.username}_chunk_{idx}", chunk)
+                    written_chunks.append(idx)
+                # Atualiza o contador de chunks consolidando a nova transação
                 keyring.set_password(self.service_name, f"{self.username}_chunks", str(len(chunks)))
-        except Exception as exc:
-            raise KeyringStorageError(f"Falha ao gravar credenciais no keyring: {exc}") from exc
+            except Exception as exc:
+                # Rollback parcial dos chunks que acabaram de ser escritos nesta tentativa
+                for idx in written_chunks:
+                    try:
+                        keyring.delete_password(self.service_name, f"{self.username}_chunk_{idx}")
+                    except Exception:
+                        pass
+                raise KeyringStorageError(
+                    f"Falha ao gravar novos chunks no keyring (sessão anterior preservada): {exc}"
+                ) from exc
+
+            # Limpa valor single antigo se existia
+            try:
+                keyring.delete_password(self.service_name, self.username)
+            except Exception:
+                pass
+
+            # Limpa chunks antigos que excedem o novo tamanho
+            if old_chunks_count > len(chunks):
+                for idx in range(len(chunks), old_chunks_count):
+                    try:
+                        keyring.delete_password(self.service_name, f"{self.username}_chunk_{idx}")
+                    except Exception:
+                        pass
 
     def load_tokens(self) -> TokenResponse | None:
         """Carrega e remonta os tokens armazenados no keyring."""

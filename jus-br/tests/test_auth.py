@@ -61,6 +61,23 @@ def test_parse_callback_input_state_mismatch():
         parse_callback_input(url, expected_state="expected_state")
 
 
+def test_parse_callback_input_missing_state():
+    url = "https://www.jus.br/callback?code=code_abc_123"
+    with pytest.raises(OAuthStateMismatchError, match="Parâmetro 'state' ausente"):
+        parse_callback_input(url, expected_state="state_xyz_789")
+
+
+def test_parse_callback_input_isolated_code_rejected():
+    with pytest.raises(JusBrAuthError, match="código isolado sem contexto"):
+        parse_callback_input("just_a_random_code_without_url", expected_state="state_xyz_789")
+
+
+def test_parse_callback_input_unauthorized_host():
+    url = "https://attacker.evil.com/callback?code=code_abc_123&state=s1"
+    with pytest.raises(JusBrAuthError, match="Origem de callback não autorizada"):
+        parse_callback_input(url, expected_state="s1")
+
+
 def test_parse_callback_input_with_error():
     url = "https://www.jus.br/?error=access_denied&error_description=Cancelado&state=s1"
     with pytest.raises(JusBrAuthError, match="Erro retornado na autorização do CNJ"):
@@ -139,3 +156,18 @@ def test_auth_service_raises_when_no_session():
     service = AuthService(credential_store=mock_store)
     with pytest.raises(SessionExpiredError):
         service.ensure_valid_tokens()
+
+
+def test_logout_remote_success_and_failure():
+    from auth import logout
+
+    # Sucesso 204
+    mock_ok = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(204)))
+    assert logout("some_rt", http_client=mock_ok) is True
+
+    # Falha 500
+    mock_fail = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(500, text="Internal error")))
+    assert logout("some_rt", http_client=mock_fail) is False
+
+    # Sem refresh token
+    assert logout(None) is False

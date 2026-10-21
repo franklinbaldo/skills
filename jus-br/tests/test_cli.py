@@ -164,4 +164,5 @@ def test_cli_peticionamento_intercorrente(mock_client_and_auth, tmp_path, capsys
     )
     captured = capsys.readouterr()
     assert "PROT-TEST-1234" in captured.out
-    assert "Petição transmitida com sucesso" in captured.out
+    assert "Recibo autêntico de protocolo recebido da PDPJ" in captured.out
+    assert "SHA-256" in captured.out

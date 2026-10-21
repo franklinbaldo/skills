@@ -137,11 +137,12 @@ class PeticionamentoRequest(BaseModel):
     descricao: str | None = None
     arquivo_base64: str
     nome_arquivo: str
+    hash_sha256: str | None = None
     documentos_anexos: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class PeticionamentoResponse(BaseModel):
-    """Recibo de protocolo retornado pelo barramento de peticionamento."""
+    """Recibo autêntico de protocolo retornado pelo barramento de peticionamento."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -149,4 +150,5 @@ class PeticionamentoResponse(BaseModel):
     data_recebimento: str
     numero_processo: str
     status: str = "RECEBIDO"
+    hash_sha256: str | None = None
     mensagem: str | None = None

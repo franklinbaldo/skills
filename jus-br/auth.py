@@ -62,28 +62,54 @@ def build_authorization_url(
     return f"{AUTH_ENDPOINT}?{urllib.parse.urlencode(params)}"
 
 
+ALLOWED_CALLBACK_HOSTS = ("www.jus.br", "jus.br")
+
+
 def parse_callback_input(callback_input: str, expected_state: str) -> str:
-    """Extrai o authorization code de uma URL colada ou string com validação de state."""
+    """Extrai e valida estritamente o authorization code de uma URL de callback.
+
+    Exige:
+    1. Que a entrada seja uma URL com protocolo HTTP/HTTPS ou fragmento de query válido.
+    2. Que a origem da URL (se presente) pertença ao domínio oficial autorizado do Jus.br.
+    3. Que o parâmetro 'state' esteja obrigatoriamente presente e seja idêntico ao expected_state (proteção CSRF).
+    4. Que o parâmetro 'code' esteja presente.
+    Código isolado sem URL e sem validação de state é expressamente rejeitado.
+    """
     raw = callback_input.strip()
-    if "?" in raw or "&" in raw or raw.startswith("http"):
-        parsed = urllib.parse.urlparse(raw)
-        qs = urllib.parse.parse_qs(parsed.query or parsed.fragment)
-        error = qs.get("error", [None])[0]
-        if error:
-            desc = qs.get("error_description", [""])[0]
-            raise JusBrAuthError(f"Erro retornado na autorização do CNJ: {error} ({desc})")
+    if not raw:
+        raise JusBrAuthError("Entrada vazia. Forneça a URL de redirecionamento contendo code e state.")
 
-        state = qs.get("state", [None])[0]
-        if state and state != expected_state:
-            raise OAuthStateMismatchError(f"State retornado ({state}) não confere com o esperado ({expected_state}).")
+    if not ("?" in raw or "&" in raw or raw.startswith("http")):
+        raise JusBrAuthError(
+            "Entrada inválida: código isolado sem contexto de callback não é permitido por segurança. "
+            "Forneça a URL completa de redirecionamento contendo os parâmetros 'code' e 'state'."
+        )
 
-        code = qs.get("code", [None])[0]
-        if not code:
-            raise JusBrAuthError("Nenhum parâmetro 'code' encontrado na URL informada.")
-        return code
+    parsed = urllib.parse.urlparse(raw)
+    if parsed.netloc and parsed.netloc.lower() not in ALLOWED_CALLBACK_HOSTS:
+        raise JusBrAuthError(
+            f"Origem de callback não autorizada: '{parsed.netloc}'. "
+            f"Esperado domínio oficial: {', '.join(ALLOWED_CALLBACK_HOSTS)}"
+        )
 
-    # Caso o usuário tenha colado diretamente o código
-    return raw
+    qs = urllib.parse.parse_qs(parsed.query or parsed.fragment)
+    error = qs.get("error", [None])[0]
+    if error:
+        desc = qs.get("error_description", [""])[0]
+        raise JusBrAuthError(f"Erro retornado na autorização do CNJ: {error} ({desc})")
+
+    state = qs.get("state", [None])[0]
+    if not state:
+        raise OAuthStateMismatchError("Parâmetro 'state' ausente na URL de callback. Possível tentativa de CSRF.")
+
+    if state != expected_state:
+        raise OAuthStateMismatchError(f"State retornado ({state}) não confere com o esperado ({expected_state}).")
+
+    code = qs.get("code", [None])[0]
+    if not code:
+        raise JusBrAuthError("Nenhum parâmetro 'code' encontrado na URL informada.")
+
+    return code
 
 
 def exchange_code_for_tokens(
@@ -185,16 +211,24 @@ def get_userinfo(access_token: str, http_client: httpx.Client | None = None) -> 
     raise JusBrAuthError(f"Erro ao consultar UserInfo ({resp.status_code}): {resp.text}")
 
 
-def logout(refresh_token: str | None = None, http_client: httpx.Client | None = None) -> None:
-    """Encerra a sessão no Keycloak do CNJ."""
+def logout(refresh_token: str | None = None, http_client: httpx.Client | None = None) -> bool:
+    """Encerra a sessão no Keycloak do CNJ.
+
+    Retorna True se a revogação remota foi aceita pelo Keycloak, ou False se houve falha ou ausência de token.
+    """
     if not refresh_token:
-        return
+        return False
     client = http_client or httpx.Client(timeout=10.0)
     data = {"client_id": CLIENT_ID, "refresh_token": refresh_token}
     try:
-        client.post(LOGOUT_ENDPOINT, data=data)
-    except Exception:
-        pass
+        resp = client.post(LOGOUT_ENDPOINT, data=data)
+        if resp.status_code in (200, 204):
+            return True
+        logger.warning("Keycloak retornou HTTP %s ao revogar sessão: %s", resp.status_code, resp.text)
+        return False
+    except Exception as exc:
+        logger.warning("Falha de rede ao contatar endpoint de logout do Keycloak: %s", exc)
+        return False
 
 
 class AuthService:
@@ -251,9 +285,15 @@ class AuthService:
         self.store.save_tokens(tokens)
         return tokens
 
-    def logout(self) -> None:
-        """Revoga tokens no Keycloak do CNJ e remove do keyring."""
+    def logout(self) -> bool:
+        """Revoga tokens no Keycloak do CNJ e remove do keyring local.
+
+        Retorna True se a revogação remota foi confirmada pelo Keycloak, False caso contrário.
+        Os dados locais no keyring são sempre expurgados.
+        """
+        revogado_remoto = False
         tokens = self.store.load_tokens()
         if tokens and tokens.refresh_token:
-            logout(tokens.refresh_token, http_client=self.http_client)
+            revogado_remoto = logout(tokens.refresh_token, http_client=self.http_client)
         self.store.delete_tokens()
+        return revogado_remoto

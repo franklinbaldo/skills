@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any
 
 import httpx
@@ -100,35 +99,24 @@ class JusBrClient:
         return ComunicacaoResponse.model_validate(resp.json())
 
     def consultar_processo(self, numero: str) -> ProcessoConsultaItem:
-        """Consulta metadados e linha processual de um processo na PDPJ."""
+        """Consulta metadados e linha processual de um processo na PDPJ.
+
+        Propaga JusBrApiError ou JusBrUnauthorizedError caso o serviço retorne erro.
+        Nenhum dado é forjado ou simulado em caso de falha.
+        """
         clean_num = "".join(c for c in numero if c.isdigit())
-        # Na PDPJ a consulta unificada integra os tribunais pelo barramento
+        if not clean_num:
+            raise JusBrApiError(f"Número de processo inválido: {numero}")
         url = f"https://api.pdpj.jus.br/processos/{clean_num}"
-        try:
-            resp = self._authenticated_request("GET", url)
-            data = resp.json()
-            return ProcessoConsultaItem.model_validate(data)
-        except Exception:
-            # Fallback mock/draft para simulação antes de homologação de endpoint
-            return ProcessoConsultaItem(
-                numero=clean_num,
-                classe="Procedimento Comum",
-                tribunal="TJRO",
-                orgao_julgador="Vara de Fazenda Pública",
-            )
+        resp = self._authenticated_request("GET", url)
+        return ProcessoConsultaItem.model_validate(resp.json())
 
     def peticionar_intercorrente(self, request: PeticionamentoRequest) -> PeticionamentoResponse:
-        """Submete uma petição intercorrente ao barramento da PDPJ."""
+        """Submete uma petição intercorrente ao barramento da PDPJ.
+
+        Somente retorna sucesso quando um recibo autêntico for emitido e validado pelo barramento da PDPJ.
+        Em caso de erro de rede, recusa de protocolo ou rejeição, propaga exceção explicita.
+        """
         url = "https://api.pdpj.jus.br/peticionamento/intercorrente"
-        try:
-            resp = self._authenticated_request("POST", url, json=request.model_dump())
-            return PeticionamentoResponse.model_validate(resp.json())
-        except Exception:
-            # Protocolo estruturado de resposta em modo prévio
-            return PeticionamentoResponse(
-                protocolo=f"PROT-{int(time.time())}",
-                data_recebimento=time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                numero_processo=request.numero_processo,
-                status="EM_ANALISE",
-                mensagem="Petição recebida para transmissão ao tribunal de destino.",
-            )
+        resp = self._authenticated_request("POST", url, json=request.model_dump())
+        return PeticionamentoResponse.model_validate(resp.json())

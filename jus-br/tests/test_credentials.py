@@ -101,3 +101,34 @@ def test_keyring_unavailable_error():
     with patch("credentials.keyring.get_keyring", side_effect=Exception("No backend")):
         with pytest.raises(KeyringUnavailableError):
             store.check_availability()
+
+
+def test_transactional_save_preserves_old_tokens_on_failure(mock_keyring):
+    store = CredentialStore(service_name="test-jusbr")
+    old_tokens = TokenResponse(access_token="old_access_token", refresh_token="old_rt", expires_in=300)
+    store.save_tokens(old_tokens)
+    assert store.load_tokens().access_token == "old_access_token"
+
+    # Tentativa de salvar novos tokens com falha no meio
+    new_tokens = TokenResponse(
+        access_token="new_" + "z" * 1500,
+        refresh_token="new_rt",
+        expires_in=300,
+    )
+
+    calls = 0
+
+    def failing_set_password(service, username, password):
+        nonlocal calls
+        calls += 1
+        if "chunk_1" in username:
+            raise Exception("Quota exceeded in WinVault")
+        mock_keyring[(service, username)] = password
+
+    with patch("credentials.keyring.set_password", side_effect=failing_set_password):
+        with pytest.raises(KeyringStorageError, match="sessão anterior preservada"):
+            store.save_tokens(new_tokens)
+
+    # Verifica que a sessão antiga não foi perdida
+    assert store.load_tokens() is not None
+    assert store.load_tokens().access_token == "old_access_token"

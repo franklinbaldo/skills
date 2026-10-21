@@ -123,7 +123,60 @@ def test_client_peticionar_intercorrente(mock_auth_service):
         sigla_tribunal="TJRO",
         arquivo_base64="ZHVtbXk=",
         nome_arquivo="manifestacao.pdf",
+        hash_sha256="abc123sha256",
     )
     resp = client.peticionar_intercorrente(req)
     assert resp.protocolo == "PROT-20261021-999"
     assert resp.status == "RECEBIDO"
+
+
+def test_client_consultar_processo_sucesso(mock_auth_service):
+    mock_http = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda req: httpx.Response(
+                200,
+                json={
+                    "numero": "70012345620248220001",
+                    "classe": "Ação Civil Pública",
+                    "tribunal": "TJRO",
+                    "orgao_julgador": "2ª Vara Cível",
+                },
+            )
+        )
+    )
+    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
+    proc = client.consultar_processo("70012345620248220001")
+    assert proc.numero == "70012345620248220001"
+    assert proc.classe == "Ação Civil Pública"
+
+
+def test_client_consultar_processo_falha_nao_simula_dados(mock_auth_service):
+    from errors import JusBrApiError
+
+    mock_http = httpx.Client(
+        transport=httpx.MockTransport(lambda req: httpx.Response(404, text="Processo não localizado no barramento"))
+    )
+    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
+
+    with pytest.raises(JusBrApiError, match="Erro na API da PDPJ"):
+        client.consultar_processo("70012345620248220001")
+
+
+def test_client_peticionar_intercorrente_falha_nao_fabrica_recibo(mock_auth_service):
+    from errors import JusBrApiError
+
+    mock_http = httpx.Client(
+        transport=httpx.MockTransport(lambda req: httpx.Response(500, text="Falha de conexão com o tribunal destino"))
+    )
+    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
+
+    req = PeticionamentoRequest(
+        numero_processo="70012345620248220001",
+        tipo_peticao="Manifestação",
+        sigla_tribunal="TJRO",
+        arquivo_base64="ZHVtbXk=",
+        nome_arquivo="manifestacao.pdf",
+    )
+    # Garante categoricamente que JAMAIS fabrica PROT-<timestamp> em caso de erro!
+    with pytest.raises(JusBrApiError, match="Erro na API da PDPJ"):
+        client.peticionar_intercorrente(req)
