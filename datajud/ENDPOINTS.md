@@ -18,6 +18,29 @@ A primeira operacao e **offline**: imprime as 91 URLs organizadas por familia.
 `--probe` consulta o endpoint real por POST com `size=0`; devolve uma linha
 JSON por tribunal, sem recuperar documentos ou movimentacoes. Consulte a chave
 vigente em https://datajud-wiki.cnj.jus.br/api-publica/acesso/ .
+Para uma varredura retomavel dos 91 endpoints e da matriz DSL:
+
+```bash
+export DATAJUD_API_KEY='<chave-publica-do-CNJ>'
+python datajud/scripts/datajud_endpoints.py --probe --journal datajud-probes.jsonl --resume
+python datajud/scripts/datajud_endpoints.py --probe --features --journal datajud-matriz.jsonl --resume
+# Primeira rodada mais prudente, so um tribunal:
+python datajud/scripts/datajud_endpoints.py --probe --features --alias tjro --journal tjro.jsonl
+```
+
+`--features` executa sete consultas independentes (match_all, term, bool,
+range, aggs, source, sort). Com 91 aliases, isso representa **637 consultas**;
+nao execute todas sem considerar o limite de requisicoes do CNJ. Um retorno
+positivo apenas prova que o servidor respondeu adequadamente ao corpo
+testado naquele instante; nao estabelece compatibilidade universal do recurso.
+
+O arquivo JSONL registra timestamp UTC, alias, recurso, hash do contrato,
+status HTTP e categoria de falha, sem registrar dados pessoais ou a chave.
+O journal e somente acrescentado; `--resume` reutiliza apenas sucessos
+anteriores do mesmo corpo de teste. Erros HTTP, JSON invalido e falhas
+parciais dos shards sao preservados e tentados novamente numa futura rodada.
+**A execucao da varredura real nao e implicita na PR.**
+
 O argumento `--delay` controla o intervalo entre chamadas; evite executar
 probes indiscriminados em horario de pico. A resposta HTTP ou o erro de
 conexao nao e usado para inferir ausencia de processos.
