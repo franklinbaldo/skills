@@ -1,0 +1,343 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "cyclopts>=3.0",
+#     "httpx>=0.27.0",
+#     "keyring>=25.0.0",
+#     "pydantic>=2.0.0",
+#     "rich>=13.0.0",
+# ]
+# ///
+"""Interface de linha de comando para o Jus.br e PDPJ/CNJ."""
+
+from __future__ import annotations
+
+import base64
+import sys
+import time
+import webbrowser
+from pathlib import Path
+from typing import Annotated
+
+from cyclopts import App, Parameter
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+_root = Path(__file__).resolve().parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+from auth import AuthService  # noqa: E402
+from client import JusBrClient  # noqa: E402
+from credentials import CredentialStore  # noqa: E402
+from errors import (  # noqa: E402
+    JusBrAuthError,
+    RefreshTokenRevokedError,
+    SessionExpiredError,
+)
+from models import PeticionamentoRequest  # noqa: E402
+
+console = Console()
+
+app = App(
+    name="jusbr",
+    help="CLI para operações no portal Jus.br e Plataforma Digital do Poder Judiciário (PDPJ-Br).",
+    result_action=lambda x: x,
+)
+auth_app = App(name="auth", help="Gerenciamento de autenticação e sessão no CNJ.", result_action=lambda x: x)
+usuario_app = App(name="usuario", help="Consultas sobre o perfil na PDPJ.", result_action=lambda x: x)
+comunicacoes_app = App(
+    name="comunicacoes", help="Consulta de intimações e comunicações oficiais.", result_action=lambda x: x
+)
+processo_app = App(name="processo", help="Consulta processual unificada na PDPJ.", result_action=lambda x: x)
+peticionamento_app = App(name="peticionamento", help="Envio e acompanhamento de petições.", result_action=lambda x: x)
+
+app.command(auth_app)
+app.command(usuario_app)
+app.command(comunicacoes_app)
+app.command(processo_app)
+app.command(peticionamento_app)
+
+
+@auth_app.command(name="login")
+def auth_login(
+    force: Annotated[bool, Parameter(help="Forçar novo login mesmo se já houver sessão ativa.")] = False,
+    callback_url: Annotated[str, Parameter(help="URL final redirecionada contendo o parâmetro code.")] = "",
+    no_browser: Annotated[bool, Parameter(help="Não abrir o navegador automaticamente.")] = False,
+) -> None:
+    """Inicia autenticação com a conta gov.br / certificado digital no Keycloak da PDPJ/CNJ."""
+    store = CredentialStore()
+    auth = AuthService(credential_store=store)
+    client = JusBrClient(auth_service=auth)
+
+    if not force:
+        try:
+            auth.ensure_valid_tokens()
+            perfil = client.obter_perfil()
+            console.print("[green]Sessão ativa e válida no keyring da PDPJ/CNJ.[/green]")
+            console.print(
+                f"Usuário: [bold]{perfil.name or perfil.preferred_username}[/bold] (CPF: {perfil.cpf_mascarado()})"
+            )
+            return
+        except (SessionExpiredError, RefreshTokenRevokedError):
+            pass
+        except Exception as exc:
+            console.print(f"[yellow]Sessão anterior da PDPJ não pôde ser reaproveitada: {exc}[/yellow]")
+
+    auth_url, verifier, state = auth.start_login()
+
+    console.print(
+        Panel(
+            "[bold cyan]Autenticação Jus.br (PDPJ/CNJ)[/bold cyan]\n\n"
+            "1. O navegador será aberto no Keycloak oficial da PDPJ/CNJ.\n"
+            "2. Autentique-se com sua conta [bold]Gov.br[/bold] ou [bold]Certificado Digital[/bold] e conclua o MFA.\n"
+            "3. Ao finalizar, o navegador redirecionará para [cyan]https://www.jus.br/?code=...&state=...[/cyan]\n"
+            "4. Copie a URL completa da barra de endereços do navegador e cole aqui para finalizar.",
+            title="Login Único Jus.br",
+            border_style="cyan",
+        )
+    )
+
+    if not no_browser:
+        webbrowser.open(auth_url)
+
+    target_input = callback_url
+    if not target_input:
+        target_input = console.input(
+            "\n[bold yellow]Cole a URL redirecionada (ou o código) aqui: [/bold yellow]"
+        ).strip()
+
+    try:
+        tokens = auth.complete_login(target_input, code_verifier=verifier, state=state)
+        perfil = client.obter_perfil()
+        console.print("[bold green]Autenticação concluída com sucesso![/bold green]")
+        console.print(
+            f"Bem-vindo(a), [bold]{perfil.name or perfil.preferred_username}[/bold] (CPF: {perfil.cpf_mascarado()})"
+        )
+        console.print(
+            f"[dim]Token Bearer armazenado com segurança no Windows Credential Manager. Validade: {tokens.expires_in}s[/dim]"
+        )
+    except JusBrAuthError as exc:
+        console.print(f"[bold red]Falha na autenticação da PDPJ:[/bold red] {exc}")
+        sys.exit(1)
+    except Exception as exc:
+        console.print(f"[bold red]Erro inesperado:[/bold red] {exc}")
+        sys.exit(1)
+
+
+@auth_app.command(name="status")
+def auth_status() -> None:
+    """Verifica a situação da sessão atual da PDPJ no keyring."""
+    store = CredentialStore()
+    tokens = store.load_tokens()
+
+    if not tokens:
+        console.print("[yellow]Status: Não autenticado.[/yellow] (Nenhuma sessão encontrada no keyring)")
+        return
+
+    table = Table(title="Status da Sessão Jus.br / PDPJ", border_style="cyan")
+    table.add_column("Propriedade", style="bold")
+    table.add_column("Valor")
+
+    table.add_row("Keyring", "Conectado (Windows Credential Manager)")
+
+    now = time.time()
+    at_remaining = int((tokens.created_at + tokens.expires_in) - now)
+    if at_remaining > 0:
+        table.add_row("Access Token", f"[green]Válido ({at_remaining}s restantes)[/green]")
+    else:
+        table.add_row("Access Token", f"[yellow]Expirado há {abs(at_remaining)}s (renovável via refresh)[/yellow]")
+
+    if tokens.refresh_token:
+        if tokens.refresh_expires_in:
+            rt_remaining = int((tokens.created_at + tokens.refresh_expires_in) - now)
+            if rt_remaining > 0:
+                table.add_row("Refresh Token", f"[green]Ativo ({rt_remaining // 60} min restantes)[/green]")
+            else:
+                table.add_row("Refresh Token", "[red]Expirado[/red]")
+        else:
+            table.add_row("Refresh Token", "[green]Ativo[/green]")
+    else:
+        table.add_row("Refresh Token", "[red]Ausente[/red]")
+
+    auth = AuthService(credential_store=store)
+    client = JusBrClient(auth_service=auth)
+    try:
+        perfil = client.obter_perfil()
+        table.add_row("Estado", "[bold green]Sessão Ativa e Operacional[/bold green]")
+        table.add_row("Usuário", f"{perfil.name or perfil.preferred_username} ({perfil.cpf_mascarado()})")
+        if perfil.email:
+            table.add_row("E-mail", perfil.email)
+    except Exception as exc:
+        table.add_row("Estado", f"[yellow]Atenção ao validar perfil: {exc}[/yellow]")
+
+    console.print(table)
+
+
+@auth_app.command(name="refresh")
+def auth_refresh() -> None:
+    """Renova manualmente a sessão utilizando o refresh token."""
+    store = CredentialStore()
+    auth = AuthService(credential_store=store)
+    try:
+        tokens = auth.refresh()
+        console.print("[bold green]Sessão da PDPJ renovada com sucesso![/bold green]")
+        console.print(f"Novo access token emitido com validade de {tokens.expires_in}s.")
+    except Exception as exc:
+        console.print(f"[bold red]Falha ao renovar sessão:[/bold red] {exc}")
+        sys.exit(1)
+
+
+@auth_app.command(name="logout")
+def auth_logout() -> None:
+    """Encerra a sessão local e revoga tokens no Keycloak do CNJ."""
+    store = CredentialStore()
+    auth = AuthService(credential_store=store)
+    auth.logout()
+    console.print("[bold green]Sessão encerrada com sucesso.[/bold green] Credenciais removidas do keyring.")
+
+
+@usuario_app.command(name="obter")
+def usuario_obter() -> None:
+    """Consulta dados cadastrais do usuário na PDPJ/Jus.br."""
+    client = JusBrClient()
+    try:
+        perfil = client.obter_perfil()
+    except Exception as exc:
+        console.print(f"[bold red]Erro ao consultar perfil na PDPJ:[/bold red] {exc}")
+        sys.exit(1)
+
+    table = Table(title="Perfil do Usuário - PDPJ / Jus.br", border_style="green")
+    table.add_column("Campo", style="bold")
+    table.add_column("Valor")
+
+    table.add_row("Nome", perfil.name or "-")
+    table.add_row("Login / Usuário", perfil.preferred_username or "-")
+    table.add_row("CPF", perfil.cpf_mascarado())
+    table.add_row("E-mail", perfil.email or "-")
+    table.add_row("Perfis / Papéis", ", ".join(perfil.roles) if perfil.roles else "Padrão")
+
+    console.print(table)
+
+
+@comunicacoes_app.command(name="buscar")
+def comunicacoes_buscar(
+    processo: Annotated[str, Parameter(help="Filtrar por número do processo (só dígitos ou CNJ).")] = "",
+    tribunal: Annotated[str, Parameter(help="Filtrar por sigla do tribunal (ex: TJRO, TRF1, STJ).")] = "",
+    data: Annotated[str, Parameter(help="Filtrar por data de disponibilização (YYYY-MM-DD).")] = "",
+    pagina: Annotated[int, Parameter(help="Número da página (inicia em 1).")] = 1,
+    itens: Annotated[int, Parameter(help="Quantidade de itens por página.")] = 10,
+) -> None:
+    """Consulta intimações, editais e publicações oficiais em tempo real (ComunicaAPI/PJe)."""
+    client = JusBrClient()
+    try:
+        resp = client.buscar_comunicacoes(
+            numero_processo=processo,
+            sigla_tribunal=tribunal,
+            data_disponibilizacao=data,
+            pagina=pagina,
+            itens_por_pagina=itens,
+        )
+    except Exception as exc:
+        console.print(f"[bold red]Erro ao consultar comunicações:[/bold red] {exc}")
+        sys.exit(1)
+
+    if not resp.items:
+        console.print("[yellow]Nenhuma comunicação encontrada para os filtros informados.[/yellow]")
+        return
+
+    table = Table(title=f"Comunicações e Publicações Oficiais (Página {pagina})", border_style="blue")
+    table.add_column("ID", justify="right", style="cyan")
+    table.add_column("Data", style="bold")
+    table.add_column("Tribunal", style="green")
+    table.add_column("Tipo")
+    table.add_column("Processo", style="bold", no_wrap=True)
+    table.add_column("Órgão Julgador")
+
+    for item in resp.items:
+        table.add_row(
+            str(item.id),
+            item.data_disponibilizacao or "-",
+            item.siglaTribunal or "-",
+            item.tipoComunicacao or "-",
+            item.numero_processo or "-",
+            item.nomeOrgao or "-",
+        )
+
+    console.print(table)
+    console.print(f"[dim]Total de registros encontrados na base nacional: {resp.count}[/dim]")
+
+
+@processo_app.command(name="consultar")
+def processo_consultar(
+    numero: Annotated[str, Parameter(help="Número único do processo (CNJ).")] = "",
+) -> None:
+    """Consulta metadados e andamento de processo judicial unificado na PDPJ."""
+    if not numero:
+        console.print("[bold red]Informe o número do processo.[/bold red]")
+        sys.exit(1)
+
+    client = JusBrClient()
+    try:
+        proc = client.consultar_processo(numero)
+    except Exception as exc:
+        console.print(f"[bold red]Erro ao consultar processo:[/bold red] {exc}")
+        sys.exit(1)
+
+    table = Table(title=f"Processo Judicial: {proc.numero}", border_style="magenta")
+    table.add_column("Campo", style="bold")
+    table.add_column("Valor")
+
+    table.add_row("Número", proc.numero)
+    table.add_row("Tribunal", proc.tribunal or "-")
+    table.add_row("Órgão Julgador", proc.orgao_julgador or "-")
+    table.add_row("Classe Processual", proc.classe or "-")
+
+    console.print(table)
+
+
+@peticionamento_app.command(name="intercorrente")
+def peticionamento_intercorrente(
+    processo: Annotated[str, Parameter(help="Número do processo de destino.")] = "",
+    tribunal: Annotated[str, Parameter(help="Sigla do tribunal (ex: TJRO).")] = "",
+    tipo: Annotated[str, Parameter(help="Tipo da petição (ex: Manifestação, Petição).")] = "Manifestação",
+    arquivo: Annotated[str, Parameter(help="Caminho do arquivo PDF da petição.")] = "",
+    descricao: Annotated[str, Parameter(help="Descrição sucinta da petição.")] = "",
+) -> None:
+    """Protocolar petição intercorrente em processo em andamento pela PDPJ."""
+    if not processo or not arquivo or not tribunal:
+        console.print("[bold red]Processo, tribunal e arquivo PDF são obrigatórios.[/bold red]")
+        sys.exit(1)
+
+    path = Path(arquivo)
+    if not path.is_file():
+        console.print(f"[bold red]Arquivo não encontrado:[/bold red] {arquivo}")
+        sys.exit(1)
+
+    b64_content = base64.b64encode(path.read_bytes()).decode("ascii")
+
+    req = PeticionamentoRequest(
+        numero_processo=processo,
+        tipo_peticao=tipo,
+        sigla_tribunal=tribunal,
+        descricao=descricao or f"Peticionamento intercorrente: {tipo}",
+        arquivo_base64=b64_content,
+        nome_arquivo=path.name,
+    )
+
+    client = JusBrClient()
+    try:
+        resp = client.peticionar_intercorrente(req)
+        console.print("[bold green]Petição transmitida com sucesso ao barramento da PDPJ![/bold green]")
+        console.print(f"Protocolo: [bold cyan]{resp.protocolo}[/bold cyan]")
+        console.print(f"Status: {resp.status}")
+        console.print(f"Data: {resp.data_recebimento}")
+    except Exception as exc:
+        console.print(f"[bold red]Falha ao protocolar petição:[/bold red] {exc}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    app()
