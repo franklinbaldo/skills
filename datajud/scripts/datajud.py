@@ -556,32 +556,48 @@ def consultar(entrada: ConsultaLote, anteriores: dict[str, ProcessoConsultado] |
 
     def rodar(tarefa):
         i, ds = tarefa
-        d = search(RequisicaoBusca(size=LOTE * 10, query={"terms": {"numeroProcesso": ds}}).bruto(),
-                   tribunal=i)
-        hits = d.get("hits", {}).get("hits", [])
-        total = d.get("hits", {}).get("total", {}).get("value", 0)
-        if total > len(hits):
-            if len(ds) > 1:
-                # Divisao adaptativa garante completude sem paginacao instavel.
-                meio = len(ds) // 2
-                return rodar((i, ds[:meio])) + rodar((i, ds[meio:]))
-            raise RuntimeError(
-                f"processo {ds[0]} em {i}: resposta truncada ({len(hits)} de {total}); "
-                "resultado incompleto nao pode ser considerado ausencia"
+        try:
+            d = search(
+                RequisicaoBusca(
+                    size=LOTE * 10, track_total_hits=True,
+                    query={"terms": {"numeroProcesso": ds}},
+                ).bruto(),
+                tribunal=i,
             )
-        return [Registro.model_validate(h) for h in hits]
+            hits = d.get("hits", {}).get("hits", [])
+            total_info = d.get("hits", {}).get("total", {})
+            total = total_info.get("value", 0) if isinstance(total_info, dict) else total_info
+            if total > len(hits) or (
+                isinstance(total_info, dict) and total_info.get("relation") == "gte"
+            ):
+                if len(ds) > 1:
+                    meio = len(ds) // 2
+                    parte_a, falhas_a = rodar((i, ds[:meio]))
+                    parte_b, falhas_b = rodar((i, ds[meio:]))
+                    return parte_a + parte_b, falhas_a + falhas_b
+                raise RuntimeError(
+                    f"resposta truncada em {i}: {len(hits)} de {total}; "
+                    "resultado incompleto nao pode ser ausencia"
+                )
+            return [Registro.model_validate(h) for h in hits], []
+        except (RuntimeError, ValidationError) as exc:
+            # A falha e atribuida apenas aos numeros desta subtarefa.
+            return [], [(numero, str(exc)[:200]) for numero in ds]
 
     with ThreadPoolExecutor(entrada.trabalhadores) as pool:
         futuros = {pool.submit(rodar, t): t for t in tarefas}
         for futuro in as_completed(futuros):
             i, ds = futuros[futuro]
             try:
-                for registro in futuro.result():
-                    if registro.numero in alvo:
-                        alvo[registro.numero].registros.append(registro)
-            except (RuntimeError, ValidationError) as e:
-                for num in ds:
-                    alvo[num].falhas.append(FalhaIndice(indice=i, erro=str(e)[:200]))
+                registros, falhas = futuro.result()
+            except Exception as exc:
+                registros = []
+                falhas = [(numero, str(exc)[:200]) for numero in ds]
+            for registro in registros:
+                if registro.numero in alvo:
+                    alvo[registro.numero].registros.append(registro)
+            for numero, mensagem in falhas:
+                alvo[numero].falhas.append(FalhaIndice(indice=i, erro=mensagem))
     for item in alvo.values():
         item.registros.sort(key=lambda r: (r.tribunal, r.grau or ""))
     return alvo
