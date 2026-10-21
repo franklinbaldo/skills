@@ -95,7 +95,7 @@ Corpo de `guiadispensada` (GuiaModel do front):
 - `pdf_procuracao`: vazio (procurador do Estado). O sistema registra `tipoEmissao` = `Gratuidade SEM Procuração`.
 - Ciclo observado: `Pagamento Dispensado (em análise)` (evento "Dispensa de pagamento solicitada") → `Pagamento Dispensado` ("Dispensa de pagamento concedida", servidor do arquivo, cerca de 1 dia útil) → `Envio Concluído`.
 
-### Acompanhamento
+**Regras de múltiplos volumes:** uma resposta positiva de `existeSolicitacao/{numero}` pode cobrir todos os volumes ou apenas um pedido; o contrato ainda não foi demonstrado. Não interpretar automaticamente como autorização para novos POSTs. Se houver dois IDs para o mesmo número, suspender após o primeiro e confirmar com o DESARQ a semântica de solicitação por volume.\n\n### Acompanhamento
 
 | Método | Rota                                                                                | Resposta verificada                                                                                                                                                                                                                    |
 | ------ | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -117,86 +117,102 @@ Corpo de `guiadispensada` (GuiaModel do front):
 3. Pré-voo (só GETs): para cada número, `existeSolicitacao` + `processo/numero`. Tabela para o usuário: número, encontrado?, registros (duplicidade), vara, ação, partes, caixa, já existe pedido?
 4. Esperar confirmação explícita do lote. Criar solicitação é ato com efeito externo.
 5. Registrar **cada volume autorizado** no arquivo `selecionados.tsv` (`numero<TAB>idProcesso`), uma linha por volume, na ordem escolhida. Não inferir seleção a partir de `.[0]`; não incluir registros não autorizados nem IDs repetidos.
-6. Executar `FASE=primeiro` para **uma única solicitação**. Qualquer erro HTTP, falha de transporte ou ausência de confirmação na busca de pendentes bloqueia o lote. Mesmo com sucesso, a execução termina aqui.
-7. Conferir manualmente a solicitação criada (processo, volume/`idProcesso`, status, natureza e ausência de duplicidade) na busca de pendentes. Só após essa conferência, e com confirmação humana expressa, executar `FASE=restante PRIMEIRO_VALIDADO=sim`. Sem essa confirmação não continuar.
-8. Relatório por volume selecionado: processo, `idProcesso`, volume, resultado (criada / já existia / não encontrado / erro HTTP + `mensagem`). O arquivo de seleção deve refletir o pré-voo já aprovado; não usar resultado novo da API para ampliar o lote.
+6. Executar `FASE=primeiro` para **uma única tentativa**. Qualquer falha HTTP ou de transporte deixa o resultado **indeterminado** até reconciliação. HTTP 2xx não confirma a criação: não continuar automaticamente. A tentativa cria um registro de intenção local antes do POST.
+7. Conferir manualmente a solicitação criada (id da solicitação, processo, volume/`idProcesso`, status, natureza e ausência de duplicidade) em **todas as páginas** da busca ou no detalhe. Criar `VALIDACAO_JSON` local com `confirmado_por_usuario:true`, `numero`, `idProcesso`, `idSolicitacao`, `verificado_em`, `status_confirmado`; apenas depois executar `FASE=restante VALIDACAO_JSON=...`. Nunca versionar este registro com dados de processos.
+8. Na fase restante, executar **uma linha por chamada supervisionada**, registrando a conferência individual e avançando o cursor de forma explícita; jamais reenviar linha já tentada. Relatório por volume selecionado: processo, `idProcesso`, volume, resultado (criada / já existia / não encontrado / erro HTTP + `mensagem`). O arquivo de seleção deve refletir o pré-voo já aprovado; não usar resultado novo da API para ampliar o lote.
 6. Relatório: processo, vara, resultado (criada / já existia / não encontrado / erro HTTP + `mensagem`).
 
 ```bash
-# Entrada aprovada no pré-voo: selecionados.tsv (numero<TAB>idProcesso),
-# UMA linha por volume escolhido, inclusive múltiplos volumes do mesmo processo.
-# FASE=primeiro: envia somente a primeira linha e TERMINA.
-# FASE=restante PRIMEIRO_VALIDADO=sim: apenas após verificação humana do primeiro POST.
+# selecionados.tsv: numero<TAB>idProcesso, somente volumes autorizados.
+# Esta é uma referência de execução supervisionada, NÃO um worker autônomo.
 set -euo pipefail
-: "${TELEFONE:?Informe o telefone}"
-: "${ID_BASE:?Informe o pedido-base autorizado}"
-: "${DESARQ_RT:?Autentique-se na sessão do usuário}"
+: "${TELEFONE:?Obrigatório}"
+: "${ID_BASE:?Pedido-base autorizado obrigatório}"
+: "${DESARQ_RT:?Sessão do usuário obrigatória}"
 : "${API:=https://desarquivamento-back.tjro.jus.br/back}"
 : "${FASE:=primeiro}"
-[[ "$FASE" == primeiro || "$FASE" == restante ]] || { echo "FASE inválida" >&2; exit 1; }
-if [[ "$FASE" == restante && "${PRIMEIRO_VALIDADO:-}" != sim ]]; then
-  echo "BLOQUEADO: confira o primeiro POST e o registro em pendentes antes de continuar" >&2
-  exit 1
+[[ "$FASE" == primeiro || "$FASE" == restante ]] || exit 1
+[[ -s selecionados.tsv ]] || exit 1
+awk -F '\t' 'NF!=2 || $1 !~ /^[0-9]+$/ || $2 !~ /^[0-9]+$/ || seen[$1 FS $2]++ {exit 1}' selecionados.tsv
+if [[ "$FASE" == restante ]]; then
+  # Não confiar em flag livre. Registro criado SOMENTE depois da conferência
+  # humana do pedido real, armazenado localmente, fora de Git.
+  : "${VALIDACAO_JSON:?Informe arquivo de conferência do primeiro pedido}"
+  python3 - "$VALIDACAO_JSON" selecionados.tsv <<'PY'
+import json, sys
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text())
+first = Path(sys.argv[2]).read_text().splitlines()[0].split("\t")
+assert data.get("confirmado_por_usuario") is True
+assert data.get("numero") == first[0] and str(data.get("idProcesso")) == first[1]
+assert isinstance(data.get("idSolicitacao"), int) and data["idSolicitacao"] > 0
+assert data.get("verificado_em") and data.get("status_confirmado")
+PY
 fi
-[[ -s selecionados.tsv ]] || { echo "Falta seleção aprovada de volumes" >&2; exit 1; }
-# Rejeitar duplicidades e linhas malformadas; não transmitir dados não selecionados.
-awk -F '\t' 'NF!=2 || $1 !~ /^[0-9]+$/ || $2 !~ /^[0-9]+$/ || seen[$1 FS $2]++ {exit 1}' selecionados.tsv ||
-  { echo "Seleção inválida/duplicada" >&2; exit 1; }
 desarq_token
 ME=$(curl -fsS "${H[@]}" "$API/api/usuarios/me")
 PDF=$(curl -fsS "${H[@]}" "$API/desarquivamento/comprovante/$ID_BASE")
-[[ "$PDF" == data:application/pdf\;base64,* ]] || { echo "Comprovante inválido" >&2; exit 1; }
+[[ "$PDF" == data:application/pdf\;base64,* ]] || exit 1
 MODO=${MODO:-Digitalizado}
 [[ "$MODO" == Digitalizado || "$MODO" == Físico ]] || exit 1
-if [[ "$FASE" == primeiro ]]; then
-  linhas=$(head -n 1 selecionados.tsv)
-else
-  linhas=$(tail -n +2 selecionados.tsv)
-fi
+# O primeiro volume nunca é reenviado na fase restante.
+if [[ "$FASE" == primeiro ]]; then linhas=$(head -n 1 selecionados.tsv)
+else linhas=$(tail -n +2 selecionados.tsv); fi
 while IFS=$'\t' read -r n pid; do
   [[ -n "$n" ]] || continue
   desarq_token
-  # Confere a seleção contra o cadastro real, sem escolher automaticamente o primeiro volume.
-  P=$(curl -fsS "${H[@]}" "$API/processo/numero/$n") || exit 1
-  p=$(jq -ce --argjson id "$pid" '[.[] | select(.id == $id)] | if length == 1 then .[0] else error("volume ausente ou ambíguo") end' <<<"$P") || exit 1
-  # A API existeSolicitacao é por número; bloqueia duplicidade, inclusive durante o lote.
-  existe=$(curl -fsS "${H[@]}" "$API/guia/existeSolicitacao/$n") || exit 1
-  if [[ "$existe" == true ]]; then
-    echo "$n;$pid;JA_EXISTE_OU_PENDENTE"
-    # Para múltiplos volumes do mesmo número, não pular silenciosamente: exigir verificação.
-    exit 1
+  # Procurar em TODAS as páginas de TODOS os pedidos, e não só nos 100 pendentes.
+  # Em qualquer falha/ambiguidade, bloquear o POST.
+  export NUMERO_ALVO="$n" ID_ALVO="$pid"
+  pagina=0; encontrados=0
+  while :; do
+    result=$(curl -fsS "${H[@]}" "$API/desarquivamento/busca?page=$pagina&size=100") || exit 1
+    qtd=$(jq -er '.content | length' <<<"$result") || exit 1
+    match=$(jq -er --arg n "$n" --argjson id "$pid"       '[.content[] | select((.numeroProcesso|tostring)==$n and (.idProcesso|tostring)==($id|tostring))] | length' <<<"$result") || exit 1
+    encontrados=$((encontrados + match))
+    total=$(jq -er '.page.totalPages' <<<"$result") || exit 1
+    pagina=$((pagina + 1))
+    (( pagina < total )) || break
+  done
+  if (( encontrados > 0 )); then
+    echo "$n;$pid;JA_EXISTE;sem POST"; continue
   fi
-  [[ "$existe" == false ]] || { echo "Resposta de duplicidade inesperada" >&2; exit 1; }
-  body=$(jq -n --argjson me "$ME" --argjson p "$p" --arg n "$n" --arg tel "$TELEFONE" \
-    --arg modo "$MODO" --arg pdf "$PDF" '{
+  # Por segurança, a consulta por número pode agregar múltiplos volumes.
+  existe=$(curl -fsS "${H[@]}" "$API/guia/existeSolicitacao/$n") || exit 1
+  if [[ "$existe" != false ]]; then
+    echo "$n;$pid;BLOQUEADO_POR_NUMERO" >&2; exit 1
+  fi
+  P=$(curl -fsS "${H[@]}" "$API/processo/numero/$n") || exit 1
+  p=$(jq -ce --arg id "$pid" '[.[] | select((.id|tostring)==$id)] | if length==1 then .[0] else error("volume ausente ou ambíguo") end' <<<"$P") || exit 1
+  body=$(jq -n --argjson me "$ME" --argjson p "$p" --arg n "$n" --arg tel "$TELEFONE"     --arg modo "$MODO" --arg pdf "$PDF" '{
       login:$me.login, cpfCNPJ:$me.cpfCNPJ, tipoSolicitante:$me.origemAutenticacao,
       solicitante:$me.nome, pagador:$me.nome, email:$me.email, telefone:$tel,
       valor:0, pessoaEncontrada:true, tipo:$modo, idProcesso:$p.id,
       numeroProcesso:$n, natureza:($p.destino // ""), pdf_gratuidade:$pdf, pdf_procuracao:""}')
-  # Não imprima o corpo: contém dados pessoais e comprovante.
-  resp=$(mktemp)
-  code=$(curl -sS -o "$resp" -w '%{http_code}' "${H[@]}" -X POST "$API/guia/guiadispensada" --data-binary "$body") ||
-    { rm -f "$resp"; echo "POST: erro de transporte" >&2; exit 1; }
+  # Gravar intenção ANTES da operação com efeito externo. Se cair após POST,
+  # bloquear reenvio até reconciliação manual (inclusive POST com HTTP 500).
+  mkdir -p .desarq-local; chmod 700 .desarq-local
+  intent=".desarq-local/${n}_${pid}.intent"
+  if [[ -e "$intent" ]]; then
+    echo "$n;$pid;RESULTADO_INDETERMINADO_OU_JA_TENTADO;reconciliar" >&2; exit 1
+  fi
+  (umask 077; printf 'POST_POSSIVEL numero=%s idProcesso=%s\n' "$n" "$pid" > "$intent")
+  resp=$(mktemp); trap 'rm -f "$resp"' EXIT
+  code=$(curl --max-time 60 -sS -o "$resp" -w '%{http_code}' "${H[@]}"     -X POST "$API/guia/guiadispensada" --data-binary "$body") || {
+      echo "$n;$pid;INDETERMINADO;reconciliar sem repetir POST" >&2; exit 1;
+    }
   if [[ ! "$code" =~ ^2[0-9][0-9]$ ]]; then
-    echo "$n;$pid;HTTP_$code;$(jq -r '.mensagem // .message // "sem mensagem"' "$resp" 2>/dev/null || echo erro)" >&2
-    rm -f "$resp"; exit 1
+    echo "$n;$pid;HTTP_$code;reconciliar sem repetir POST" >&2; exit 1
   fi
-  rm -f "$resp"
-  # Validação independente: procura pedido pendente com o ID de volume selecionado.
-  pendentes=$(curl -fsS "${H[@]}" "$API/desarquivamento/busca?page=0&size=100&andamento=pendentes") || exit 1
-  if ! jq -e --arg n "$n" --argjson id "$pid"       'any(.content[]?; (.idProcesso == $id) and ((.numeroProcesso | tostring) == $n))' <<<"$pendentes" >/dev/null; then
-    echo "$n;$pid;SEM_CONFIRMACAO_EM_PENDENTES — PARE E INVESTIGUE" >&2; exit 1
-  fi
-  echo "$n;$pid;CRIADA_CONFIRMADA_EM_PENDENTES"
-  if [[ "$FASE" == primeiro ]]; then
-    echo "PARADA OBRIGATÓRIA: conferir pedido, volume e status no DESARQ antes de liberar restante" >&2
-    break
-  fi
-  sleep 2
+  # Não confundir sucesso HTTP com criação comprovada.
+  echo "$n;$pid;POST_2XX;CONFERENCIA_OBRIGATORIA"
+  # Não há reenvio ou passagem automática ao próximo volume sem conferir
+  # o ID da solicitação no DESARQ e registrar evidência.
+  exit 0
 done <<<"$linhas"
 ```
 
-## 4. Onde rodar
+**Aviso operacional:** a fase `restante` acima é deliberadamente fail-closed: encerra após uma tentativa. Para enviar a linha seguinte é necessário mecanismo de cursor persistente e reconciliação; NÃO repetir o comando sem confirmar qual linha foi efetivamente processada. A pasta `.desarq-local/` é privada e deve entrar no `.gitignore`; em ambientes efêmeros o operador deve preservar o estado fora do contêiner.\n\n## 4. Onde rodar
 
 - Com o Jatobá disponível: Opção A em `mcp__jatoba__bash` (`curl`, `jq`).
 - Sem shell: Opção B, mesma sequência via `fetch` na aba logada.
