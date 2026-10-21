@@ -15,22 +15,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - name: Load publicly documented API key from DataJud client
-        shell: bash
+      - name: Require configured public CNJ key
+        env:
+          DATAJUD_API_KEY: ${{ vars.DATAJUD_API_KEY }}
         run: |
-          KEY=$(python - <<'PY'
-          import ast
-          from pathlib import Path
-          tree = ast.parse(Path("datajud/scripts/datajud.py").read_text())
-          for node in tree.body:
-              if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "APIKEY" for t in node.targets):
-                  print(ast.literal_eval(node.value.args[1]))
-                  break
-          else:
-              raise SystemExit("Public key unavailable")
-          PY
-          )
-          echo "DATAJUD_API_KEY=$KEY" >> "$GITHUB_ENV"
+          if [ -z "$DATAJUD_API_KEY" ]; then
+            echo "::error::Configure repository variable DATAJUD_API_KEY with the current CNJ public key"
+            exit 1
+          fi
+          echo "DATAJUD_API_KEY=$DATAJUD_API_KEY" >> "$GITHUB_ENV"
       - name: Check 91 endpoints with throttling
         continue-on-error: true
         run: |
