@@ -27,7 +27,7 @@ TOKEN_ENDPOINT = f"{KEYCLOAK_BASE}/protocol/openid-connect/token"
 LOGOUT_ENDPOINT = f"{KEYCLOAK_BASE}/protocol/openid-connect/logout"
 USERINFO_ENDPOINT = f"{KEYCLOAK_BASE}/protocol/openid-connect/userinfo"
 CLIENT_ID = "jusbr"
-DEFAULT_REDIRECT_URI = "https://www.jus.br"
+DEFAULT_REDIRECT_URI = "https://www.jus.br/callback"
 
 
 def generate_pkce() -> tuple[str, str]:

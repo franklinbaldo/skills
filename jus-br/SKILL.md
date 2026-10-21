@@ -40,7 +40,7 @@ Para garantir segurança total sem depender de Playwright, scraping ou intercept
 1. O comando `jusbr auth login` gera o par PKCE (`code_verifier` e `code_challenge`) e um token anti-CSRF (`state`).
 2. Abre o navegador padrão do usuário na URL de autorização oficial do CNJ.
 3. O usuário realiza a autenticação com **Gov.br** (ouro/prata) ou **Certificado Digital (ICP-Brasil)**, incluindo qualquer MFA exigido diretamente nos servidores do governo.
-4. Ao concluir, o Keycloak redireciona o navegador para `https://www.jus.br/?code=...&state=...`.
+4. Ao concluir, o Keycloak redireciona o navegador para `https://www.jus.br/callback?code=...&state=...` (evitando o script de recarregamento da raiz).
 5. O usuário copia a URL final da barra de endereços e a insere no prompt da CLI.
 6. A CLI valida o parâmetro `state`, extrai o `authorization_code` e realiza a troca direta com o Token Endpoint via TLS, obtendo `access_token` e `refresh_token`.
 

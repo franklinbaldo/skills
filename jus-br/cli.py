@@ -93,7 +93,7 @@ def auth_login(
             "[bold cyan]Autenticação Jus.br (PDPJ/CNJ)[/bold cyan]\n\n"
             "1. O navegador será aberto no Keycloak oficial da PDPJ/CNJ.\n"
             "2. Autentique-se com sua conta [bold]Gov.br[/bold] ou [bold]Certificado Digital[/bold] e conclua o MFA.\n"
-            "3. Ao finalizar, o navegador redirecionará para [cyan]https://www.jus.br/?code=...&state=...[/cyan]\n"
+            "3. Ao finalizar, o navegador redirecionará para [cyan]https://www.jus.br/callback?code=...&state=...[/cyan]\n"
             "4. Copie a URL completa da barra de endereços do navegador e cole aqui para finalizar.",
             title="Login Único Jus.br",
             border_style="cyan",
