@@ -92,7 +92,7 @@ def test_keyring_storage_error_on_save():
     tokens = TokenResponse(access_token="at", expires_in=300)
 
     with patch("credentials.keyring.set_password", side_effect=Exception("Disk full")):
-        with pytest.raises(KeyringStorageError, match="Falha ao gravar credenciais"):
+        with pytest.raises(KeyringStorageError, match="Falha ao persistir nova geração"):
             store.save_tokens(tokens)
 
 
@@ -126,7 +126,7 @@ def test_transactional_save_preserves_old_tokens_on_failure(mock_keyring):
         mock_keyring[(service, username)] = password
 
     with patch("credentials.keyring.set_password", side_effect=failing_set_password):
-        with pytest.raises(KeyringStorageError, match="sessão anterior preservada"):
+        with pytest.raises(KeyringStorageError, match="geração anterior intacta"):
             store.save_tokens(new_tokens)
 
     # Verifica que a sessão antiga não foi perdida

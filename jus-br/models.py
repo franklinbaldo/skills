@@ -142,13 +142,13 @@ class PeticionamentoRequest(BaseModel):
 
 
 class PeticionamentoResponse(BaseModel):
-    """Recibo autêntico de protocolo retornado pelo barramento de peticionamento."""
+    """Recibo autêntico de protocolo retornado pelo barramento de peticionamento da PDPJ."""
 
     model_config = ConfigDict(extra="ignore")
 
     protocolo: str
     data_recebimento: str
     numero_processo: str
-    status: str = "RECEBIDO"
+    status: str
     hash_sha256: str | None = None
     mensagem: str | None = None

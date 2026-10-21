@@ -402,13 +402,17 @@ def peticionamento_intercorrente(
     client = JusBrClient()
     try:
         resp = client.peticionar_intercorrente(req)
-        console.print("[bold green]Recibo autêntico de protocolo recebido da PDPJ![/bold green]")
+        console.print("[bold green]Recibo de submissão emitido pelo barramento da PDPJ![/bold green]")
         console.print(f"Protocolo: [bold cyan]{resp.protocolo}[/bold cyan]")
-        console.print(f"Status: {resp.status}")
-        console.print(f"Data: {resp.data_recebimento}")
-        console.print(f"SHA-256: [dim]{sha256_hash}[/dim]")
+        console.print(f"Status no Barramento: [bold]{resp.status}[/bold]")
+        console.print(f"Data/Hora: {resp.data_recebimento}")
+        console.print(f"SHA-256 da Peça: [dim]{sha256_hash}[/dim]")
         if resp.mensagem:
             console.print(f"Mensagem: {resp.mensagem}")
+        console.print(
+            "[dim yellow]Atenção: A transmissão foi acolhida pelo barramento. "
+            "A juntada definitiva aos autos depende de confirmação assíncrona do tribunal de destino.[/dim yellow]"
+        )
     except Exception as exc:
         console.print(f"[bold red]Falha ao protocolar petição na PDPJ:[/bold red] {exc}")
         sys.exit(1)

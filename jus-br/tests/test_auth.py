@@ -50,13 +50,13 @@ def test_build_authorization_url():
 
 
 def test_parse_callback_input_from_full_url():
-    url = "https://www.jus.br/?code=code_abc_123&state=state_xyz_789"
+    url = "https://www.jus.br/callback?code=code_abc_123&state=state_xyz_789"
     code = parse_callback_input(url, expected_state="state_xyz_789")
     assert code == "code_abc_123"
 
 
 def test_parse_callback_input_state_mismatch():
-    url = "https://www.jus.br/?code=code_abc_123&state=attacker_state"
+    url = "https://www.jus.br/callback?code=code_abc_123&state=attacker_state"
     with pytest.raises(OAuthStateMismatchError, match="State retornado"):
         parse_callback_input(url, expected_state="expected_state")
 
@@ -68,8 +68,13 @@ def test_parse_callback_input_missing_state():
 
 
 def test_parse_callback_input_isolated_code_rejected():
-    with pytest.raises(JusBrAuthError, match="código isolado sem contexto"):
+    with pytest.raises(JusBrAuthError, match="Entrada inválida"):
         parse_callback_input("just_a_random_code_without_url", expected_state="state_xyz_789")
+
+
+def test_parse_callback_input_partial_query_rejected():
+    with pytest.raises(JusBrAuthError, match="Entrada inválida"):
+        parse_callback_input("?code=code_abc_123&state=s1", expected_state="s1")
 
 
 def test_parse_callback_input_unauthorized_host():
@@ -78,8 +83,20 @@ def test_parse_callback_input_unauthorized_host():
         parse_callback_input(url, expected_state="s1")
 
 
+def test_parse_callback_input_invalid_path():
+    url = "https://www.jus.br/servicos?code=code_abc_123&state=s1"
+    with pytest.raises(JusBrAuthError, match="Caminho de callback inválido"):
+        parse_callback_input(url, expected_state="s1")
+
+
+def test_parse_callback_input_insecure_http():
+    url = "http://www.jus.br/callback?code=code_abc_123&state=s1"
+    with pytest.raises(JusBrAuthError, match="Entrada inválida"):
+        parse_callback_input(url, expected_state="s1")
+
+
 def test_parse_callback_input_with_error():
-    url = "https://www.jus.br/?error=access_denied&error_description=Cancelado&state=s1"
+    url = "https://www.jus.br/callback?error=access_denied&error_description=Cancelado&state=s1"
     with pytest.raises(JusBrAuthError, match="Erro retornado na autorização do CNJ"):
         parse_callback_input(url, expected_state="s1")
 

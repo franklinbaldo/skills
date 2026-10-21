@@ -63,36 +63,44 @@ def build_authorization_url(
 
 
 ALLOWED_CALLBACK_HOSTS = ("www.jus.br", "jus.br")
+EXPECTED_CALLBACK_PATH = "/callback"
 
 
 def parse_callback_input(callback_input: str, expected_state: str) -> str:
     """Extrai e valida estritamente o authorization code de uma URL de callback.
 
     Exige:
-    1. Que a entrada seja uma URL com protocolo HTTP/HTTPS ou fragmento de query válido.
-    2. Que a origem da URL (se presente) pertença ao domínio oficial autorizado do Jus.br.
-    3. Que o parâmetro 'state' esteja obrigatoriamente presente e seja idêntico ao expected_state (proteção CSRF).
-    4. Que o parâmetro 'code' esteja presente.
-    Código isolado sem URL e sem validação de state é expressamente rejeitado.
+    1. URL HTTPS completa iniciando com 'https://'.
+    2. Host pertencente à lista autorizada de domínios oficiais ('www.jus.br' ou 'jus.br').
+    3. Path exato de redirecionamento ('/callback').
+    4. Parâmetro 'state' obrigatoriamente presente e estritamente idêntico ao expected_state (anti-CSRF).
+    5. Parâmetro 'code' obrigatoriamente presente.
+    Fragmentos parciais, URLs HTTP inseguras ou códigos isolados são sumariamente rejeitados.
     """
     raw = callback_input.strip()
     if not raw:
         raise JusBrAuthError("Entrada vazia. Forneça a URL de redirecionamento contendo code e state.")
 
-    if not ("?" in raw or "&" in raw or raw.startswith("http")):
+    if not raw.startswith("https://"):
         raise JusBrAuthError(
-            "Entrada inválida: código isolado sem contexto de callback não é permitido por segurança. "
-            "Forneça a URL completa de redirecionamento contendo os parâmetros 'code' e 'state'."
+            "Entrada inválida: é obrigatório fornecer a URL HTTPS completa gerada no redirecionamento "
+            "(exemplo: https://www.jus.br/callback?code=...&state=...). Entradas parciais ou inseguras não são permitidas."
         )
 
     parsed = urllib.parse.urlparse(raw)
-    if parsed.netloc and parsed.netloc.lower() not in ALLOWED_CALLBACK_HOSTS:
+    if parsed.scheme.lower() != "https":
+        raise JusBrAuthError("Protocolo inválido: a URL de callback deve utilizar HTTPS obrigatoriamente.")
+
+    if parsed.netloc.lower() not in ALLOWED_CALLBACK_HOSTS:
         raise JusBrAuthError(
             f"Origem de callback não autorizada: '{parsed.netloc}'. "
             f"Esperado domínio oficial: {', '.join(ALLOWED_CALLBACK_HOSTS)}"
         )
 
-    qs = urllib.parse.parse_qs(parsed.query or parsed.fragment)
+    if parsed.path != EXPECTED_CALLBACK_PATH:
+        raise JusBrAuthError(f"Caminho de callback inválido: '{parsed.path}'. Esperado: '{EXPECTED_CALLBACK_PATH}'")
+
+    qs = urllib.parse.parse_qs(parsed.query)
     error = qs.get("error", [None])[0]
     if error:
         desc = qs.get("error_description", [""])[0]
