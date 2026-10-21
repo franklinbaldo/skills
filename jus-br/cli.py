@@ -166,7 +166,7 @@ def auth_login(
         Panel(
             "[bold cyan]Autenticação Jus.br (PDPJ/CNJ)[/bold cyan]\n\n"
             "• [bold green]OPÇÃO A (Recomendada - Bookmarklet):[/bold green]\n"
-            "  Se já estiver logado em [cyan]www.jus.br[/cyan], use o favorito [bold]'Capturar Sessão Jus.br'[/bold].\n"
+            "  Acesse [bold green]https://portaldeservicos.pdpj.jus.br/consulta[/bold green] e clique no favorito.\n"
             "  (Para instalar o favorito, execute [yellow]jusbr auth bookmarklet[/yellow]).\n\n"
             "• [bold blue]OPÇÃO B (Navegador SSO CNJ):[/bold blue]\n"
             "  O navegador abrirá a autenticação Gov.br / Certificado no Keycloak.\n"
@@ -244,12 +244,14 @@ def auth_bookmarklet(
     url = bookmarklet_file.resolve().as_uri()
     console.print(
         Panel(
-            "[bold cyan]Conector Bookmarklet Jus.br[/bold cyan]\n\n"
-            "1. Arraste o botão [bold]⭐ ⚖️ Capturar Sessão Jus.br[/bold] da página para seus [bold]Favoritos[/bold].\n"
-            "2. Acesse [cyan]https://www.jus.br[/cyan] com seu login Gov.br / Certificado ativo.\n"
-            "3. Clique no favorito: a sessão será copiada para a Área de Transferência.\n\n"
-            "⏳ [bold yellow]Aguardando você acionar o favorito na aba do Jus.br...[/bold yellow]",
-            title="Bookmarklet Jus.br",
+            "[bold cyan]Conector Bookmarklet Jus.br / PDPJ[/bold cyan]\n\n"
+            "1. Arraste o botão [bold]⭐ ⚖️ Conectar Sessão PDPJ[/bold] da página para seus [bold]Favoritos[/bold].\n"
+            "2. Certifique-se de estar na página oficial correta com login Gov.br / Certificado ativo:\n"
+            "   👉 [bold green]https://portaldeservicos.pdpj.jus.br/consulta[/bold green]\n"
+            "3. Na aba da PDPJ, clique no favorito criado: a sessão será copiada instantaneamente.\n\n"
+            "⏳ [bold yellow]Aguardando você acionar o favorito na aba da PDPJ...[/bold yellow]\n"
+            "[dim](A detecção no terminal é automática. Pressione Ctrl+C para cancelar)[/dim]",
+            title="Conector de Sessão PDPJ",
             border_style="cyan",
         )
     )

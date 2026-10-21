@@ -64,8 +64,28 @@ O conector Bookmarklet permite sincronizar a sessão de um navegador já autenti
    Crie um novo favorito no seu navegador (Chrome, Edge, Firefox, Brave) com o nome `⚖️ Conectar PDPJ` e cole o código abaixo no campo **URL**:
 
    ```javascript
-   javascript:(function(){try{function notificar(msg,ok){var id='jusbr-toast';var old=document.getElementById(id);if(old)old.remove();var d=document.createElement('div');d.id=id;d.style.cssText='position:fixed;top:24px;right:24px;z-index:99999999;background:'+(ok?'#065f46':'#1e293b')+';color:#ffffff;padding:16px 22px;border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,0.35);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:14px;max-width:380px;line-height:1.5;transition:all 0.3s;border-left:5px solid '+(ok?'#10b981':'#38bdf8')+';';d.innerHTML=msg;document.body.appendChild(d);if(ok){setTimeout(function(){if(d&&d.parentNode)d.remove();},6000);}}function salvarToken(token){if(!token)return false;var clean=token.trim();if(clean.toLowerCase().indexOf('bearer ')===0)clean=clean.substring(7).trim();if(clean.indexOf('eyJ')!==0)return false;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(clean).then(function(){notificar('<strong>✓ Sessão PDPJ capturada com sucesso!</strong><br>O token foi copiado para a Área de Transferência. Retorne ao seu terminal PowerShell.',true);}).catch(function(){prompt('Copie o token abaixo (Ctrl+C) e cole no terminal:',clean);});}else{prompt('Copie o token abaixo (Ctrl+C) e cole no terminal:',clean);}return true;}function varrerTokens(){if(window.keycloak&&window.keycloak.token)return window.keycloak.token;if(window.kc&&window.kc.token)return window.kc.token;if(window.__keycloak&&window.__keycloak.token)return window.__keycloak.token;for(var i=0;i<localStorage.length;i++){var v=localStorage.getItem(localStorage.key(i));if(v&&v.indexOf('eyJ')!==-1){var m=v.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(m)return m[0];}}for(var j=0;j<sessionStorage.length;j++){var sv=sessionStorage.getItem(sessionStorage.key(j));if(sv&&sv.indexOf('eyJ')!==-1){var sm=sv.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(sm)return sm[0];}}if(document.cookie&&document.cookie.indexOf('eyJ')!==-1){var cm=document.cookie.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(cm)return cm[0];}for(var k in window){try{var obj=window[k];if(obj&&typeof obj==='object'){if(typeof obj.token==='string'&&obj.token.indexOf('eyJ')===0)return obj.token;if(typeof obj.idToken==='string'&&obj.idToken.indexOf('eyJ')===0)return obj.idToken;if(typeof obj.accessToken==='string'&&obj.accessToken.indexOf('eyJ')===0)return obj.accessToken;}}catch(e){}}return null;}var achado=varrerTokens();if(achado&&salvarToken(achado)){return;}if(!window.__jusbr_listener_active){window.__jusbr_listener_active=true;var origFetch=window.fetch;if(origFetch){window.fetch=function(url,opts){try{if(opts&&opts.headers){var h=opts.headers;var a=null;if(typeof h.get==='function'){a=h.get('Authorization')||h.get('authorization');}else if(typeof h==='object'){a=h.Authorization||h.authorization;}if(a&&typeof a==='string'){var m=a.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(m)salvarToken(m[0]);}}catch(err){}return origFetch.apply(this,arguments);};}var origOpen=XMLHttpRequest.prototype.open;var origSetHeader=XMLHttpRequest.prototype.setRequestHeader;XMLHttpRequest.prototype.setRequestHeader=function(header,value){try{if(header&&header.toLowerCase()==='authorization'&&value){var m=value.match(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/);if(m)salvarToken(m[0]);}}catch(err){}return origSetHeader.apply(this,arguments);};}notificar('<strong>⚖️ Conector Jus.br Ativado!</strong><br>Dê um clique em qualquer botão ou menu da página (ex: Consultar) para capturar a sessão automaticamente.',false);}catch(ex){alert('Erro no conector Jus.br: '+ex.message);}})();
    ```
+
+javascript:(function(){ try { var url = window.location.href; var host = window.location.hostname; if (host.indexOf('portaldeservicos.pdpj.jus.br') === -1 && host.indexOf('jus.br') === -1) { if (confirm('⚠️ Você NÃO está no Portal da PDPJ!
+
+Você está em: ' + url + '
+
+A página correta é:
+👉 https://portaldeservicos.pdpj.jus.br/consulta
+
+Deseja abrir a página correta agora?')) { window.location.href = 'https://portaldeservicos.pdpj.jus.br/consulta'; } return; } function concluir(token) { var clean = token.trim(); if (clean.toLowerCase().indexOf('bearer ') === 0) clean = clean.substring(7).trim(); var m = clean.match(/eyJ[a-zA-Z0-9\_-]+.[a-zA-Z0-9\_-]+.[a-zA-Z0-9\_-]+/); if (!m) return false; var jwt = m[0]; if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(jwt).then(function(){ alert('✓ Token da PDPJ copiado com sucesso!
+
+Retorne ao terminal PowerShell para concluir.'); }).catch(function(){ prompt('Copie o token abaixo (Ctrl+C) e retorne ao terminal:', jwt); }); } else { prompt('Copie o token abaixo (Ctrl+C) e retorne ao terminal:', jwt); } return true; } var token = null; if (window.keycloak && window.keycloak.token) token = window.keycloak.token; else if (window.kc && window.kc.token) token = window.kc.token; else if (window.__keycloak && window.__keycloak.token) token = window.__keycloak.token; if (!token) { var storages = [localStorage, sessionStorage]; for (var s = 0; s < storages.length; s++) { var st = storages[s]; for (var i = 0; i < st.length; i++) { var val = st.getItem(st.key(i)); if (val && val.indexOf('eyJ') !== -1) { var match = val.match(/eyJ\[a-zA-Z0-9_-\]+.\[a-zA-Z0-9_-\]+.\[a-zA-Z0-9_-\]+/); if (match) { token = match[0]; break; } } } if (token) break; } } if (!token && document.cookie && document.cookie.indexOf('eyJ') !== -1) { var cm = document.cookie.match(/eyJ\[a-zA-Z0-9_-\]+.\[a-zA-Z0-9_-\]+.\[a-zA-Z0-9_-\]+/); if (cm) token = cm[0]; } if (!token) { for (var k in window) { try { var obj = window[k]; if (!obj || typeof obj !== 'object') continue; if (typeof obj.token === 'string' && obj.token.indexOf('eyJ') === 0) { token = obj.token; break; } if (typeof obj.idToken === 'string' && obj.idToken.indexOf('eyJ') === 0) { token = obj.idToken; break; } if (typeof obj.accessToken === 'string' && obj.accessToken.indexOf('eyJ') === 0) { token = obj.accessToken; break; } for (var prop in obj) { try { var sub = obj[prop]; if (sub && typeof sub === 'object' && typeof sub.token === 'string' && sub.token.indexOf('eyJ') === 0) { token = sub.token; break; } } catch(e2){} } if (token) break; } catch(e1){} } } if (!token && window.ng) { try { var rootEl = document.querySelector('app-root') || document.querySelector('[ng-version]'); if (rootEl && typeof window.ng.getComponent === 'function') { var comp = window.ng.getComponent(rootEl); if (comp && comp.keycloak && comp.keycloak.token) token = comp.keycloak.token; } } catch(e3){} } if (token && concluir(token)) { return; } var digitado = prompt( '⚠️ O token da PDPJ está na memória de requisições da página.
+
+' + 'Como copiar em 5 segundos:
+' + '1. Pressione F12 -> aba Rede (Network)
+' + '2. Filtre por "userinfo" ou "consulta"
+' + '3. Clique na requisição -> aba Cabeçalhos (Headers)
+' + '4. Copie o valor de "Authorization" (Bearer eyJ...)
+
+' + 'Cole o token ou o cabeçalho Authorization aqui:' ); if (digitado) { if (!concluir(digitado)) { alert('❌ Não foi encontrado um token JWT válido na entrada informada.'); } } } catch(err) { alert('Erro no conector Jus.br: ' + err.message); } })();
+
+````
 
 3. **Como Utilizar no Dia a Dia:**
 
@@ -91,7 +111,7 @@ A CLI é executável diretamente com `uv run` utilizando metadados PEP 723:
 
 ```powershell
 uv run jus-br/cli.py --help
-```
+````
 
 ### Autenticação (`auth`)
 
