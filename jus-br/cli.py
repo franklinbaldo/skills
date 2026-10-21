@@ -210,8 +210,10 @@ def auth_login(
 
 
 @auth_app.command(name="bookmarklet")
-def auth_bookmarklet() -> None:
-    """Abre no navegador a página do Bookmarklet para captura instantânea de sessão no www.jus.br."""
+def auth_bookmarklet(
+    no_wait: Annotated[bool, Parameter(help="Apenas abrir a página do bookmarklet sem aguardar a captura.")] = False,
+) -> None:
+    """Abre no navegador a página do Bookmarklet e aguarda a captura instantânea de sessão."""
     bookmarklet_file = _root / "bookmarklet.html"
     if not bookmarklet_file.exists():
         console.print("[bold red]Arquivo bookmarklet.html não encontrado.[/bold red]")
@@ -221,15 +223,41 @@ def auth_bookmarklet() -> None:
     console.print(
         Panel(
             "[bold cyan]Conector Bookmarklet Jus.br[/bold cyan]\n\n"
-            "1. Arraste o botão [bold]⭐ ⚖️ Capturar Sessão Jus.br[/bold] da página que vai se abrir para seus [bold]Favoritos[/bold].\n"
+            "1. Arraste o botão [bold]⭐ ⚖️ Capturar Sessão Jus.br[/bold] da página para seus [bold]Favoritos[/bold].\n"
             "2. Acesse [cyan]https://www.jus.br[/cyan] com seu login Gov.br / Certificado ativo.\n"
-            "3. Clique no favorito para copiar a sessão.\n"
-            "4. Execute [green]jusbr auth login[/green] (ou [green]jusbr auth set-token[/green]) para sincronizar com o terminal.",
+            "3. Clique no favorito: a sessão será copiada para a Área de Transferência.\n\n"
+            "⏳ [bold yellow]Aguardando você acionar o favorito na aba do Jus.br...[/bold yellow]",
             title="Bookmarklet Jus.br",
             border_style="cyan",
         )
     )
     webbrowser.open(url)
+
+    if no_wait:
+        return
+
+    store = CredentialStore()
+    auth = AuthService(credential_store=store)
+    client = JusBrClient(auth_service=auth)
+
+    raw_input = _aguardar_callback_url(
+        expected_state="",
+        prompt_text="\n[bold yellow]Cole o token ou aguarde a detecção automática do favorito: [/bold yellow]",
+    )
+
+    try:
+        tokens = auth.import_session(raw_input)
+        perfil = client.obter_perfil()
+        console.print("[bold green]Sessão importada e salva com sucesso no Keyring![/bold green]")
+        console.print(
+            f"Usuário: [bold]{perfil.name or perfil.preferred_username}[/bold] (CPF: {perfil.cpf_mascarado()})"
+        )
+        console.print(
+            f"[dim]Token Bearer armazenado com segurança no Windows Credential Manager. Validade: {tokens.expires_in}s[/dim]"
+        )
+    except JusBrAuthError as exc:
+        console.print(f"[bold red]Falha ao importar sessão:[/bold red] {exc}")
+        sys.exit(1)
 
 
 @auth_app.command(name="set-token")

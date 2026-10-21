@@ -184,8 +184,24 @@ def test_cli_auth_set_token(mock_client_and_auth, capsys):
 
 
 def test_cli_auth_bookmarklet(mock_client_and_auth, capsys):
-    with patch("webbrowser.open") as mock_open:
+    tokens = TokenResponse(access_token="sample_jwt_123", token_type="Bearer", expires_in=3600)
+    mock_client_and_auth["auth"].import_session.return_value = tokens
+    mock_client_and_auth["client"].obter_perfil.return_value = UsuarioJusBr(
+        name="Usuario Bookmarklet",
+        cpf="12345678900",
+    )
+    with patch("webbrowser.open") as mock_open, patch("cli._aguardar_callback_url", return_value="sample_jwt_123"):
         app(["auth", "bookmarklet"], exit_on_error=False, result_action=None)
+        captured = capsys.readouterr()
+        assert "Conector Bookmarklet Jus.br" in captured.out
+        assert "Usuario Bookmarklet" in captured.out
+        mock_open.assert_called_once()
+        mock_client_and_auth["auth"].import_session.assert_called_once_with("sample_jwt_123")
+
+
+def test_cli_auth_bookmarklet_no_wait(mock_client_and_auth, capsys):
+    with patch("webbrowser.open") as mock_open:
+        app(["auth", "bookmarklet", "--no-wait"], exit_on_error=False, result_action=None)
         captured = capsys.readouterr()
         assert "Conector Bookmarklet Jus.br" in captured.out
         mock_open.assert_called_once()
