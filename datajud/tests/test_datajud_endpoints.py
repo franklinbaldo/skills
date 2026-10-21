@@ -4,8 +4,9 @@
 # ///
 """Testes offline: nunca fazem requisicoes a API do CNJ."""
 import importlib.util
+import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -67,7 +68,6 @@ def test_journal_append_only_e_resume(tmp_path):
 
 
 def test_probe_feature_e_corpo_minimo():
-     from unittest.mock import MagicMock
 
     resposta = MagicMock()
     resposta.status = 200
@@ -78,14 +78,12 @@ def test_probe_feature_e_corpo_minimo():
         r = mod.probe("tjro", "fake-key", feature="range")
     assert r["ok"] is True
     request = urlopen.call_args.args[0]
-    import json
     payload = json.loads(request.data)
     assert "range" in payload["query"]
     assert payload["size"] == 0
 
 
 def test_probe_nao_considera_falha_shard_sucesso():
-    from unittest.mock import MagicMock
     resposta = MagicMock()
     resposta.status = 200
     resposta.read.return_value = b'{"hits": {}, "_shards": {"failed": 1}}'
