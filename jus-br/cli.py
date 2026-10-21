@@ -13,8 +13,6 @@
 
 from __future__ import annotations
 
-import base64
-import hashlib
 import queue
 import subprocess
 import sys
@@ -41,7 +39,6 @@ from errors import (  # noqa: E402
     RefreshTokenRevokedError,
     SessionExpiredError,
 )
-from models import PeticionamentoRequest  # noqa: E402
 
 console = Console()
 
@@ -55,8 +52,10 @@ usuario_app = App(name="usuario", help="Consultas sobre o perfil na PDPJ.", resu
 comunicacoes_app = App(
     name="comunicacoes", help="Consulta de intimações e comunicações oficiais.", result_action=lambda x: x
 )
-processo_app = App(name="processo", help="Consulta processual unificada na PDPJ.", result_action=lambda x: x)
-peticionamento_app = App(name="peticionamento", help="Envio e acompanhamento de petições.", result_action=lambda x: x)
+processo_app = App(name="processo", help="Consulta processual experimental (desabilitada).", result_action=lambda x: x)
+peticionamento_app = App(
+    name="peticionamento", help="Peticionamento experimental (desabilitado).", result_action=lambda x: x
+)
 
 app.command(auth_app)
 app.command(usuario_app)
@@ -343,18 +342,16 @@ def comunicacoes_buscar(
 def processo_consultar(
     numero: Annotated[str, Parameter(help="Número único do processo (CNJ).")] = "",
 ) -> None:
-    """Consulta metadados e andamento de processo judicial unificado na PDPJ."""
+    """Consulta experimental, ainda sem contrato de endpoint confirmado."""
     if not numero:
         console.print("[bold red]Informe o número do processo.[/bold red]")
         sys.exit(1)
 
-    console.print("[dim cyan]Consultando barramento unificado da PDPJ...[/dim cyan]")
     client = JusBrClient()
     try:
         proc = client.consultar_processo(numero)
     except Exception as exc:
-        console.print(f"[bold red]Falha na consulta ao barramento da PDPJ:[/bold red] {exc}")
-        console.print("[dim yellow]Nota: A consulta federada depende de convênio ativo do tribunal de origem na PDPJ.[/dim yellow]")
+        console.print(f"[bold red]Erro ao consultar processo:[/bold red] {exc}")
         sys.exit(1)
 
     table = Table(title=f"Processo Judicial: {proc.numero}", border_style="magenta")
@@ -377,53 +374,14 @@ def peticionamento_intercorrente(
     arquivo: Annotated[str, Parameter(help="Caminho do arquivo PDF da petição.")] = "",
     descricao: Annotated[str, Parameter(help="Descrição sucinta da petição.")] = "",
 ) -> None:
-    """Protocolar petição intercorrente em processo em andamento pela PDPJ."""
-    if not processo or not arquivo or not tribunal:
-        console.print("[bold red]Processo, tribunal e arquivo PDF são obrigatórios.[/bold red]")
-        sys.exit(1)
-
-    path = Path(arquivo)
-    if not path.is_file():
-        console.print(f"[bold red]Arquivo não encontrado:[/bold red] {arquivo}")
-        sys.exit(1)
-
-    file_bytes = path.read_bytes()
-    sha256_hash = hashlib.sha256(file_bytes).hexdigest()
-    b64_content = base64.b64encode(file_bytes).decode("ascii")
-
-    req = PeticionamentoRequest(
-        numero_processo=processo,
-        tipo_peticao=tipo,
-        sigla_tribunal=tribunal,
-        descricao=descricao or f"Peticionamento intercorrente: {tipo}",
-        arquivo_base64=b64_content,
-        nome_arquivo=path.name,
-        hash_sha256=sha256_hash,
-    )
-
+    """Informa que o envio por API segue experimental e não transmite a peça."""
     console.print(
-        "[dim cyan]Submetendo petição com chave de idempotência ao barramento da PDPJ...[/dim cyan]"
+        "[bold yellow]Peticionamento por API não habilitado.[/bold yellow] "
+        "O endpoint utilizado anteriormente não está confirmado em contrato oficial; "
+        "nenhum arquivo foi lido ou transmitido e nenhum protocolo foi gerado. "
+        "Use o Portal de Serviços oficial do CNJ."
     )
-    client = JusBrClient()
-    try:
-        resp = client.peticionar_intercorrente(req)
-        console.print("[bold green]Recibo de submissão emitido pelo barramento da PDPJ![/bold green]")
-        console.print(f"Protocolo: [bold cyan]{resp.protocolo}[/bold cyan]")
-        console.print(f"Status no Barramento: [bold]{resp.status}[/bold]")
-        console.print(f"Data/Hora: {resp.data_recebimento}")
-        console.print(f"SHA-256 da Peça: [dim]{sha256_hash}[/dim]")
-        if resp.mensagem:
-            console.print(f"Mensagem: {resp.mensagem}")
-        console.print(
-            "[dim yellow]Atenção: A transmissão foi acolhida pelo barramento. "
-            "A juntada definitiva aos autos depende de confirmação assíncrona do tribunal de destino.[/dim yellow]"
-        )
-    except Exception as exc:
-        console.print(f"[bold red]Falha ao protocolar petição na PDPJ:[/bold red] {exc}")
-        console.print(
-            "[dim yellow]Nota: O peticionamento via PDPJ requer habilitação no barramento e credenciamento institucional.[/dim yellow]"
-        )
-        sys.exit(1)
+    sys.exit(2)
 
 
 if __name__ == "__main__":
