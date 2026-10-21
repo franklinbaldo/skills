@@ -205,3 +205,25 @@ def test_cli_auth_bookmarklet_no_wait(mock_client_and_auth, capsys):
         captured = capsys.readouterr()
         assert "Conector Bookmarklet Jus.br" in captured.out
         mock_open.assert_called_once()
+
+
+def test_cli_auth_set_token_access_and_refresh(mock_client_and_auth, capsys):
+    tokens = TokenResponse(access_token="acc_123", token_type="Bearer", expires_in=3600, refresh_token="ref_456")
+    mock_client_and_auth["auth"].import_session.return_value = tokens
+    mock_client_and_auth["client"].obter_perfil.return_value = UsuarioJusBr(
+        name="Usuario Duplo",
+        cpf="12345678900",
+    )
+
+    app(["auth", "set-token", "--access", "acc_123", "--refresh", "ref_456"], exit_on_error=False, result_action=None)
+    captured = capsys.readouterr()
+    assert "Sessão importada e salva com sucesso" in captured.out
+    mock_client_and_auth["auth"].import_session.assert_called_once_with("acc_123", refresh_token="ref_456")
+
+
+def test_cli_api_get(mock_client_and_auth, capsys):
+    mock_client_and_auth["client"].get.return_value = {"status": "ok", "items": [1, 2, 3]}
+    app(["api", "get", "status"], exit_on_error=False, result_action=None)
+    captured = capsys.readouterr()
+    assert "ok" in captured.out
+    mock_client_and_auth["client"].get.assert_called_once_with("status")

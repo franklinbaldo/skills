@@ -26,6 +26,26 @@ from models import (
 logger = logging.getLogger(__name__)
 
 COMUNICA_API_BASE = "https://comunicaapi.pje.jus.br/api/v1"
+PDPJ_API_BASE = "https://portaldeservicos.pdpj.jus.br/api"
+
+
+class JusBrBearerAuth(httpx.Auth):
+    """Injeta Authorization: Bearer e, em 401, forca refresh e repete 1x."""
+
+    def __init__(self, auth_service: AuthService) -> None:
+        self.auth = auth_service
+
+    def auth_flow(self, request: httpx.Request):  # type: ignore[no-untyped-def]
+        tokens = self.auth.ensure_valid_tokens()
+        request.headers["Authorization"] = f"Bearer {tokens.access_token}"
+        response = yield request
+        if response.status_code == 401:
+            try:
+                new_tokens = self.auth.refresh()
+                request.headers["Authorization"] = f"Bearer {new_tokens.access_token}"
+                yield request
+            except Exception:
+                pass
 
 
 class JusBrClient:
@@ -127,3 +147,31 @@ class JusBrClient:
             "Peticionamento por API indisponível: o endpoint anteriormente implementado não foi confirmado "
             "por contrato oficial, e nenhum protocolo foi transmitido ou gerado. Use o Portal de Serviços oficial."
         )
+
+    def get(self, path: str, **params: Any) -> Any:
+        """Executa requisição GET autenticada na API base da PDPJ (descoberta de endpoints)."""
+        clean_path = path.lstrip("/")
+        url = f"{PDPJ_API_BASE}/{clean_path}"
+        tokens = self.auth.ensure_valid_tokens()
+        headers = {"Authorization": f"Bearer {tokens.access_token}", "Accept": "application/json"}
+        resp = self.http.get(url, params=params or None, headers=headers)
+        if resp.status_code == 401:
+            try:
+                new_tokens = self.auth.refresh()
+                headers["Authorization"] = f"Bearer {new_tokens.access_token}"
+                resp = self.http.get(url, params=params or None, headers=headers)
+            except Exception:
+                pass
+        if resp.status_code >= 400:
+            raise JusBrApiError(f"Erro na API da PDPJ ({resp.status_code}) em {url}: {resp.text}")
+        ctype = resp.headers.get("content-type", "")
+        return resp.json() if "json" in ctype else resp.text
+
+    def close(self) -> None:
+        self.http.close()
+
+    def __enter__(self) -> JusBrClient:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()

@@ -64,6 +64,8 @@ app.command(usuario_app)
 app.command(comunicacoes_app)
 app.command(processo_app)
 app.command(peticionamento_app)
+api_app = App(name="api", help="Exploração direta de endpoints da API PDPJ.", result_action=lambda x: x)
+app.command(api_app)
 
 
 def _obter_clipboard_texto() -> str:
@@ -329,13 +331,16 @@ def auth_bookmarklet(
 @auth_app.command(name="set-token")
 def auth_set_token(
     token: Annotated[str, Parameter(help="Token Bearer (JWT) ou JSON exportado do bookmarklet.")] = "",
+    access: Annotated[str, Parameter(help="Access Token (JWT) opcional.")] = "",
+    refresh: Annotated[str, Parameter(help="Refresh Token (JWT) opcional.")] = "",
 ) -> None:
     """Salva diretamente no keyring uma sessão ativa obtida via bookmarklet ou DevTools."""
     store = CredentialStore()
     auth = AuthService(credential_store=store)
     client = JusBrClient(auth_service=auth)
 
-    raw_input = token
+    raw_input = access or token
+    refresh_token = refresh or None
     if not raw_input:
         try:
             raw_input = _aguardar_callback_url(
@@ -348,7 +353,10 @@ def auth_set_token(
 
     while True:
         try:
-            tokens = auth.import_session(raw_input)
+            if refresh_token:
+                tokens = auth.import_session(raw_input, refresh_token=refresh_token)
+            else:
+                tokens = auth.import_session(raw_input)
             perfil = client.obter_perfil()
             console.print("\n[bold green]✓ Sessão importada e salva com sucesso no Keyring![/bold green]")
             console.print(
@@ -573,6 +581,23 @@ def peticionamento_intercorrente(
         "Use o Portal de Serviços oficial do CNJ."
     )
     sys.exit(2)
+
+
+@api_app.command(name="get")
+def api_get(
+    path: Annotated[str, Parameter(help="Caminho relativo na API PDPJ (ex: /processo/...).")],
+) -> None:
+    """Executa requisição GET autenticada na API da PDPJ."""
+    client = JusBrClient()
+    try:
+        data = client.get(path)
+        if isinstance(data, (dict, list)):
+            console.print_json(data=data)
+        else:
+            console.print(data)
+    except Exception as exc:
+        console.print(f"[bold red]Erro ao consultar API PDPJ:[/bold red] {exc}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

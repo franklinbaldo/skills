@@ -125,6 +125,9 @@ uv run jus-br/cli.py auth login
 # Salvar diretamente um token JWT ou export do bookmarklet no Keyring
 uv run jus-br/cli.py auth set-token --token "<token-jwt>"
 
+# Salvar par access token e refresh token capturados da sessão
+uv run jus-br/cli.py auth set-token --access "<access-jwt>" --refresh "<refresh-jwt>"
+
 # Verificar status da sessão e validade dos tokens
 uv run jus-br/cli.py auth status
 
@@ -162,6 +165,15 @@ uv run jus-br/cli.py comunicacoes buscar --tribunal TJRO --data 2026-10-20
 ```powershell
 # Consultar metadados básicos de um processo na PDPJ
 uv run jus-br/cli.py processo consultar 7001234-56.2024.8.22.0001
+```
+
+### Exploração de Endpoints (`api`)
+
+Permite inspecionar endpoints REST da base oficial da PDPJ (`https://portaldeservicos.pdpj.jus.br/api`) com renovação transparente em caso de 401:
+
+```powershell
+# Consultar endpoint relativo na API da PDPJ
+uv run jus-br/cli.py api get "/usuario/perfil"
 ```
 
 ### Peticionamento Intercorrente (`peticionamento`)

@@ -178,3 +178,37 @@ def test_authenticated_request_http_failures_raise(status, mock_auth_service):
     client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
     with pytest.raises(JusBrApiError, match=f"{status}"):
         client._authenticated_request("GET", "https://example.invalid")
+
+
+def test_client_get_success_and_context_manager(mock_auth_service):
+    def handle_request(req):
+        assert str(req.url) == "https://portaldeservicos.pdpj.jus.br/api/status"
+        return httpx.Response(200, json={"status": "online"}, headers={"content-type": "application/json"})
+
+    mock_http = httpx.Client(transport=httpx.MockTransport(handle_request))
+    with JusBrClient(auth_service=mock_auth_service, http_client=mock_http) as client:
+        res = client.get("status")
+        assert res == {"status": "online"}
+
+
+def test_client_get_401_retries_with_refresh(mock_auth_service):
+    attempts = 0
+
+    def handle_request(req):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return httpx.Response(401, text="Unauthorized")
+        return httpx.Response(200, json={"ok": True}, headers={"content-type": "application/json"})
+
+    mock_auth_service.refresh.return_value = TokenResponse(
+        access_token="new_refreshed_jwt",
+        token_type="Bearer",
+        expires_in=300,
+    )
+    mock_http = httpx.Client(transport=httpx.MockTransport(handle_request))
+    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
+    res = client.get("/test")
+    assert res == {"ok": True}
+    assert attempts == 2
+    mock_auth_service.refresh.assert_called_once()

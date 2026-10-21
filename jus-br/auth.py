@@ -158,16 +158,21 @@ def decode_jwt_payload(token: str) -> dict[str, Any]:
         raise JusBrAuthError(f"Falha ao decodificar payload do token JWT: {exc}") from exc
 
 
-def parse_session_input(raw_input: str) -> TokenResponse:
+def parse_session_input(raw_input: str, refresh_token: str | None = None) -> TokenResponse:
     """Extrai um TokenResponse de um token JWT direto, Bearer ou payload exportado do bookmarklet."""
     raw = raw_input.strip()
     if not raw:
         raise JusBrAuthError("Entrada vazia. Forneça o token ou payload da sessão.")
 
     candidate_jwt: str | None = None
+    extracted_refresh = refresh_token
+
     if raw.startswith("{") and raw.endswith("}"):
         try:
             data = json.loads(raw)
+            if not extracted_refresh and isinstance(data.get("refresh_token"), str):
+                extracted_refresh = data["refresh_token"]
+
             all_values = []
             if isinstance(data.get("storage"), dict):
                 all_values.extend(data["storage"].values())
@@ -198,10 +203,22 @@ def parse_session_input(raw_input: str) -> TokenResponse:
     else:
         expires_in = 3600
 
+    refresh_exp = None
+    if extracted_refresh:
+        try:
+            r_payload = decode_jwt_payload(extracted_refresh)
+            r_exp = r_payload.get("exp")
+            if r_exp and isinstance(r_exp, (int, float)):
+                refresh_exp = max(60, int(r_exp - now))
+        except Exception:
+            refresh_exp = 1800
+
     return TokenResponse(
         access_token=candidate_jwt,
         token_type="Bearer",
         expires_in=expires_in,
+        refresh_token=extracted_refresh,
+        refresh_expires_in=refresh_exp,
         scope=payload.get("scope"),
         created_at=now,
     )
@@ -429,9 +446,9 @@ class AuthService:
         self.store.save_tokens(tokens)
         return tokens
 
-    def import_session(self, raw_input: str) -> TokenResponse:
+    def import_session(self, raw_input: str, refresh_token: str | None = None) -> TokenResponse:
         """Importa e persiste uma sessão diretamente a partir de um JWT ou payload do bookmarklet."""
-        tokens = parse_session_input(raw_input)
+        tokens = parse_session_input(raw_input, refresh_token=refresh_token)
         self.store.save_tokens(tokens)
         return tokens
 
