@@ -22,16 +22,10 @@ CHUNK_SIZE = 512  # Limite seguro para CredWriteW do WinVault
 class CredentialStore:
     """Gerencia a persistência de tokens no Keyring usando gerações imutáveis e ponteiro atômico.
 
-    Arquitetura de Consistência e Atomicidade:
-    1. Gerações Imutáveis: Cada gravação cria um conjunto de chaves sob uma geração única com timestamp e entropia
-       criptográfica (ex: current_session_gen_1729530000_abcd_chunk_0). Dois processos concorrentes nunca colidem chunks.
-    2. Validação Estrita Pré-Comutação (Roundtrip Verification): Antes de alternar a geração ativa, a implementação relê
-       todos os chunks gravados no backend e desserializa o TokenResponse completo. Se houver falha de leitura, o ponteiro
-       não é alterado e a geração defeituosa é descartada.
-    3. Comutação de Ponteiro: A comutação é efetuada gravando a chave única '{username}_active_gen'. Nos backends oficiais
-       (Windows Credential Manager via CredWriteW, macOS Keychain via SecItemAdd/Update e Linux SecretService via DBus), a
-       escrita de uma chave individual é atômica no nível do subsistema de segurança do SO.
-    4. Purga Tardia: Chunks de gerações anteriores só são removidos após a confirmação integral da nova geração ativa.
+    Cada gravação cria uma nova geração isolada (ex: current_session_gen_1729530000_abcd).
+    Todos os chunks da nova geração são gravados e validados antes do ponteiro ativo ser atualizado.
+    Em caso de falha a meio caminho, os chunks da nova geração são descartados e a geração ativa
+    anterior permanece intocada. Somente após a troca bem-sucedida do ponteiro ativo a geração antiga é purgada.
     """
 
     def __init__(self, service_name: str = DEFAULT_SERVICE_NAME, username: str = DEFAULT_USERNAME) -> None:
@@ -80,6 +74,24 @@ class CredentialStore:
             except Exception:
                 pass
 
+    @staticmethod
+    def _split_chunks(payload: str) -> list[str]:
+        """Divide texto em blocos de no máximo 512 bytes sem cortar UTF-8."""
+        chunks: list[str] = []
+        current: list[str] = []
+        current_size = 0
+        for char in payload:
+            char_size = len(char.encode("utf-8"))
+            if current and current_size + char_size > CHUNK_SIZE:
+                chunks.append("".join(current))
+                current = []
+                current_size = 0
+            current.append(char)
+            current_size += char_size
+        if current:
+            chunks.append("".join(current))
+        return chunks
+
     def _purge_legacy(self) -> None:
         """Limpa identificadores legados que não utilizavam controle de geração."""
         try:
@@ -109,6 +121,7 @@ class CredentialStore:
         """Salva a resposta de tokens criando uma geração imutável e comutando o ponteiro de forma atômica."""
         self.check_availability()
         payload = tokens.model_dump_json()
+        payload_bytes = payload.encode("utf-8")
 
         old_gen = None
         try:
@@ -120,12 +133,12 @@ class CredentialStore:
         written_keys: list[str] = []
 
         try:
-            if len(payload) <= CHUNK_SIZE:
+            if len(payload_bytes) <= CHUNK_SIZE:
                 key = f"{self.username}_{new_gen}"
                 keyring.set_password(self.service_name, key, payload)
                 written_keys.append(key)
             else:
-                chunks = [payload[i : i + CHUNK_SIZE] for i in range(0, len(payload), CHUNK_SIZE)]
+                chunks = self._split_chunks(payload)
                 for idx, chunk in enumerate(chunks):
                     chunk_key = f"{self.username}_{new_gen}_chunk_{idx}"
                     keyring.set_password(self.service_name, chunk_key, chunk)
@@ -135,39 +148,54 @@ class CredentialStore:
                 keyring.set_password(self.service_name, chunks_key, str(len(chunks)))
                 written_keys.append(chunks_key)
 
-            # Confirmação de gravação (roundtrip validation): relê e valida antes de atualizar o ponteiro
-            if len(payload) <= CHUNK_SIZE:
-                readback_raw = keyring.get_password(self.service_name, f"{self.username}_{new_gen}")
+            # Valida a geração completa antes de publicar o ponteiro. Isso detecta
+            # gravações truncadas ou omitidas pelo backend de keyring.
+            if len(payload_bytes) <= CHUNK_SIZE:
+                persisted = keyring.get_password(self.service_name, f"{self.username}_{new_gen}")
             else:
-                readback_count = keyring.get_password(self.service_name, f"{self.username}_{new_gen}_chunks")
-                if not readback_count or int(readback_count) != len(chunks):
-                    raise KeyringStorageError("Verificação de gravação falhou: contador de chunks inconsistente.")
-                parts = []
-                for idx in range(len(chunks)):
-                    p = keyring.get_password(self.service_name, f"{self.username}_{new_gen}_chunk_{idx}")
-                    if p is None:
-                        raise KeyringStorageError(f"Verificação de gravação falhou: chunk {idx} ausente na leitura.")
-                    parts.append(p)
-                readback_raw = "".join(parts)
+                persisted_count = keyring.get_password(self.service_name, f"{self.username}_{new_gen}_chunks")
+                if persisted_count != str(len(chunks)):
+                    raise ValueError("Contador de chunks não confere após gravação.")
+                persisted_parts = [
+                    keyring.get_password(self.service_name, f"{self.username}_{new_gen}_chunk_{idx}")
+                    for idx in range(len(chunks))
+                ]
+                if any(part is None for part in persisted_parts):
+                    raise ValueError("Chunk ausente após gravação.")
+                persisted = "".join(persisted_parts)
+            if persisted != payload:
+                raise ValueError("Conteúdo persistido não confere com os tokens gravados.")
+            TokenResponse.model_validate_json(persisted)
 
-            if not readback_raw:
-                raise KeyringStorageError("Verificação de gravação falhou: dados ausentes no keyring.")
-
-            # Desserializa e valida que o conteúdo persistido está perfeitamente íntegro
-            TokenResponse.model_validate_json(readback_raw)
-
-            # Transição atômica: comuta o ponteiro para a nova geração validada
+            # Transição atômica: atualiza o ponteiro para a nova geração
             keyring.set_password(self.service_name, self._active_pointer_key, new_gen)
+            if keyring.get_password(self.service_name, self._active_pointer_key) != new_gen:
+                raise ValueError("Ponteiro ativo não confirmou a nova geração.")
 
         except Exception as exc:
-            # Rollback: purga as chaves da nova geração com falha, mantendo a geração anterior 100% intacta
-            for k in written_keys:
-                try:
-                    keyring.delete_password(self.service_name, k)
-                except Exception:
-                    pass
+            # A gravação do ponteiro pode persistir e ainda assim lançar erro. Restaura
+            # o valor anterior antes de remover a geração candidata.
+            pointer_restored = False
+            try:
+                if old_gen:
+                    keyring.set_password(self.service_name, self._active_pointer_key, old_gen)
+                else:
+                    keyring.delete_password(self.service_name, self._active_pointer_key)
+                restored = keyring.get_password(self.service_name, self._active_pointer_key)
+                pointer_restored = restored == old_gen
+            except Exception:
+                logger.exception("Não foi possível restaurar o ponteiro anterior do keyring")
+            # Se o estado do ponteiro for incerto, preserve a geração candidata:
+            # ela pode ter se tornado a ativa apesar da exceção do backend.
+            if pointer_restored:
+                for k in written_keys:
+                    try:
+                        keyring.delete_password(self.service_name, k)
+                    except Exception:
+                        pass
             raise KeyringStorageError(
-                f"Falha ao persistir nova geração de credenciais no keyring (geração anterior intacta): {exc}"
+                f"Falha ao persistir nova geração de credenciais no keyring "
+                f"({'geração anterior restaurada' if pointer_restored else 'estado do ponteiro incerto; dados preservados'}): {exc}"
             ) from exc
 
         # Após o commit bem-sucedido do novo ponteiro, purga a geração antiga e dados legados
@@ -232,11 +260,35 @@ class CredentialStore:
         try:
             active_gen = keyring.get_password(self.service_name, self._active_pointer_key)
             if active_gen:
+                generation_count_key = f"{self.username}_{active_gen}_chunks"
+                generation_count = keyring.get_password(self.service_name, generation_count_key)
+                generation_keys = [f"{self.username}_{active_gen}", generation_count_key]
+                if generation_count:
+                    generation_keys.extend(
+                        f"{self.username}_{active_gen}_chunk_{idx}" for idx in range(int(generation_count))
+                    )
                 self._purge_generation(active_gen)
+                if any(keyring.get_password(self.service_name, key) is not None for key in generation_keys):
+                    raise KeyringStorageError("Uma ou mais credenciais da geração ativa permaneceram no keyring.")
                 try:
                     keyring.delete_password(self.service_name, self._active_pointer_key)
                 except Exception:
                     pass
+                if keyring.get_password(self.service_name, self._active_pointer_key) is not None:
+                    raise KeyringStorageError("O ponteiro da sessão permaneceu no keyring.")
             self._purge_legacy()
-        except Exception:
-            pass
+            legacy_count = keyring.get_password(self.service_name, f"{self.username}_chunks")
+            legacy_keys = [self.username, f"{self.username}_chunks"]
+            if legacy_count:
+                legacy_keys.extend(f"{self.username}_chunk_{idx}" for idx in range(int(legacy_count)))
+            if any(keyring.get_password(self.service_name, key) is not None for key in legacy_keys):
+                raise KeyringStorageError("Uma ou mais credenciais legadas permaneceram no keyring.")
+            if (
+                keyring.get_password(self.service_name, self._active_pointer_key) is not None
+                or self.load_tokens() is not None
+            ):
+                raise KeyringStorageError("O keyring ainda contém uma sessão após a tentativa de remoção local.")
+        except KeyringStorageError:
+            raise
+        except Exception as exc:
+            raise KeyringStorageError(f"Falha ao remover a sessão local do keyring: {exc}") from exc
