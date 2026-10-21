@@ -1,11 +1,14 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["cyclopts>=3.0"]
+# ///
 """Inventario verificavel dos aliases PUBLICOS DataJud/CNJ.
 
 Nunca confundir API Publica com os endpoints de envio/manutencao reservados
 a tribunais. O catalogo e offline; --probe faz consultas autenticadas reais,
 com taxa limitada e persistencia a cargo do chamador.
 """
-import argparse
 import datetime
 import hashlib
 import json
@@ -121,53 +124,74 @@ def _sucessos(path: Path) -> set[str]:
     return ok
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--probe", action="store_true", help="testa efetivamente a API (faz rede)")
-    parser.add_argument("--alias", choices=sorted(ALIASES), help="testa somente um tribunal")
-    parser.add_argument("--features", action="store_true", help="matriz de recursos DSL com probes separados")
-    parser.add_argument("--journal", type=Path, help="JSONL append-only com observacoes (sem dados de processos)")
-    parser.add_argument("--resume", action="store_true", help="pula probes ja confirmados no journal")
-    parser.add_argument("--delay", type=float, default=1.0, help="intervalo minimo entre testes (segundos)")
-    parser.add_argument("--timeout", type=float, default=20.0)
-    args = parser.parse_args(argv)
-    if args.delay < 0 or args.timeout <= 0:
-        parser.error("delay deve ser >= 0 e timeout > 0")
-    if args.resume and not args.journal:
-        parser.error("--resume exige --journal")
-    if args.features and not args.probe:
-        parser.error("--features exige --probe")
-    aliases = [args.alias] if args.alias else sorted(ALIASES)
-    if not args.probe:
+app = cyclopts.App(name="datajud-endpoints", help="Inventario e probes publicos do DataJud.")
+
+
+def executar(
+    *,
+    probe: bool = False,
+    alias: str | None = None,
+    features: bool = False,
+    journal: Path | None = None,
+    resume: bool = False,
+    delay: float = 1.0,
+    timeout: float = 20.0,
+) -> int:
+    if delay < 0 or timeout <= 0:
+        raise ValueError("delay deve ser >= 0 e timeout > 0")
+    if alias is not None:
+        endpoint(alias)
+    if resume and journal is None:
+        raise ValueError("--resume exige --journal")
+    if features and not probe:
+        raise ValueError("--features exige --probe")
+    aliases = [alias] if alias else sorted(ALIASES)
+    if not probe:
         print(json.dumps({"total": len(ALIASES), "grupos": {k: list(v) for k, v in GRUPOS.items()},
                           "endpoints": [endpoint(a) for a in aliases]}, ensure_ascii=False, indent=2))
         return 0
     key = os.environ.get("DATAJUD_API_KEY")
     if not key:
-        parser.error("--probe exige DATAJUD_API_KEY no ambiente; consulte a chave publica atual no CNJ")
-    features = list(FEATURE_QUERIES) if args.features else ["match_all"]
-    completed = _sucessos(args.journal) if args.resume else set()
+        raise ValueError("--probe exige DATAJUD_API_KEY no ambiente")
+    resources = list(FEATURE_QUERIES) if features else ["match_all"]
+    completed = _sucessos(journal) if resume and journal else set()
     failures = 0
     attempted = 0
-    for alias in aliases:
-        for feature in features:
-            check = _observation_key(alias, feature)
+    for target in aliases:
+        for feature in resources:
+            check = _observation_key(target, feature)
             if check in completed:
                 continue
             if attempted:
-                time.sleep(args.delay)
-            result = probe(alias, key, args.timeout, feature=feature)
+                time.sleep(delay)
+            result = globals()["probe"](target, key, timeout, feature=feature)
             event = {
                 "observed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "key": check, **result,
             }
-            if args.journal:
-                _append_event(args.journal, event)
+            if journal:
+                _append_event(journal, event)
             print(json.dumps(event, ensure_ascii=False), flush=True)
             attempted += 1
             failures += not result["ok"]
     return 1 if failures else 0
 
 
+@app.default
+def cli(
+    *,
+    probe: bool = False,
+    alias: str | None = None,
+    features: bool = False,
+    journal: Path | None = None,
+    resume: bool = False,
+    delay: float = 1.0,
+    timeout: float = 20.0,
+) -> int:
+    """Lista aliases offline ou verifica disponibilidade e recursos com --probe."""
+    return executar(probe=probe, alias=alias, features=features, journal=journal,
+                    resume=resume, delay=delay, timeout=timeout)
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()
