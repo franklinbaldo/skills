@@ -85,22 +85,26 @@ def _aguardar_callback_url(expected_state: str, prompt_text: str) -> str:
     initial_clipboard = _obter_clipboard_texto()
 
     def _monitor_clipboard() -> None:
+        last_seen = initial_clipboard
         while not stop_event.is_set():
             time.sleep(0.3)
             if stop_event.is_set():
                 break
             text = _obter_clipboard_texto()
-            if text and text != initial_clipboard:
-                # Caso 1: Token JWT direto ou payload do bookmarklet
-                if "eyJ" in text or (text.startswith("{") and "storage" in text):
+            if text and text != last_seen:
+                last_seen = text
+                # Caso 1: Token JWT direto ou payload do bookmarklet contendo eyJ
+                if "eyJ" in text:
                     console.print(
-                        "\n[bold cyan]✓ Sessão Jus.br / Token detectado na Área de Transferência![/bold cyan]"
+                        "\n[bold green]✓ Token / Sessão PDPJ detectada na Área de Transferência![/bold green]"
                     )
                     result_queue.put(text)
                     return
                 # Caso 2: URL de callback com state esperado
                 if expected_state and expected_state in text and "code=" in text:
-                    console.print("\n[bold cyan]✓ Nova URL de callback detectada na Área de Transferência![/bold cyan]")
+                    console.print(
+                        "\n[bold green]✓ URL de callback com código detectada na Área de Transferência![/bold green]"
+                    )
                     result_queue.put(text)
                     return
 
@@ -178,35 +182,53 @@ def auth_login(
 
     target_input = callback_url
     if not target_input:
-        target_input = _aguardar_callback_url(
-            expected_state=state,
-            prompt_text="\n[bold yellow]Cole a URL redirecionada ou o Token aqui (ou dê Ctrl+C no navegador): [/bold yellow]",
-        )
+        try:
+            target_input = _aguardar_callback_url(
+                expected_state=state,
+                prompt_text="\n[bold yellow]Cole a URL redirecionada ou o Token aqui (ou acione o favorito/Ctrl+C): [/bold yellow]",
+            )
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Operação cancelada pelo usuário.[/yellow]")
+            sys.exit(130)
 
-    try:
-        if (
-            "eyJ" in target_input
-            or (target_input.startswith("{") and "storage" in target_input)
-            or target_input.strip().lower().startswith("bearer ")
-        ):
-            tokens = auth.import_session(target_input)
-        else:
-            tokens = auth.complete_login(target_input, code_verifier=verifier, state=state)
+    while True:
+        try:
+            if (
+                "eyJ" in target_input
+                or target_input.strip().lower().startswith("bearer ")
+                or (target_input.startswith("{") and "eyJ" in target_input)
+            ):
+                tokens = auth.import_session(target_input)
+            else:
+                tokens = auth.complete_login(target_input, code_verifier=verifier, state=state)
 
-        perfil = client.obter_perfil()
-        console.print("[bold green]Autenticação concluída com sucesso![/bold green]")
-        console.print(
-            f"Bem-vindo(a), [bold]{perfil.name or perfil.preferred_username}[/bold] (CPF: {perfil.cpf_mascarado()})"
-        )
-        console.print(
-            f"[dim]Token Bearer armazenado com segurança no Windows Credential Manager. Validade: {tokens.expires_in}s[/dim]"
-        )
-    except JusBrAuthError as exc:
-        console.print(f"[bold red]Falha na autenticação da PDPJ:[/bold red] {exc}")
-        sys.exit(1)
-    except Exception as exc:
-        console.print(f"[bold red]Erro inesperado:[/bold red] {exc}")
-        sys.exit(1)
+            perfil = client.obter_perfil()
+            console.print("[bold green]✓ Autenticação concluída com sucesso![/bold green]")
+            console.print(
+                f"Bem-vindo(a), [bold]{perfil.name or perfil.preferred_username}[/bold] (CPF: {perfil.cpf_mascarado()})"
+            )
+            if perfil.oab:
+                console.print(f"Inscrição OAB: [bold cyan]{perfil.oab}[/bold cyan]")
+            console.print(
+                f"[dim]Sessão armazenada com segurança no Windows Credential Manager. Validade: {tokens.expires_in}s[/dim]"
+            )
+            break
+        except JusBrAuthError as exc:
+            console.print(f"[yellow]⚠️ {exc}[/yellow]")
+            try:
+                target_input = _aguardar_callback_url(
+                    expected_state=state,
+                    prompt_text="\n[bold yellow]Cole novamente o token ou URL aqui (Ctrl+C para sair): [/bold yellow]",
+                )
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Operação cancelada pelo usuário.[/yellow]")
+                sys.exit(130)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Operação cancelada pelo usuário.[/yellow]")
+            sys.exit(130)
+        except Exception as exc:
+            console.print(f"[bold red]Erro inesperado:[/bold red] {exc}")
+            sys.exit(1)
 
 
 @auth_app.command(name="bookmarklet")
@@ -240,24 +262,39 @@ def auth_bookmarklet(
     auth = AuthService(credential_store=store)
     client = JusBrClient(auth_service=auth)
 
-    raw_input = _aguardar_callback_url(
-        expected_state="",
-        prompt_text="\n[bold yellow]Cole o token ou aguarde a detecção automática do favorito: [/bold yellow]",
-    )
-
     try:
-        tokens = auth.import_session(raw_input)
-        perfil = client.obter_perfil()
-        console.print("[bold green]Sessão importada e salva com sucesso no Keyring![/bold green]")
-        console.print(
-            f"Usuário: [bold]{perfil.name or perfil.preferred_username}[/bold] (CPF: {perfil.cpf_mascarado()})"
+        raw_input = _aguardar_callback_url(
+            expected_state="",
+            prompt_text="\n[bold yellow]Cole o token ou aguarde a detecção automática do favorito: [/bold yellow]",
         )
-        console.print(
-            f"[dim]Token Bearer armazenado com segurança no Windows Credential Manager. Validade: {tokens.expires_in}s[/dim]"
-        )
-    except JusBrAuthError as exc:
-        console.print(f"[bold red]Falha ao importar sessão:[/bold red] {exc}")
-        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Operação cancelada pelo usuário.[/yellow]")
+        sys.exit(130)
+
+    while True:
+        try:
+            tokens = auth.import_session(raw_input)
+            perfil = client.obter_perfil()
+            console.print("\n[bold green]✓ Sessão importada e salva com sucesso no Keyring![/bold green]")
+            console.print(
+                f"Usuário: [bold]{perfil.name or perfil.preferred_username}[/bold] (CPF: {perfil.cpf_mascarado()})"
+            )
+            if perfil.oab:
+                console.print(f"Inscrição OAB: [bold cyan]{perfil.oab}[/bold cyan]")
+            console.print(
+                f"[dim]Token Bearer armazenado com segurança no Windows Credential Manager. Validade: {tokens.expires_in}s[/dim]"
+            )
+            break
+        except JusBrAuthError as exc:
+            console.print(f"[yellow]⚠️ {exc}[/yellow]")
+            try:
+                raw_input = _aguardar_callback_url(
+                    expected_state="",
+                    prompt_text="\n[bold yellow]Cole o token ou acione o favorito novamente (Ctrl+C para sair): [/bold yellow]",
+                )
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Operação cancelada pelo usuário.[/yellow]")
+                sys.exit(130)
 
 
 @auth_app.command(name="set-token")
@@ -271,24 +308,39 @@ def auth_set_token(
 
     raw_input = token
     if not raw_input:
-        raw_input = _aguardar_callback_url(
-            expected_state="",
-            prompt_text="\n[bold yellow]Cole o token Bearer (JWT) ou export do bookmarklet aqui: [/bold yellow]",
-        )
+        try:
+            raw_input = _aguardar_callback_url(
+                expected_state="",
+                prompt_text="\n[bold yellow]Cole o token Bearer (JWT) ou export do bookmarklet aqui: [/bold yellow]",
+            )
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Operação cancelada pelo usuário.[/yellow]")
+            sys.exit(130)
 
-    try:
-        tokens = auth.import_session(raw_input)
-        perfil = client.obter_perfil()
-        console.print("[bold green]Sessão importada e salva com sucesso no Keyring![/bold green]")
-        console.print(
-            f"Usuário: [bold]{perfil.name or perfil.preferred_username}[/bold] (CPF: {perfil.cpf_mascarado()})"
-        )
-        console.print(
-            f"[dim]Token Bearer armazenado com segurança no Windows Credential Manager. Validade: {tokens.expires_in}s[/dim]"
-        )
-    except JusBrAuthError as exc:
-        console.print(f"[bold red]Falha ao importar sessão:[/bold red] {exc}")
-        sys.exit(1)
+    while True:
+        try:
+            tokens = auth.import_session(raw_input)
+            perfil = client.obter_perfil()
+            console.print("\n[bold green]✓ Sessão importada e salva com sucesso no Keyring![/bold green]")
+            console.print(
+                f"Usuário: [bold]{perfil.name or perfil.preferred_username}[/bold] (CPF: {perfil.cpf_mascarado()})"
+            )
+            if perfil.oab:
+                console.print(f"Inscrição OAB: [bold cyan]{perfil.oab}[/bold cyan]")
+            console.print(
+                f"[dim]Token Bearer armazenado com segurança no Windows Credential Manager. Validade: {tokens.expires_in}s[/dim]"
+            )
+            break
+        except JusBrAuthError as exc:
+            console.print(f"[yellow]⚠️ {exc}[/yellow]")
+            try:
+                raw_input = _aguardar_callback_url(
+                    expected_state="",
+                    prompt_text="\n[bold yellow]Cole o token novamente (Ctrl+C para sair): [/bold yellow]",
+                )
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Operação cancelada pelo usuário.[/yellow]")
+                sys.exit(130)
 
 
 @auth_app.command(name="status")
