@@ -14,7 +14,10 @@
 from __future__ import annotations
 
 import base64
+import queue
+import subprocess
 import sys
+import threading
 import time
 import webbrowser
 from pathlib import Path
@@ -61,6 +64,59 @@ app.command(processo_app)
 app.command(peticionamento_app)
 
 
+def _obter_clipboard_texto() -> str:
+    """Tenta ler texto da área de transferência do Windows de forma silenciosa e rápida."""
+    try:
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "Get-Clipboard"],
+            capture_output=True,
+            text=True,
+            timeout=2.0,
+        )
+        return res.stdout.strip()
+    except Exception:
+        return ""
+
+
+def _aguardar_callback_url(expected_state: str, prompt_text: str) -> str:
+    """Aguarda o usuário colar no terminal ou captura automaticamente do clipboard com Ctrl+C."""
+    result_queue: queue.Queue[str] = queue.Queue()
+    stop_event = threading.Event()
+
+    def _monitor_clipboard() -> None:
+        while not stop_event.is_set():
+            time.sleep(0.3)
+            if stop_event.is_set():
+                break
+            text = _obter_clipboard_texto()
+            if text and ("code=" in text or "session_state=" in text):
+                if expected_state in text or "code=" in text:
+                    result_queue.put(text)
+                    return
+
+    t_clip = threading.Thread(target=_monitor_clipboard, daemon=True)
+    t_clip.start()
+
+    def _read_input() -> None:
+        try:
+            val = console.input(prompt_text).strip()
+            if val:
+                result_queue.put(val)
+        except Exception:
+            pass
+
+    t_input = threading.Thread(target=_read_input, daemon=True)
+    t_input.start()
+
+    try:
+        captured = result_queue.get()
+        stop_event.set()
+        return captured
+    except Exception as exc:
+        stop_event.set()
+        raise JusBrAuthError(f"Falha ao obter URL de callback: {exc}") from exc
+
+
 @auth_app.command(name="login")
 def auth_login(
     force: Annotated[bool, Parameter(help="Forçar novo login mesmo se já houver sessão ativa.")] = False,
@@ -94,7 +150,8 @@ def auth_login(
             "1. O navegador será aberto no Keycloak oficial da PDPJ/CNJ.\n"
             "2. Autentique-se com sua conta [bold]Gov.br[/bold] ou [bold]Certificado Digital[/bold] e conclua o MFA.\n"
             "3. Ao finalizar, o navegador redirecionará para [cyan]https://www.jus.br/callback?code=...&state=...[/cyan]\n"
-            "4. Copie a URL completa da barra de endereços do navegador e cole aqui para finalizar.",
+            "4. [bold green]DICA RÁPIDA:[/bold green] Basta selecionar a barra de endereços e dar [bold]Ctrl+C[/bold]!\n"
+            "   A CLI detectará a URL copiada [bold underline]instantaneamente[/bold underline] antes de expirar.",
             title="Login Único Jus.br",
             border_style="cyan",
         )
@@ -105,9 +162,10 @@ def auth_login(
 
     target_input = callback_url
     if not target_input:
-        target_input = console.input(
-            "\n[bold yellow]Cole a URL redirecionada (ou o código) aqui: [/bold yellow]"
-        ).strip()
+        target_input = _aguardar_callback_url(
+            expected_state=state,
+            prompt_text="\n[bold yellow]Cole a URL redirecionada aqui (ou dê Ctrl+C nela no navegador): [/bold yellow]",
+        )
 
     try:
         tokens = auth.complete_login(target_input, code_verifier=verifier, state=state)
