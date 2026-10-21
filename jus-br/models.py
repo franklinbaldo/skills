@@ -1,3 +1,9 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "pydantic>=2.0.0",
+# ]
+# ///
 """Modelos de dados e contratos Pydantic para o Jus.br e PDPJ/CNJ."""
 
 from __future__ import annotations

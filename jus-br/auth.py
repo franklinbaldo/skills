@@ -1,3 +1,11 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "httpx>=0.27.0",
+#     "keyring>=25.0.0",
+#     "pydantic>=2.0.0",
+# ]
+# ///
 """Módulo de autenticação OAuth 2.0 / OIDC com PKCE para o Jus.br e PDPJ/CNJ."""
 
 from __future__ import annotations

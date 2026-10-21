@@ -1,3 +1,6 @@
+# /// script
+# requires-python = ">=3.11"
+# ///
 """Exceções especializadas para a integração com o portal Jus.br e PDPJ/CNJ."""
 
 

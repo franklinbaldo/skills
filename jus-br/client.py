@@ -1,3 +1,11 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "httpx>=0.27.0",
+#     "keyring>=25.0.0",
+#     "pydantic>=2.0.0",
+# ]
+# ///
 """Cliente HTTP autenticado para as APIs do ecossistema Jus.br e PDPJ/CNJ."""
 
 from __future__ import annotations

@@ -1,3 +1,12 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "pytest",
+#     "httpx>=0.27.0",
+#     "keyring>=25.0.0",
+#     "pydantic>=2.0.0",
+# ]
+# ///
 """Testes para o cliente HTTP de Jus.br e PDPJ."""
 
 import sys

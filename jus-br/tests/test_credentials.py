@@ -1,3 +1,11 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "pytest",
+#     "keyring>=25.0.0",
+#     "pydantic>=2.0.0",
+# ]
+# ///
 """Testes unitários para armazenamento de credenciais no keyring em jus-br."""
 
 import sys

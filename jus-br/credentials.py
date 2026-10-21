@@ -1,3 +1,10 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "keyring>=25.0.0",
+#     "pydantic>=2.0.0",
+# ]
+# ///
 """Armazenamento seguro de credenciais e tokens da PDPJ/Jus.br no Keyring / Windows Credential Manager."""
 
 from __future__ import annotations

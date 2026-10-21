@@ -1,3 +1,14 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "pytest",
+#     "cyclopts>=3.0",
+#     "httpx>=0.27.0",
+#     "keyring>=25.0.0",
+#     "pydantic>=2.0.0",
+#     "rich>=13.0.0",
+# ]
+# ///
 """Testes para a interface CLI de jus-br."""
 
 import sys
