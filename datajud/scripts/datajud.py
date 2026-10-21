@@ -54,9 +54,9 @@ from typing import Annotated, Any, Literal
 
 import cyclopts
 from cyclopts import Parameter
+import datajud_store as store
 from datajud_endpoints import ALIASES, endpoint as endpoint_publico
 from datajud_modelos import Assunto, Codificado, Movimento, OrgaoJulgador, RequisicaoBusca
-import datajud_store as store
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 BASE = "https://api-publica.datajud.cnj.jus.br"
