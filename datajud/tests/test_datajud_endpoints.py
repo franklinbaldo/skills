@@ -42,3 +42,62 @@ def test_probe_sem_chave_nao_acessa_rede(monkeypatch):
         with pytest.raises(SystemExit) as err:
             mod.main(["--probe", "--alias", "tjro"])
     assert err.value.code == 2
+
+
+def test_feature_matrix():
+    assert set(mod.FEATURE_QUERIES) == {
+        "match_all", "term", "bool", "range", "aggs", "source", "sort"
+    }
+    assert all("size" in q for q in mod.FEATURE_QUERIES.values())
+
+
+def test_journal_append_only_e_resume(tmp_path):
+    path = tmp_path / "probe.jsonl"
+    key = mod._observation_key("tjro", "match_all")
+    mod._append_event(path, {"key": key, "ok": True, "observed_at": "2026-10-21T00:00:00Z"})
+    mod._append_event(path, {"key": "falhou", "ok": False})
+    with path.open("a", encoding="utf-8") as out:
+        out.write('{"incompleto":')
+    assert mod._sucessos(path) == {key}
+    assert len(path.read_text(encoding="utf-8").splitlines()) == 3
+
+
+def test_probe_feature_e_corpo_minimo():
+    import io
+    from unittest.mock import MagicMock
+
+    resposta = MagicMock()
+    resposta.status = 200
+    resposta.read.return_value = b'{"hits": {"total": {"value": 0}}}'
+    context = MagicMock()
+    context.__enter__.return_value = resposta
+    with patch.object(mod.urllib.request, "urlopen", return_value=context) as urlopen:
+        r = mod.probe("tjro", "fake-key", feature="range")
+    assert r["ok"] is True
+    request = urlopen.call_args.args[0]
+    import json
+    payload = json.loads(request.data)
+    assert "range" in payload["query"]
+    assert payload["size"] == 0
+
+
+def test_probe_nao_considera_falha_shard_sucesso():
+    from unittest.mock import MagicMock
+    resposta = MagicMock()
+    resposta.status = 200
+    resposta.read.return_value = b'{"hits": {}, "_shards": {"failed": 1}}'
+    context = MagicMock()
+    context.__enter__.return_value = resposta
+    with patch.object(mod.urllib.request, "urlopen", return_value=context):
+        r = mod.probe("tjro", "fake-key")
+    assert r["ok"] is False
+    assert r["categoria"] == "parcial"
+
+
+def test_resume_pula_sucesso_sem_rede(monkeypatch, tmp_path):
+    path = tmp_path / "journal.jsonl"
+    key = mod._observation_key("tjro", "match_all")
+    mod._append_event(path, {"key": key, "ok": True})
+    monkeypatch.setenv("DATAJUD_API_KEY", "fake-key")
+    with patch.object(mod, "probe", side_effect=AssertionError("rede")):
+        assert mod.main(["--probe", "--alias", "tjro", "--journal", str(path), "--resume"]) == 0
