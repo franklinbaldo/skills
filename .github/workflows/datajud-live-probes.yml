@@ -1,0 +1,51 @@
+name: DataJud live endpoint audit
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-probe:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'datajud-live-probe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Load publicly documented API key from DataJud client
+        shell: bash
+        run: |
+          KEY=$(python - <<'PY'
+          import ast
+          from pathlib import Path
+          tree = ast.parse(Path("datajud/scripts/datajud.py").read_text())
+          for node in tree.body:
+              if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "APIKEY" for t in node.targets):
+                  print(ast.literal_eval(node.value.args[1]))
+                  break
+          else:
+              raise SystemExit("Public key unavailable")
+          PY
+          )
+          echo "DATAJUD_API_KEY=$KEY" >> "$GITHUB_ENV"
+      - name: Check 91 endpoints with throttling
+        continue-on-error: true
+        run: |
+          uv run datajud/scripts/datajud_endpoints.py --probe --delay 1.5 --timeout 25 --journal reports/endpoint-probes.jsonl
+      - name: Check DSL features on TJRO and representative branches
+        if: always()
+        continue-on-error: true
+        run: |
+          for tribunal in tjro trt14 trf1 tre-ro stj; do
+            uv run datajud/scripts/datajud_endpoints.py --probe --features --alias "$tribunal" --delay 1.5 --timeout 25 --journal reports/feature-probes.jsonl || true
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: datajud-live-audit-${{ github.run_id }}
+          path: reports/*.jsonl
+          if-no-files-found: warn
+          retention-days: 30
