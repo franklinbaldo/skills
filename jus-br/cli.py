@@ -13,7 +13,9 @@
 
 from __future__ import annotations
 
+import os
 import queue
+import signal
 import subprocess
 import sys
 import threading
@@ -122,13 +124,38 @@ def _aguardar_callback_url(expected_state: str, prompt_text: str) -> str:
     t_input = threading.Thread(target=_read_input, daemon=True)
     t_input.start()
 
-    try:
-        captured = result_queue.get()
+    def _sig_handler(sig: int, frame: object) -> None:
         stop_event.set()
-        return captured
+        console.print("\n[yellow]Operação cancelada pelo usuário (Ctrl+C).[/yellow]")
+        os._exit(130)
+
+    try:
+        orig_sig = signal.signal(signal.SIGINT, _sig_handler)
+    except Exception:
+        orig_sig = None
+
+    try:
+        while not stop_event.is_set():
+            try:
+                captured = result_queue.get(timeout=0.25)
+                stop_event.set()
+                return captured
+            except queue.Empty:
+                continue
+    except (KeyboardInterrupt, SystemExit):
+        stop_event.set()
+        console.print("\n[yellow]Operação cancelada pelo usuário (Ctrl+C).[/yellow]")
+        os._exit(130)
     except Exception as exc:
         stop_event.set()
         raise JusBrAuthError(f"Falha ao obter URL de callback: {exc}") from exc
+    finally:
+        if orig_sig is not None:
+            try:
+                signal.signal(signal.SIGINT, orig_sig)
+            except Exception:
+                pass
+    return ""
 
 
 @auth_app.command(name="login")
