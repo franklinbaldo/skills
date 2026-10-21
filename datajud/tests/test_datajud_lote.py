@@ -113,7 +113,8 @@ def test_indice_que_falha_nao_vira_ausencia(monkeypatch, tmp_path):
     lista.write_text("7009511-71.2024.8.22.0001\n", encoding="utf-8")
 
     assert dj.cmd_lote(lista, tmp_path / "datajud", trabalhadores=1, so_origem=False, as_json=True) == 1
-    assert not (tmp_path / "datajud" / "tjro").exists(), "nada vai a disco enquanto um índice não responde"
+    gravado = dj.ler_processo(tmp_path / "datajud", "70095117120248220001")
+    assert gravado is not None and [f.indice for f in gravado.falhas] == ["stj"]
 
 
 def test_lote_truncado_e_erro(monkeypatch, tmp_path):
@@ -124,7 +125,8 @@ def test_lote_truncado_e_erro(monkeypatch, tmp_path):
     lista.write_text("7009511-71.2024.8.22.0001\n", encoding="utf-8")
 
     assert dj.cmd_lote(lista, tmp_path / "datajud", trabalhadores=1, so_origem=True, as_json=True) == 1
-    assert not (tmp_path / "datajud" / "tjro").exists(), "truncado não vira 'não encontrado'"
+    gravado = dj.ler_processo(tmp_path / "datajud", "70095117120248220001")
+    assert gravado is not None and gravado.falhas
 
 
 def test_modelos_de_entrada_validam_e_normalizam():
@@ -183,3 +185,47 @@ def test_mcp_so_origem_consulta_so_o_tribunal_de_origem(monkeypatch, tmp_path, c
     vistos.clear()
     mod.app(["processo", "0000774-14.2019.4.01.4102", "--so-origem", "--json"], result_action="return_value")
     assert vistos == ["trf1"], "a CLI da MCP aceita --so-origem, como a SKILL.md promete"
+
+
+def test_retomada_por_indice_sem_refazer_sucessos(monkeypatch, tmp_path):
+    numero = "70095117120248220001"
+    chamadas = []
+    falhar = True
+
+    def search(body, tribunal="tjro", **_):
+        chamadas.append(tribunal)
+        if falhar and tribunal == "stj":
+            raise RuntimeError("504")
+        hits = [_hit(numero, "tjro")] if tribunal == "tjro" else []
+        return {"hits": {"total": {"value": len(hits)}, "hits": hits}}
+
+    monkeypatch.setattr(dj, "search", search)
+    lista = tmp_path / "numeros.txt"
+    lista.write_text(numero + "\n", encoding="utf-8")
+    saida = tmp_path / "saida"
+    assert dj.cmd_lote(lista, saida, 1, False, True) == 1
+    primeiro = dj.ler_processo(saida, numero)
+    assert primeiro.encontrado and len(primeiro.falhas) == 1
+    chamadas.clear()
+    falhar = False
+    assert dj.cmd_lote(lista, saida, 1, False, True) == 0
+    assert chamadas == ["stj"], "retomar exclusivamente tribunal pendente"
+    assert not dj.ler_processo(saida, numero).falhas
+
+
+def test_truncamento_divide_lote_sem_omitir_hits(monkeypatch):
+    numeros = ["70095117120248220001", "70000000020248220001"]
+    chamadas = []
+
+    def search(body, tribunal="tjro", **_):
+        ds = body["query"]["terms"]["numeroProcesso"]
+        chamadas.append(ds)
+        hits = [_hit(n, tribunal) for n in ds]
+        if len(ds) > 1:
+            return {"hits": {"total": {"value": len(ds) + 1}, "hits": hits}}
+        return {"hits": {"total": {"value": 1}, "hits": hits}}
+
+    monkeypatch.setattr(dj, "search", search)
+    resultado = dj.consultar(dj.ConsultaLote(numeros=numeros, so_origem=True, trabalhadores=1))
+    assert len(chamadas) == 3
+    assert all(len(item.registros) == 1 and not item.falhas for item in resultado.values())
