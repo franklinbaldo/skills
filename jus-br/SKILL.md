@@ -22,21 +22,23 @@ ambientes não forem confirmados. Nenhuma dessas operações é simulada.
 
 ## Estado de suporte e contratos
 
-| Recurso | Estado | Evidência/limite |
-| --- | --- | --- |
-| SSO CNJ / token OIDC | Implementação candidata; testes simulados | A documentação CNJ confirma Keycloak/realm `pje` e informa que integradores precisam de cliente cadastrado. A compatibilidade do cliente público `jusbr`, do fluxo authorization-code+PKCE e do callback não foi confirmada. |
-| ComunicaAPI | Implementado como leitura | O CNJ publica orientações de integração e bases distintas de homologação e produção. Consultas podem ser públicas; o CLI não exige nem envia token automaticamente. |
-| Consulta processual via `api.pdpj.jus.br/processos/{numero}` | Experimental e desabilitada | A URL usada anteriormente não foi localizada em contrato oficial. O serviço documentado de Cabeçalho Processual tem Swagger e contrato próprios; esta CLI ainda não os implementa. |
-| Petição intercorrente via `api.pdpj.jus.br/peticionamento/intercorrente` | Experimental e desabilitada | A documentação oficial descreve o Portal de Serviços, Swagger de homologação e callbacks assíncronos. Ela não comprova o path anterior. Nenhum documento é transmitido e nenhum recibo é criado. |
+| Recurso                                                                  | Estado                                    | Evidência/limite                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SSO CNJ / token OIDC                                                     | Implementação candidata; testes simulados | A documentação CNJ confirma Keycloak/realm `pje` e informa que integradores precisam de cliente cadastrado. A compatibilidade do cliente público `jusbr`, do fluxo authorization-code+PKCE e do callback não foi confirmada. |
+| ComunicaAPI                                                              | Implementado como leitura                 | O CNJ publica orientações de integração e bases distintas de homologação e produção. Consultas podem ser públicas; o CLI não exige nem envia token automaticamente.                                                          |
+| Consulta processual via `api.pdpj.jus.br/processos/{numero}`             | Experimental e desabilitada               | A URL usada anteriormente não foi localizada em contrato oficial. O serviço documentado de Cabeçalho Processual tem Swagger e contrato próprios; esta CLI ainda não os implementa.                                           |
+| Petição intercorrente via `api.pdpj.jus.br/peticionamento/intercorrente` | Experimental e desabilitada               | A documentação oficial descreve o Portal de Serviços, Swagger de homologação e callbacks assíncronos. Ela não comprova o path anterior. Nenhum documento é transmitido e nenhum recibo é criado.                             |
 
 Referências oficiais verificadas: [SSO da PDPJ-Br](https://docs.pdpj.jus.br/servicos-estruturantes/autenticacao-sso/), [orientações do CNJ para integração das APIs de Comunicações Processuais](https://www.cnj.jus.br/programas-e-acoes/processo-judicial-eletronico-pje/comunicacoes-processuais/orientacoes-aos-tribunais/), [Petição Intercorrente na PDPJ-Br](https://docs.pdpj.jus.br/servicos-negociais/portal-servicos/pet-intercorrente/) e [notas do Cabeçalho Processual](https://docs.pdpj.jus.br/servicos-estruturantes/release-notes/cabecalho-processual/). A documentação do SSO diz que o integrador deve solicitar cadastro de cliente ao CNJ e receber suas credenciais; não confirma que o `client_id=jusbr` sem segredo está habilitado para esse fluxo. A documentação de peticionamento aponta para o Swagger do Portal em homologação (`portalexterno-tribunais.stg.pdpj.jus.br/swagger-ui.html`) e para callbacks de resultado do tribunal.
 
----
+______________________________________________________________________
 
 ## 1. Arquitetura de Autenticação Segura
 
 ### Federação OIDC com PKCE S256
+
 A autenticação utiliza o Keycloak oficial da PDPJ/PJe:
+
 - **Realm Base**: `https://sso.cloud.pje.jus.br/auth/realms/pje`
 - **Authorization Endpoint**: `https://sso.cloud.pje.jus.br/auth/realms/pje/protocol/openid-connect/auth`
 - **Token Endpoint**: `https://sso.cloud.pje.jus.br/auth/realms/pje/protocol/openid-connect/token`
@@ -44,9 +46,11 @@ A autenticação utiliza o Keycloak oficial da PDPJ/PJe:
 - **Método PKCE**: `S256` (code_verifier de 64 bytes com hash SHA-256 base64url)
 
 ### Callback e fluxo assistido candidato
+
 O fluxo implementado assume que o cliente público `jusbr` aceita `https://www.jus.br/callback`. A configuração oficial do cliente e seu cadastro de `redirect_uri` precisam de confirmação antes de tratar o login como integração validada.
 
 O fluxo proposto evita Playwright, scraping e coleta de senha pelo agente. Ainda não foi validado end-to-end:
+
 1. O comando `jusbr auth login` gera o par PKCE (`code_verifier` e `code_challenge`) e um token anti-CSRF (`state`).
 2. Abre o navegador padrão do usuário na URL de autorização oficial do CNJ.
 3. O usuário realiza a autenticação com **Gov.br** (ouro/prata) ou **Certificado Digital (ICP-Brasil)**, incluindo qualquer MFA exigido diretamente nos servidores do governo.
@@ -55,14 +59,16 @@ O fluxo proposto evita Playwright, scraping e coleta de senha pelo agente. Ainda
 6. A CLI valida o parâmetro `state` e tenta trocar o `authorization_code` no Token Endpoint via TLS. O sucesso depende da confirmação do cliente OIDC e do callback cadastrados no provedor.
 
 ### Armazenamento Protegido (Windows Credential Manager / Keyring)
+
 - Os tokens nunca são gravados em arquivos de texto plano ou variáveis de ambiente.
 - O armazenamento utiliza o cofre de credenciais do sistema operacional (`keyring`).
 - **Suporte a Chunking no Windows (WinVaultKeyring)**: Para superar a limitação de 512 bytes da API Win32 `CredWriteW` (código de erro 1783), o módulo `credentials.py` divide os tokens em blocos transparentes (`chunk_0`, `chunk_1`, ...), preservando compatibilidade nativa sem corrupção.
 
 ### Renovação Autônoma (Refresh Token)
+
 Uma vez autenticado, o agente renova o `access_token` silenciosamente chamando o Token Endpoint com `grant_type=refresh_token`, garantindo operação contínua sem necessidade de novo login interativo até a expiração da sessão do usuário.
 
----
+______________________________________________________________________
 
 ## 2. Comandos da CLI (`jus-br/cli.py`)
 
@@ -133,7 +139,7 @@ uv run jus-br/cli.py peticionamento intercorrente `
 
 Use o Portal de Serviços oficial do CNJ para protocolar. Quando o contrato oficial for implementado, a resposta de recebimento do Portal e a confirmação ou recusa assíncrona do tribunal deverão ser representadas como estados distintos.
 
----
+______________________________________________________________________
 
 ## 3. Diretrizes de Segurança e Confiabilidade Forense
 
@@ -146,3 +152,14 @@ Use o Portal de Serviços oficial do CNJ para protocolar. Quando o contrato ofic
 7. **Renovação:** Quando a resposta de refresh não rotacionar `refresh_token`, a credencial anterior é mantida. A atualização em keyring só ocorre depois de validar a nova geração.
 8. **Tratamento de 401 Unauthorized:** O cliente tenta renovar uma vez após 401. Se a sessão estiver revogada, orienta novo login.
 9. **Logout:** A remoção local é validada e pode falhar com erro explícito. O comando só informa revogação remota confirmada para HTTP 200/204; em outro caso informa que não houve confirmação remota.
+
+______________________________________________________________________
+
+## Real-use postmortem
+
+Após qualquer uso material desta skill, realize uma breve auto-avaliação antes de encerrar a tarefa:
+avalie se o roteamento foi correto, se a skill melhorou, foi neutra ou degradou o resultado, qual
+instrução concreta fez diferença e eventuais atritos ou contornos necessários. O sucesso de rotina
+permanece efêmero. Havendo aprendizado acionável, pesquise as issues de `franklinbaldo/skills` e acrescente
+evidências a uma issue existente ou abra uma issue de feedback devidamente saneada. Nunca publique
+segredos, credenciais, dados pessoais ou fatos sigilosos.
