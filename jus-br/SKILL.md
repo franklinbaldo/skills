@@ -1,13 +1,13 @@
 ---
 name: jus-br
 description: >-
-  Acesso autenticado ao portal unificado da Justiça Brasileira (www.jus.br / PDPJ-Br)
-  e serviços do CNJ (ComunicaAPI, Consulta Processual Unificada e Peticionamento).
-  Suporta autenticação federada gov.br/Certificado Digital via Keycloak com PKCE S256,
-  armazenamento seguro no Windows Credential Manager (com chunking WinVault),
-  renovação automática via refresh token e CLI rica para consultas e peticionamento.
+  Autenticação OIDC com PKCE para o SSO CNJ e consulta documentada à ComunicaAPI.
+  Consulta processual direta e peticionamento por API permanecem experimentais e desabilitados.
+  Implementa uma configuração candidata de autenticação federada via Keycloak com PKCE S256,
+  armazenamento seguro no keyring e consulta de comunicações. Endpoints não confirmados
+  ficam desabilitados; login real e cliente OIDC ainda dependem de validação end-to-end.
 compatibility: >-
-  Requires Python 3.12+ with PEP 723 script metadata. Compatible with Windows 11
+  Requires Python 3.11+ with PEP 723 script metadata. Intended for Windows
   Credential Manager (WinVaultKeyring), macOS Keychain and Linux SecretService.
   Dependencies managed via `uv run`.
 ---
@@ -16,19 +16,20 @@ compatibility: >-
 
 Esta skill implementa o cliente e a CLI de integração com a **Plataforma Digital do Poder Judiciário (PDPJ-Br)** e o portal unificado **Jus.br** (`https://www.jus.br`), mantido pelo Conselho Nacional de Justiça (CNJ).
 
-Ela permite que agentes operem serviços judiciais de forma segura e auditável:
-1. **Comunicações Processuais Oficiais**: Consulta em tempo real na ComunicaAPI (`https://comunicaapi.pje.jus.br`).
-2. **Consulta Processual Unificada**: Dados de processos distribuídos em tribunais integrados à PDPJ.
-3. **Peticionamento Eletrônico Intercorrente**: Protocolo unificado de petições e documentos.
+Ela permite autenticar via SSO CNJ e consultar comunicações na ComunicaAPI. A consulta processual direta
+e o peticionamento por API não são oferecidos operacionalmente enquanto seus contratos, permissões e
+ambientes não forem confirmados. Nenhuma dessas operações é simulada.
 
-### Matriz de Prontidão Operacional dos Serviços
+## Estado de suporte e contratos
 
-| Serviço | Endpoint Oficial | Status de Prontidão | Requisitos e Contrato |
-| :--- | :--- | :--- | :--- |
-| **ComunicaAPI** (Publicações e Intimações) | `https://comunicaapi.pje.jus.br/api/v1` | **Operacional em Produção** | API pública aberta/autenticada com dados nacionais em tempo real. |
-| **Keycloak CNJ SSO** (Login Gov.br / Certificado) | `https://sso.cloud.pje.jus.br/auth/realms/pje` | **Operacional em Produção** | Client público `jusbr` OIDC com PKCE S256 e federação Gov.br. |
-| **Consulta Processual PDPJ** | `https://api.pdpj.jus.br/processos` | **Piloto / Prévia de Integração** | Depende de barramento federado e convênio ativo do tribunal de origem. |
-| **Peticionamento Intercorrente** | `https://api.pdpj.jus.br/peticionamento` | **Piloto / Prévia de Integração** | Fluxo assíncrono MNI ([docs.pdpj.jus.br](https://docs.pdpj.jus.br/servicos-negociais/portal-servicos/pet-intercorrente/)); requer credenciamento institucional. |
+| Recurso | Estado | Evidência/limite |
+| --- | --- | --- |
+| SSO CNJ / token OIDC | Implementação candidata; testes simulados | A implementação usa endpoints de Keycloak no realm CNJ e cliente `jusbr`. A configuração do cliente, callback autorizado e login real não foram confirmados end-to-end nesta revisão. |
+| ComunicaAPI | Implementado como leitura | O CNJ publica orientações de integração e bases distintas de homologação e produção. Consultas podem ser públicas; o CLI não exige nem envia token automaticamente. |
+| Consulta processual via `api.pdpj.jus.br/processos/{numero}` | Experimental e desabilitada | A URL usada anteriormente não foi localizada em contrato oficial. O serviço documentado de Cabeçalho Processual tem Swagger e contrato próprios; esta CLI ainda não os implementa. |
+| Petição intercorrente via `api.pdpj.jus.br/peticionamento/intercorrente` | Experimental e desabilitada | A documentação oficial descreve o Portal de Serviços, Swagger de homologação e callbacks assíncronos. Ela não comprova o path anterior. Nenhum documento é transmitido e nenhum recibo é criado. |
+
+Referências oficiais verificadas: [orientações do CNJ para integração das APIs de Comunicações Processuais](https://www.cnj.jus.br/programas-e-acoes/processo-judicial-eletronico-pje/comunicacoes-processuais/orientacoes-aos-tribunais/), [Petição Intercorrente na PDPJ-Br](https://docs.pdpj.jus.br/servicos-negociais/portal-servicos/pet-intercorrente/) e [notas do Cabeçalho Processual](https://docs.pdpj.jus.br/servicos-estruturantes/release-notes/cabecalho-processual/). A documentação de peticionamento aponta para o Swagger do Portal em homologação (`portalexterno-tribunais.stg.pdpj.jus.br/swagger-ui.html`) e para callbacks de resultado do tribunal.
 
 ---
 
@@ -42,16 +43,16 @@ A autenticação utiliza o Keycloak oficial da PDPJ/PJe:
 - **Client ID**: `jusbr` (cliente público OIDC, sem segredo de cliente)
 - **Método PKCE**: `S256` (code_verifier de 64 bytes com hash SHA-256 base64url)
 
-### Restrição de Callback e Fluxo Assistido
-O cliente público `jusbr` do CNJ tem sua lista de `redirect_uris` restrita a `https://www.jus.br/*` (rejeitando `localhost` ou `127.0.0.1` com HTTP 400).
+### Callback e fluxo assistido candidato
+O fluxo implementado assume que o cliente público `jusbr` aceita `https://www.jus.br/callback`. A configuração oficial do cliente e seu cadastro de `redirect_uri` precisam de confirmação antes de tratar o login como integração validada.
 
-Para garantir segurança total sem depender de Playwright, scraping ou interceptação indevida de senhas:
+O fluxo proposto evita Playwright, scraping e coleta de senha pelo agente. Ainda não foi validado end-to-end:
 1. O comando `jusbr auth login` gera o par PKCE (`code_verifier` e `code_challenge`) e um token anti-CSRF (`state`).
 2. Abre o navegador padrão do usuário na URL de autorização oficial do CNJ.
 3. O usuário realiza a autenticação com **Gov.br** (ouro/prata) ou **Certificado Digital (ICP-Brasil)**, incluindo qualquer MFA exigido diretamente nos servidores do governo.
-4. Ao concluir, o Keycloak redireciona o navegador para `https://www.jus.br/callback?code=...&state=...` (evitando o script de recarregamento da raiz).
+4. Ao concluir, o Keycloak deve redirecionar para `https://www.jus.br/callback?code=...&state=...` (evitando o script de recarregamento da raiz).
 5. O usuário copia a URL final da barra de endereços e a insere no prompt da CLI.
-6. A CLI valida o parâmetro `state`, extrai o `authorization_code` e realiza a troca direta com o Token Endpoint via TLS, obtendo `access_token` e `refresh_token`.
+6. A CLI valida o parâmetro `state` e tenta trocar o `authorization_code` no Token Endpoint via TLS. O sucesso depende da confirmação do cliente OIDC e do callback cadastrados no provedor.
 
 ### Armazenamento Protegido (Windows Credential Manager / Keyring)
 - Os tokens nunca são gravados em arquivos de texto plano ou variáveis de ambiente.
@@ -118,7 +119,7 @@ uv run jus-br/cli.py processo consultar 7001234-56.2024.8.22.0001
 
 ### Peticionamento Intercorrente (`peticionamento`)
 
-Submete petição intermediária ao barramento da PDPJ ([Documentação Oficial de Petição Intercorrente da PDPJ-Br](https://docs.pdpj.jus.br/servicos-negociais/portal-servicos/pet-intercorrente/)):
+**Não disponível para transmissão por esta skill.** O comando abaixo permanece apenas como aviso de compatibilidade e encerra com código 2. Ele não lê o arquivo, não autentica, não envia requisições e não produz protocolo. A documentação oficial descreve o serviço Portal de Serviços e seu Swagger de homologação, mas não confirma o endpoint REST que havia sido usado nesta implementação.
 
 ```powershell
 # Submeter petição intercorrente ao barramento da PDPJ
@@ -130,15 +131,18 @@ uv run jus-br/cli.py peticionamento intercorrente `
   --arquivo "minutas/2026-10-21-manifestacao.pdf"
 ```
 
-> **Aviso de Fluxo Assíncrono:** O protocolo gerado na submissão atesta o acolhimento da peça pelo barramento do CNJ. A juntada definitiva aos autos depende do processamento assíncrono pelo tribunal de destino (confirmação ou recusa).
+Use o Portal de Serviços oficial do CNJ para protocolar. Quando o contrato oficial for implementado, a resposta de recebimento do Portal e a confirmação ou recusa assíncrona do tribunal deverão ser representadas como estados distintos.
 
 ---
 
 ## 3. Diretrizes de Segurança e Confiabilidade Forense
 
-1. **Tolerância Zero a Dados Fictícios:** O cliente e a CLI **nunca simulam** recibos de protocolo, números de protocolo ou dados processuais. Falhas de conexão, indisponibilidade de serviço ou rejeições de barramento propagam `JusBrApiError` imediatamente. Recibo de protocolo é estritamente o retornado pelo barramento oficial, sem valores padrão pré-assumidos (`status` obrigatório).
-2. **Nunca Expor Credenciais:** Não faça log, print ou commit de `access_token`, `refresh_token`, `authorization_code` ou `code_verifier`.
-3. **Validação Estrita de Callback:** O authorization code só é aceito se fornecida uma URL HTTPS completa iniciando por `https://www.jus.br/callback` (ou `jus.br`), com `state` obrigatório e idêntico ao gerado para a sessão. Fragmentos de query avulsos ou códigos isolados sem validação CSRF são sumariamente rejeitados.
-4. **Integridade de Peças com SHA-256:** Todas as requisições de peticionamento calculam o hash SHA-256 local do arquivo PDF antes do envio, registrando a impressão digital da peça para auditoria e confronto com o recibo de juntada emitido pelo tribunal.
-5. **Atualização Transacional com Gerações Imutáveis no Keyring:** A persistência de tokens no Windows Credential Manager cria uma nova geração isolada de chunks para cada sessão. A comutação de ponteiro (`active_gen`) é atômica; caso ocorra falha durante a escrita dos novos chunks, a geração antiga permanece 100% intocada.
-6. **Tratamento de 401 Unauthorized:** O `JusBrClient` tenta renovar o token automaticamente via refresh token uma vez ao encontrar erro HTTP 401. Caso a sessão esteja revogada remotamente, orienta a execução de `jusbr auth login`.
+1. **Contratos de resposta explícitos:** A resposta de token exige `access_token`, `token_type` e `expires_in` válido; a resposta da ComunicaAPI exige `status=success`, `count` e `items`. JSON incompleto ou com status de erro não vira sessão ou lista vazia.
+2. **Tolerância Zero a Dados Fictícios:** O cliente e a CLI nunca simulam recibos, números de protocolo ou dados processuais. Consulta de processo e peticionamento por API lançam `ExperimentalServiceUnavailableError` antes de autenticar ou fazer rede.
+3. **Nunca Expor Credenciais:** Não faça log, print ou commit de `access_token`, `refresh_token`, `authorization_code` ou `code_verifier`.
+4. **Validação Estrita de Callback:** Só aceita URL absoluta HTTPS em `www.jus.br/callback`, com `state` e `code` únicos, sem fragmento, e `state` idêntico ao da sessão.
+5. **Hash local:** Nenhuma verificação ponta a ponta de integridade de documentos é anunciada ou realizada. SHA-256 local apenas identifica bytes locais, salvo confirmação por contrato remoto.
+6. **Persistência no Keyring:** Tokens são escritos e lidos de volta numa geração isolada antes de atualizar o ponteiro ativo. Em falha de persistência, o erro é reportado; se o estado do ponteiro for incerto, dados candidatos são preservados para evitar destruir a única sessão válida. Chunks têm no máximo 512 bytes UTF-8.
+7. **Renovação:** Quando a resposta de refresh não rotacionar `refresh_token`, a credencial anterior é mantida. A atualização em keyring só ocorre depois de validar a nova geração.
+8. **Tratamento de 401 Unauthorized:** O cliente tenta renovar uma vez após 401. Se a sessão estiver revogada, orienta novo login.
+9. **Logout:** A remoção local é validada e pode falhar com erro explícito. O comando só informa revogação remota confirmada para HTTP 200/204; em outro caso informa que não houve confirmação remota.
