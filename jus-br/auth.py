@@ -62,7 +62,7 @@ def build_authorization_url(
     return f"{AUTH_ENDPOINT}?{urllib.parse.urlencode(params)}"
 
 
-ALLOWED_CALLBACK_HOSTS = ("www.jus.br", "jus.br")
+ALLOWED_CALLBACK_HOSTS = ("www.jus.br",)
 EXPECTED_CALLBACK_PATH = "/callback"
 
 
@@ -91,7 +91,7 @@ def parse_callback_input(callback_input: str, expected_state: str) -> str:
     if parsed.scheme.lower() != "https":
         raise JusBrAuthError("Protocolo inválido: a URL de callback deve utilizar HTTPS obrigatoriamente.")
 
-    if parsed.netloc.lower() not in ALLOWED_CALLBACK_HOSTS:
+    if parsed.netloc not in ALLOWED_CALLBACK_HOSTS:
         raise JusBrAuthError(
             f"Origem de callback não autorizada: '{parsed.netloc}'. "
             f"Esperado domínio oficial: {', '.join(ALLOWED_CALLBACK_HOSTS)}"
@@ -99,8 +99,13 @@ def parse_callback_input(callback_input: str, expected_state: str) -> str:
 
     if parsed.path != EXPECTED_CALLBACK_PATH:
         raise JusBrAuthError(f"Caminho de callback inválido: '{parsed.path}'. Esperado: '{EXPECTED_CALLBACK_PATH}'")
+    if parsed.fragment:
+        raise JusBrAuthError("Fragmentos não são aceitos na URL de callback.")
 
     qs = urllib.parse.parse_qs(parsed.query)
+    for parameter in ("state", "code", "error"):
+        if len(qs.get(parameter, [])) > 1:
+            raise JusBrAuthError(f"Parâmetro '{parameter}' repetido na URL de callback.")
     error = qs.get("error", [None])[0]
     if error:
         desc = qs.get("error_description", [""])[0]
@@ -111,7 +116,7 @@ def parse_callback_input(callback_input: str, expected_state: str) -> str:
         raise OAuthStateMismatchError("Parâmetro 'state' ausente na URL de callback. Possível tentativa de CSRF.")
 
     if state != expected_state:
-        raise OAuthStateMismatchError(f"State retornado ({state}) não confere com o esperado ({expected_state}).")
+        raise OAuthStateMismatchError("O state retornado não confere com o esperado.")
 
     code = qs.get("code", [None])[0]
     if not code:
@@ -263,6 +268,12 @@ class AuthService:
             raise SessionExpiredError("Sessão da PDPJ expirada. Execute 'jusbr auth login'.")
 
         new_tokens = refresh_access_token(tokens.refresh_token, http_client=self.http_client)
+        new_tokens = new_tokens.model_copy(
+            update={
+                "refresh_token": new_tokens.refresh_token or tokens.refresh_token,
+                "refresh_expires_in": new_tokens.refresh_expires_in or tokens.refresh_expires_in,
+            }
+        )
         self.store.save_tokens(new_tokens)
         return new_tokens
 
@@ -272,6 +283,12 @@ class AuthService:
         if not tokens or not tokens.refresh_token:
             raise SessionExpiredError("Nenhum refresh token disponível no keyring.")
         new_tokens = refresh_access_token(tokens.refresh_token, http_client=self.http_client)
+        new_tokens = new_tokens.model_copy(
+            update={
+                "refresh_token": new_tokens.refresh_token or tokens.refresh_token,
+                "refresh_expires_in": new_tokens.refresh_expires_in or tokens.refresh_expires_in,
+            }
+        )
         self.store.save_tokens(new_tokens)
         return new_tokens
 
