@@ -523,7 +523,7 @@ def _imprimir(modelo: BaseModel) -> None:
     print(modelo.model_dump_json(by_alias=True, indent=2))
 
 
-def consultar(entrada: ConsultaLote) -> dict[str, ProcessoConsultado]:
+def consultar(entrada: ConsultaLote, anteriores: dict[str, ProcessoConsultado] | None = None) -> dict[str, ProcessoConsultado]:
     """Procura cada numero em todos os indices da sua familia (ou so na origem).
 
     Uma consulta `terms` por indice para ate LOTE numeros, em paralelo. Devolve
@@ -533,12 +533,25 @@ def consultar(entrada: ConsultaLote) -> dict[str, ProcessoConsultado]:
     alvo: dict[str, ProcessoConsultado] = {}
     for n in entrada.numeros:
         indices = [tribunal_do_cnj(n)] if entrada.so_origem else familia_do_cnj(n)
+        prev = (anteriores or {}).get(so_digitos(n))
         alvo[so_digitos(n)] = ProcessoConsultado(
-            processo=n, origem=tribunal_do_cnj(n), consultados=[i for i in indices if i])
+            processo=n, origem=tribunal_do_cnj(n), consultados=[i for i in indices if i],
+            registros=list(prev.registros) if prev else [],
+        )
+        if prev and not prev.falhas:
+            # O arquivo anterior ja confirmou todos os indices listados.
+            alvo[so_digitos(n)].consultados = [
+                i for i in indices if i and i not in prev.consultados
+            ]
     por_indice: dict[str, list[str]] = {}
     for d, item in alvo.items():
+        prev = (anteriores or {}).get(d)
+        anteriores_ok = set(prev.consultados) - {f.indice for f in prev.falhas} if prev else set()
         for i in item.consultados:
-            por_indice.setdefault(i, []).append(d)
+            if i not in anteriores_ok:
+                por_indice.setdefault(i, []).append(d)
+        # Mostrar todos os indices cobertos pela soma entre observacoes.
+        item.consultados = list(dict.fromkeys([*anteriores_ok, *item.consultados]))
     tarefas = [(i, ds[k:k + LOTE]) for i, ds in por_indice.items() for k in range(0, len(ds), LOTE)]
 
     def rodar(tarefa):
@@ -971,9 +984,14 @@ def cmd_lote(arquivo: Path, saida: Path | None, trabalhadores: int,
     print(f"{len(numeros)} processos; {len(pendentes)} a consultar"
           f"{' (so na origem)' if so_origem else ' (familia: origem + outros + superiores)'}",
           file=sys.stderr)
+    anteriores = {
+        so_digitos(n): gravado
+        for n in pendentes
+        if saida is not None and (gravado := ler_processo(saida, n)) is not None
+    }
     resultado = consultar(ConsultaLote(
         numeros=pendentes, so_origem=so_origem, trabalhadores=trabalhadores
-    ))
+    ), anteriores=anteriores)
     destino_descr = str(saida or store.caminho_banco())
     resumo = ResumoLote(
         processos=len(numeros), em_disco=0, encontrados=0,
