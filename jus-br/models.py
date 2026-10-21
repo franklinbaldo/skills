@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,10 +14,10 @@ class TokenResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     access_token: str
-    token_type: str = "Bearer"
-    expires_in: int = Field(default=300)
+    token_type: str
+    expires_in: int = Field(gt=0)
     refresh_token: str | None = None
-    refresh_expires_in: int | None = None
+    refresh_expires_in: int | None = Field(default=None, gt=0)
     scope: str | None = None
     id_token: str | None = None
     created_at: float = Field(default_factory=time.time)
@@ -105,10 +105,10 @@ class ComunicacaoResponse(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    status: str = "success"
+    status: Literal["success"]
     message: str | None = None
-    count: int = 0
-    items: list[ComunicacaoItem] = Field(default_factory=list)
+    count: int = Field(ge=0)
+    items: list[ComunicacaoItem]
 
 
 class ProcessoConsultaItem(BaseModel):
