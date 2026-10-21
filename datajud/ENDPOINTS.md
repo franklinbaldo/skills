@@ -60,6 +60,19 @@ Familias catalogadas:
 O STF nao figura entre os aliases publicos catalogados. Toda rota segue
 `POST https://api-publica.datajud.cnj.jus.br/api_publica_{alias}/_search`.
 
+## Chave pública e GitGuardian
+
+A chave de acesso publica do CNJ pode ser copiada da [pagina oficial](https://datajud-wiki.cnj.jus.br/api-publica/acesso/).
+Nao inclua o valor literal no codigo nem em commits: defina DATAJUD_API_KEY
+no ambiente. Para auditoria GitHub Actions, configure a variavel de repositorio
+`DATAJUD_API_KEY` em Settings > Secrets and variables > Actions > Variables.
+
+Isso evita novos achados de token embutido, sem suprimir verificacoes gerais.
+Para um alerta historico ja emitido, somente classifique pontualmente como
+falso positivo se a chave encontrada for comprovadamente a chave publica do
+CNJ; nao habilite ignorancia global de padroes de segredo. Se a chave for
+privada, revogue e substitua.
+
 ## Escopo e evolucao
 
 - A lista e um **contrato local versionado**, nao uma garantia de disponibilidade.
