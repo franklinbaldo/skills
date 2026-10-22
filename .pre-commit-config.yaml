@@ -4,3 +4,13 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
+
+  - repo: local
+    hooks:
+      - id: file-token-limit
+        name: file size ratchet (approx 5000 tokens; changed files)
+        entry: python3 scripts/check_file_token_limit.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push, manual]
