@@ -1,34 +1,41 @@
 #!/usr/bin/env python3
-"""Ratchet: old violations may persist but must not grow; new files <= 5000."""
+"""File size ratchet: 4 UTF-8 bytes ~ 1 token; no external dependencies."""
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
-import tiktoken
-
-LIMIT = 5000
+MAX_BYTES = 20_000
 POLICY = ".token-limit-exceptions.json"
-
 
 def git(*args):
     return subprocess.check_output(["git", *args], stderr=subprocess.DEVNULL)
 
+def paths_from(raw):
+    return {p.decode("utf-8", "surrogateescape") for p in raw.split(b"\0") if p}
 
 def base_ref():
-    explicit = os.environ.get("TOKEN_LIMIT_BASE_SHA")
-    if explicit:
-        git("rev-parse", "--verify", explicit + "^{commit}")
-        return explicit
+    ref = os.environ.get("TOKEN_LIMIT_BASE_SHA")
+    if ref:
+        git("rev-parse", "--verify", ref + "^{commit}")
+        return ref
     for candidate in ("origin/main", "main", "HEAD^"):
         try:
             git("rev-parse", "--verify", candidate + "^{commit}")
             return candidate
         except subprocess.CalledProcessError:
-            pass
-    raise RuntimeError("No comparison base: fetch origin/main or set TOKEN_LIMIT_BASE_SHA")
+            continue
+    raise RuntimeError("Fetch origin/main or provide TOKEN_LIMIT_BASE_SHA")
 
+def text_size(data):
+    if b"\0" in data:
+        return None
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    return len(data)
 
 def main():
     policy = json.loads(Path(POLICY).read_text(encoding="utf-8"))
@@ -37,42 +44,45 @@ def main():
         not isinstance(x, str) or not x or x.startswith("/") or ".." in x.split("/")
         or any(c in x for c in "*?[]") for x in allow
     ) or len(allow) != len(set(allow)):
-        raise ValueError("Exceptions must be distinct exact relative paths, without globs")
+        raise ValueError("Exceptions must be unique exact relative paths; no patterns")
     base = base_ref()
-    # Compare the *entire* change set against the target branch; do not recheck
-    # untouched legacy files, regardless of their preexisting token counts.
-    changed = git("diff", "--name-only", "-z", "--diff-filter=ACMR", base, "HEAD")
-    paths = {p.decode("utf-8", "surrogateescape") for p in changed.split(b"\0") if p}
-    # Local staged/worktree edits are checked too, without making existing
-    # untouched violations suddenly fail.
+    changed = paths_from(git("diff", "--name-only", "-z", "--diff-filter=ACMR", base, "HEAD"))
     if not os.environ.get("CI"):
         for args in (("diff", "--name-only", "-z", "--cached"), ("diff", "--name-only", "-z")):
-            paths |= {p.decode("utf-8", "surrogateescape") for p in git(*args).split(b"\0") if p}
-    encoding = tiktoken.get_encoding("cl100k_base")
-    failed = []
-    for name in sorted(paths - set(allow)):
+            changed |= paths_from(git(*args))
+        changed |= paths_from(git("ls-files", "-z", "--others", "--exclude-standard"))
+    failures = []
+    for name in sorted(changed - set(allow)):
         try:
-            raw = Path(name).read_bytes()
-            if b"\0" in raw:
-                continue
-            content = raw.decode("utf-8")
-        except (OSError, UnicodeDecodeError):
+            current = text_size(Path(name).read_bytes())
+        except OSError:
             continue
-        n = len(encoding.encode(content, disallowed_special=()))
-        if n > LIMIT:
-            try:
-                old = git("show", f"{base}:{name}")
-                previous = len(encoding.encode(old.decode("utf-8"), disallowed_special=()))
-            except (subprocess.CalledProcessError, UnicodeDecodeError):
-                previous = 0
-            # An existing violation may be maintained or reduced, never enlarged.
-            if previous <= LIMIT or n > previous:
-                failed.append((name, n))
-    for name, n in failed:
-        print(f"FAIL {name}: {n} tokens; new files must be <= {LIMIT}, legacy oversized files must not grow")
-    print(f"Token ratchet: {len(paths)} changed files, {len(failed)} violations; legacy untouched files grandfathered")
-    return bool(failed)
-
+        if current is None or current <= MAX_BYTES:
+            continue
+        try:
+            old = text_size(git("show", f"{base}:{name}"))
+        except subprocess.CalledProcessError:
+            old = None
+        if old is None or old <= MAX_BYTES or current > old:
+            failures.append((name, current, old))
+    for name, current, old in failures:
+        print(f"\nFILE SIZE RATCHET FAILED: {name}")
+        print(f"  Current: {current:,} bytes (~{current / 4:,.0f} tokens). Target: <= {MAX_BYTES:,} bytes (~5,000 tokens).")
+        if old is not None and old > MAX_BYTES:
+            print(f"  Legacy baseline: {old:,} bytes. Existing oversized files must not grow.")
+        else:
+            print("  New or previously compliant files must stay under the limit.")
+        print("  WHY: Smaller, focused files are easier for humans and AI agents to locate, read, review and edit.")
+        print("  HOW TO FIX:")
+        print("    1. Split by cohesive responsibilities, topics or public interfaces; preserve behavior and tests.")
+        print("    2. Give each extracted file a descriptive, semantic name that reveals its content and purpose.")
+        print("       Prefer e.g. processo_autenticacao.py, processo_documentos.py over utils2.py, part3.py.")
+        print("    3. Update imports, references, navigation/indexes and tests. Keep related definitions together.")
+        print("    4. Do not delete useful context, minify, rename vaguely, or game the metric.")
+        print("    5. If splitting genuinely harms clarity, request an explicit HUMAN-approved exact-path exception")
+        print(f"       in {POLICY}; an AI agent may propose but must never self-authorize an exception.")
+    print(f"\nFile size ratchet: {len(changed)} changed/new paths; {len(failures)} failures; legacy unchanged oversized files exempt.")
+    return int(bool(failures))
 
 if __name__ == "__main__":
     sys.exit(main())
