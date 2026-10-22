@@ -4,3 +4,13 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
+
+  - repo: local
+    hooks:
+      - id: file-token-limit
+        name: file token limit (5000, entire repository)
+        entry: uv run --no-project --with tiktoken==0.12.0 python scripts/check_file_token_limit.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push, manual]
