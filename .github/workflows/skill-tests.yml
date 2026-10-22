@@ -2,20 +2,8 @@ name: Skill helper tests
 
 on:
   pull_request:
-    paths:
-      - "**/*.py"
-      - "*/SKILL.md"
-      - "tests/**"
-      - "okf-agent-skills/**"
-      - ".github/workflows/skill-tests.yml"
   push:
     branches: [main]
-    paths:
-      - "**/*.py"
-      - "*/SKILL.md"
-      - "tests/**"
-      - "okf-agent-skills/**"
-      - ".github/workflows/skill-tests.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -29,6 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: File size gate (changed files)
+        env:
+          TOKEN_LIMIT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python scripts/check_file_token_limit.py
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
