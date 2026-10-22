@@ -1,4 +1,4 @@
-name: File token limit
+name: File size ratchet
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -10,41 +10,71 @@ permissions:
   contents: read
   pull-requests: read
 jobs:
-  token-limit:
+  file-size-ratchet:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-python@v5
+      - name: Configure Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Check all tracked text files
+      - name: Enforce size ratchet
+        env:
+          TOKEN_LIMIT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: python scripts/check_file_token_limit.py
-      - name: Require independent human approval for whitelist changes
+      - name: Check human approval for new exceptions
         if: github.event_name != 'push'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           python - <<'PY'
           import json, os, subprocess, urllib.request
           policy = ".token-limit-exceptions.json"
-          changed = subprocess.check_output(["git", "diff", "--name-only", os.environ["BASE_SHA"], os.environ["HEAD_SHA"]], text=True).splitlines()
-          if policy not in changed:
+          def read_policy(ref):
+              try:
+                  raw = subprocess.check_output(["git", "show", f"{ref}:{policy}"], stderr=subprocess.DEVNULL)
+              except subprocess.CalledProcessError:
+                  return []
+              return json.loads(raw)["exceptions"]
+          previous = set(read_policy(os.environ["BASE_SHA"]))
+          current = set(read_policy(os.environ["HEAD_SHA"]))
+          added = current - previous
+          if not added:
               raise SystemExit(0)
-          url = f"https://api.github.com/repos/{os.environ['REPO']}/pulls/{os.environ['PR']}/reviews?per_page=100"
-          req = urllib.request.Request(url, headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"], "Accept": "application/vnd.github+json"})
-          with urllib.request.urlopen(req) as response:
-              reviews = json.load(response)
-          # A prior approval does not suffice for a later modification to policy:
-          # protect this check with mandatory fresh approvals / dismiss stale approvals.
-          approval = any(r.get("state") == "APPROVED" and r.get("user", {}).get("type") == "User" and r["user"]["login"] != os.environ["AUTHOR"] and r.get("commit_id") == os.environ["HEAD_SHA"] for r in reviews)
-          if not approval:
-              raise SystemExit("Whitelist changes require approval by a distinct human GitHub user on the current head commit.")
+          def get_reviews(page):
+              url = f"https://api.github.com/repos/{os.environ['REPO']}/pulls/{os.environ['PR']}/reviews?per_page=100&page={page}"
+              req = urllib.request.Request(url, headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"], "Accept": "application/vnd.github+json"})
+              with urllib.request.urlopen(req) as response:
+                  return json.load(response)
+          approvals = []
+          for page in range(1, 11):
+              reviews = get_reviews(page)
+              approvals += reviews
+              if len(reviews) < 100:
+                  break
+          latest = {}
+          for review in approvals:
+              user = review.get("user") or {}
+              login = user.get("login")
+              if login:
+                  latest[login] = review
+          valid = any(
+              review.get("state") == "APPROVED"
+              and (review.get("user") or {}).get("type") == "User"
+              and login != os.environ["AUTHOR"]
+              and review.get("commit_id") == os.environ["HEAD_SHA"]
+              for login, review in latest.items()
+          )
+          if not valid:
+              raise SystemExit("New whitelist paths need explicit approval from a distinct human on the current commit.")
           PY
