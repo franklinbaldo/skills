@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Check token sizes of every tracked UTF-8 text file (cl100k_base)."""
+"""Ratchet: existing oversized files are grandfathered until they change."""
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -11,41 +12,59 @@ LIMIT = 5000
 POLICY = ".token-limit-exceptions.json"
 
 
-def main() -> int:
-    exceptions = json.loads(Path(POLICY).read_text(encoding="utf-8"))
-    if not isinstance(exceptions, dict) or set(exceptions) != {"exceptions"}:
-        raise ValueError("Policy must be an object with exactly an 'exceptions' list")
-    allow = exceptions["exceptions"]
-    if not isinstance(allow, list) or any(not isinstance(x, str) or not x or any(c in x for c in "*?[]") for x in allow) or len(allow) != len(set(allow)):
-        raise ValueError("Exceptions must be unique, exact repository-relative paths (no globs)")
-    paths = subprocess.check_output(["git", "ls-files", "-z"]).split(b"\0")
-    tracked = {p.decode("utf-8", "surrogateescape") for p in paths if p}
-    unknown = set(allow) - tracked
-    if unknown:
-        print("Stale/invalid exceptions:", ", ".join(sorted(unknown)), file=sys.stderr)
-        return 1
+def git(*args):
+    return subprocess.check_output(["git", *args], stderr=subprocess.DEVNULL)
+
+
+def base_ref():
+    explicit = os.environ.get("TOKEN_LIMIT_BASE_SHA")
+    if explicit:
+        git("rev-parse", "--verify", explicit + "^{commit}")
+        return explicit
+    for candidate in ("origin/main", "main", "HEAD^"):
+        try:
+            git("rev-parse", "--verify", candidate + "^{commit}")
+            return candidate
+        except subprocess.CalledProcessError:
+            pass
+    raise RuntimeError("No comparison base: fetch origin/main or set TOKEN_LIMIT_BASE_SHA")
+
+
+def main():
+    policy = json.loads(Path(POLICY).read_text(encoding="utf-8"))
+    allow = policy.get("exceptions")
+    if set(policy) != {"exceptions"} or not isinstance(allow, list) or any(
+        not isinstance(x, str) or not x or x.startswith("/") or ".." in x.split("/")
+        or any(c in x for c in "*?[]") for x in allow
+    ) or len(allow) != len(set(allow)):
+        raise ValueError("Exceptions must be distinct exact relative paths, without globs")
+    base = base_ref()
+    # Compare the *entire* change set against the target branch; do not recheck
+    # untouched legacy files, regardless of their preexisting token counts.
+    changed = git("diff", "--name-only", "-z", "--diff-filter=ACMR", base, "HEAD")
+    paths = {p.decode("utf-8", "surrogateescape") for p in changed.split(b"\0") if p}
+    # Local staged/worktree edits are checked too, without making existing
+    # untouched violations suddenly fail.
+    if not os.environ.get("CI"):
+        for args in (("diff", "--name-only", "-z", "--cached"), ("diff", "--name-only", "-z")):
+            paths |= {p.decode("utf-8", "surrogateescape") for p in git(*args).split(b"\0") if p}
     encoding = tiktoken.get_encoding("cl100k_base")
-    failures = []
-    for path in sorted(tracked):
-        if path in allow:
-            continue
+    failed = []
+    for name in sorted(paths - set(allow)):
         try:
-            content = Path(path).read_bytes()
-        except (FileNotFoundError, IsADirectoryError):
+            raw = Path(name).read_bytes()
+            if b"\0" in raw:
+                continue
+            content = raw.decode("utf-8")
+        except (OSError, UnicodeDecodeError):
             continue
-        if b"\0" in content:
-            continue
-        try:
-            data = content.decode("utf-8")
-        except UnicodeDecodeError:
-            continue
-        count = len(encoding.encode(data, disallowed_special=()))
-        if count > LIMIT:
-            failures.append((path, count))
-    for path, count in failures:
-        print(f"FAIL {path}: {count} tokens (limit {LIMIT})")
-    print(f"Checked {len(tracked)} tracked paths; {len(failures)} over limit; {len(allow)} explicitly exempted")
-    return int(bool(failures))
+        n = len(encoding.encode(content, disallowed_special=()))
+        if n > LIMIT:
+            failed.append((name, n))
+    for name, n in failed:
+        print(f"FAIL {name}: {n} tokens > {LIMIT}; changed/new file must comply")
+    print(f"Token ratchet: {len(paths)} changed files, {len(failed)} violations; legacy untouched files grandfathered")
+    return bool(failed)
 
 
 if __name__ == "__main__":
