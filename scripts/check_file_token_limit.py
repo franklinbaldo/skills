@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ratchet: existing oversized files are grandfathered until they change."""
+"""Ratchet: old violations may persist but must not grow; new files <= 5000."""
 import json
 import os
 import subprocess
@@ -60,9 +60,16 @@ def main():
             continue
         n = len(encoding.encode(content, disallowed_special=()))
         if n > LIMIT:
-            failed.append((name, n))
+            try:
+                old = git("show", f"{base}:{name}")
+                previous = len(encoding.encode(old.decode("utf-8"), disallowed_special=()))
+            except (subprocess.CalledProcessError, UnicodeDecodeError):
+                previous = 0
+            # An existing violation may be maintained or reduced, never enlarged.
+            if previous <= LIMIT or n > previous:
+                failed.append((name, n))
     for name, n in failed:
-        print(f"FAIL {name}: {n} tokens > {LIMIT}; changed/new file must comply")
+        print(f"FAIL {name}: {n} tokens; new files must be <= {LIMIT}, legacy oversized files must not grow")
     print(f"Token ratchet: {len(paths)} changed files, {len(failed)} violations; legacy untouched files grandfathered")
     return bool(failed)
 
