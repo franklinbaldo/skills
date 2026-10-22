@@ -38,7 +38,7 @@ def exempt(name):
 def main():
     ref = base()
     changed = paths(git("diff", "--name-only", "-z", "--diff-filter=ACMR", ref, "HEAD"))
-    # Locally use staged files, matching pre-commit behavior, plus already committed changes.
+    # Local checks include staged changes as well as committed branch changes.
     if not os.environ.get("CI"):
         changed |= paths(git("diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"))
     failed = []
@@ -58,9 +58,12 @@ def main():
     for name, size in failed:
         print(f"\nBLOCKED: {name}: {size:,} bytes (~{size / 4:,.0f} estimated tokens); maximum 20,000 bytes (~5,000 tokens).")
         print("WHY: Files with clear responsibilities and semantic names are easier for agents and people to discover, read, test and change.")
-        print("NEXT: Split this file into cohesive modules by responsibility or topic; choose filenames that describe their contents.")
+        print("ACTION FOR AGENTS: Refactor the changed file into cohesive, discoverable units.")
+        print("Name each file semantically so its contents can be found from the filename alone.")
+        print("For documentation, split by subject and add links from the parent index.")
         print("GOOD: processo_autenticacao.py, processo_documentos.py; BAD: utils2.py, parte3.py.")
-        print("Update imports, references, navigation and tests. Do not minify, discard context or split arbitrarily to bypass this rule.")
+        print("Update imports, references, navigation and tests; maintain functionality and context.")
+        print("Do not minify, discard context, create numbered fragments or bypass the check.")
         print("Existing oversized files are ignored UNTIL CHANGED; once changed, they must meet this limit.")
     print(f"File size check: {len(changed)} changed paths; {len(failed)} over limit; unchanged legacy files not checked.")
     return int(bool(failed))
