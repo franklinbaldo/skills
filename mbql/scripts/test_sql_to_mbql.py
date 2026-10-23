@@ -17,6 +17,18 @@ from sql_to_mbql import ConversionError, convert_sql
 
 
 class SqlToMbqlTests(unittest.TestCase):
+    def test_mysql_source_dialect_matches_duckdb(self) -> None:
+        sql = "SELECT id FROM orders WHERE status = 'SENT' ORDER BY id DESC LIMIT 101"
+        self.assertEqual(
+            convert_sql(sql, database="Analytics", source_dialect="mysql"),
+            convert_sql(sql, database="Analytics"),
+        )
+
+    def test_invalid_source_dialect_is_diagnostic(self) -> None:
+        with self.assertRaises(ConversionError):
+            convert_sql("SELECT id FROM orders", database="Analytics", source_dialect="nonexistent")
+
+
     def test_plain_projection_where_order_limit(self) -> None:
         query = convert_sql(
             "SELECT id, total FROM orders WHERE total > 100 ORDER BY id DESC LIMIT 5",
