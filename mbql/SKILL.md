@@ -27,6 +27,23 @@ uv run scripts/sql_to_mbql.py \
 Também aceita `--file consulta.sql` ou stdin. O schema padrão de tabelas não
 qualificadas é `main`; altere com `--schema`.
 
+## Dialetos de origem (SQLGlot)
+
+A API Python `convert_sql(sql, database="Analytics", source_dialect="mysql")`
+aceita SQL de outros dialetos e normaliza **estritamente** para a representação
+DuckDB antes de compilar MBQL 5. O padrão continua `duckdb`, para preservar
+o contrato original. Use `--source-dialect mysql` na CLI.
+
+Para uso como módulo Python distribuível, esta pasta inclui
+`mbql/pyproject.toml`. A integração consumidora deve instalar uma versão
+fixada do subdiretório `mbql` da PR/commit canônico. Não copie o conversor
+para outros projetos nem dependa do caminho físico da skill.
+
+A normalização SQLGlot não garante equivalência semântica entre dialetos,
+especialmente em funções, collations, datas, NULL ou casts. Só habilite uma
+consulta em produção depois da validação diferencial SQL ↔ MBQL na instalação
+Metabase efetiva. Falhas de transpile ou de MBQL devem continuar explícitas.
+
 ## Subconjunto atualmente suportado
 
 O conversor cobre, entre outros:
