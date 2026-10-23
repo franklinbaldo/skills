@@ -21,6 +21,11 @@ from pathlib import Path
 import cyclopts
 
 BASE = "https://api-publica.datajud.cnj.jus.br"
+# Chave PUBLICA compartilhada, publicada pelo DPJ/CNJ; nao e segredo pessoal.
+# Fonte: https://datajud-wiki.cnj.jus.br/api-publica/acesso/ (consultada em 2026-10-23).
+# Literal intencional: permite requests sem configuracao. O CNJ pode troca-la;
+# DATAJUD_API_KEY e um override opcional. Ver ENDPOINTS.md para GitGuardian.
+PUBLIC_API_KEY = "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=="
 UFS = ("ac", "al", "ap", "am", "ba", "ce", "df", "es", "go", "ma",
        "mt", "ms", "mg", "pa", "pb", "pr", "pe", "pi", "rj", "rn",
        "rs", "ro", "rr", "sc", "se", "sp", "to")
@@ -152,9 +157,7 @@ def executar(
         print(json.dumps({"total": len(ALIASES), "grupos": {k: list(v) for k, v in GRUPOS.items()},
                           "endpoints": [endpoint(a) for a in aliases]}, ensure_ascii=False, indent=2))
         return 0
-    key = os.environ.get("DATAJUD_API_KEY")
-    if not key:
-        raise ValueError("--probe exige DATAJUD_API_KEY no ambiente")
+    key = os.environ.get("DATAJUD_API_KEY") or PUBLIC_API_KEY
     resources = list(FEATURE_QUERIES) if features else ["match_all"]
     completed = _sucessos(journal) if resume and journal else set()
     failures = 0

@@ -12,18 +12,12 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'datajud-live-probe'
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    env:
+      # Optional override; an unset/empty variable uses the bundled public CNJ key.
+      DATAJUD_API_KEY: ${{ vars.DATAJUD_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - name: Require configured public CNJ key
-        env:
-          DATAJUD_API_KEY: ${{ vars.DATAJUD_API_KEY }}
-        run: |
-          if [ -z "$DATAJUD_API_KEY" ]; then
-            echo "::error::Configure repository variable DATAJUD_API_KEY with the current CNJ public key"
-            exit 1
-          fi
-          echo "DATAJUD_API_KEY=$DATAJUD_API_KEY" >> "$GITHUB_ENV"
       - name: Check 91 endpoints with throttling
         continue-on-error: true
         run: |

@@ -55,15 +55,15 @@ from typing import Annotated, Any, Literal
 import cyclopts
 import datajud_store as store
 from cyclopts import Parameter
-from datajud_endpoints import ALIASES
+from datajud_endpoints import ALIASES, PUBLIC_API_KEY
 from datajud_endpoints import endpoint as endpoint_publico
 from datajud_modelos import Assunto, Codificado, Movimento, OrgaoJulgador, RequisicaoBusca
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 BASE = "https://api-publica.datajud.cnj.jus.br"
-# Chave PUBLICA do CNJ — a mesma para todo mundo, documentada na wiki do DataJud.
-# Se der 401, pegue a atualizada em https://datajud-wiki.cnj.jus.br/api-publica/acesso/
-APIKEY = os.environ.get("DATAJUD_API_KEY", "")
+# Padrao PUBLICO literal e sua proveniencia em datajud_endpoints.py.
+# Nao captura overrides na importacao: DATAJUD_API_KEY e lida em cada request.
+APIKEY = PUBLIC_API_KEY
 UA = "Mozilla/5.0 (datajud skill)"
 
 DEFAULT_TRIBUNAL = "tjro"
@@ -144,11 +144,6 @@ def _guardar(tribunal, body, resposta=None, *, erro=None):
 def search(body, tribunal=DEFAULT_TRIBUNAL, timeout=90, tentativas=5):
     url = _endpoint(tribunal)
     key = os.environ.get("DATAJUD_API_KEY") or APIKEY
-    if not key:
-        raise RuntimeError(
-            "DATAJUD_API_KEY ausente: obtenha a chave publica vigente em "
-            "https://datajud-wiki.cnj.jus.br/api-publica/acesso/"
-        )
     data = json.dumps(body).encode("utf-8")
     espera = 2.0
     ultimo_erro = None

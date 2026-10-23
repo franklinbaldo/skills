@@ -105,10 +105,13 @@ download em lote.
 
 O inventario versionado dos **91 aliases publicos** e o verificador opt-in
 estao em [ENDPOINTS.md](ENDPOINTS.md). O catalogo pode ser inspecionado sem
-rede com `python scripts/datajud_endpoints.py` (estando na pasta `datajud/`).
+rede com `uv run scripts/datajud_endpoints.py` (estando na pasta `datajud/`).
 Nunca trate APIs restritas de transmissao/manutencao como se fossem rotas
 publicas de consulta; o comando `--probe` so deve ser usado explicitamente,
-com a chave publica atual fornecida no ambiente.
+usando a chave publica compartilhada ja embutida no codigo. Nenhuma
+configuracao previa e necessaria; `DATAJUD_API_KEY` e um override opcional.
+A origem oficial, o valor literal e a excecao pontual no GitGuardian estao
+documentados em [ENDPOINTS.md](ENDPOINTS.md#chave-p%C3%BAblica-e-gitguardian).
 
 ## Onde o processo pode estar
 

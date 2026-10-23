@@ -410,6 +410,33 @@ def test_migracao_da_v2_preserva_estado_e_historico(tmp_path):
     assert [(i.evento, i.nome) for i in historico.mudancas[0].itens] == [("saiu", "Conclusao")]
 
 
+@pytest.mark.parametrize("override", [None, "", "chave-publica-ficticia-de-teste"])
+def test_search_envia_chave_publica_padrao_ou_override(monkeypatch, tmp_path, override):
+    if override is None:
+        monkeypatch.delenv("DATAJUD_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("DATAJUD_API_KEY", override)
+    monkeypatch.setenv("DATAJUD_SQLITE", str(tmp_path / "acervo.sqlite"))
+    requests = []
+
+    def urlopen(request, **_):
+        requests.append(request)
+        return io.BytesIO(json.dumps(resposta()).encode())
+
+    monkeypatch.setattr(dj.urllib.request, "urlopen", urlopen)
+    assert dj.search(REQUISICAO)["hits"]["hits"] == []
+    assert requests[0].get_header("Authorization") == f"APIKey {override or dj.PUBLIC_API_KEY}"
+    assert requests[0].get_method() == "POST"
+    assert json.loads(requests[0].data) == REQUISICAO
+    # O override pode mudar depois da importacao, sem reiniciar o cliente/MCP.
+    monkeypatch.setenv("DATAJUD_API_KEY", "outra-chave-publica-de-teste")
+    dj.search(REQUISICAO)
+    assert requests[1].get_header("Authorization") == "APIKey outra-chave-publica-de-teste"
+    monkeypatch.delenv("DATAJUD_API_KEY")
+    dj.search(REQUISICAO)
+    assert requests[2].get_header("Authorization") == f"APIKey {dj.PUBLIC_API_KEY}"
+
+
 def test_search_realmente_registra_toda_resposta_sem_configuracao_extra(monkeypatch, tmp_path):
     monkeypatch.setenv("DATAJUD_API_KEY", "chave-publica-ficticia-de-teste")
     banco = tmp_path / "acervo.sqlite"

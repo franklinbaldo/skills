@@ -42,11 +42,32 @@ def test_inventario_offline_nao_acessa_rede(capsys):
     assert '"total": 91' in capsys.readouterr().out
 
 
-def test_probe_sem_chave_nao_acessa_rede(monkeypatch):
-    monkeypatch.delenv("DATAJUD_API_KEY", raising=False)
-    with patch.object(mod.urllib.request, "urlopen", side_effect=AssertionError("rede")):
-        with pytest.raises(ValueError, match="DATAJUD_API_KEY"):
-            mod.executar(probe=True, alias="tjro")
+@pytest.mark.parametrize("override", [None, "", "chave-publica-ficticia-de-teste"])
+def test_probe_envia_chave_publica_padrao_ou_override(monkeypatch, tmp_path, capsys, override):
+    if override is None:
+        monkeypatch.delenv("DATAJUD_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("DATAJUD_API_KEY", override)
+    resposta = MagicMock()
+    resposta.status = 200
+    resposta.read.return_value = b'{"hits": {"total": {"value": 0}}}'
+    context = MagicMock()
+    context.__enter__.return_value = resposta
+    journal = tmp_path / "probes.jsonl"
+    with patch.object(mod.urllib.request, "urlopen", return_value=context) as urlopen:
+        assert mod.executar(probe=True, alias="tjro", journal=journal) == 0
+    request = urlopen.call_args.args[0]
+    key = override or mod.PUBLIC_API_KEY
+    assert request.get_header("Authorization") == f"APIKey {key}"
+    assert request.full_url == mod.endpoint("tjro")
+    assert request.get_method() == "POST"
+    assert key not in journal.read_text(encoding="utf-8")
+    assert key not in capsys.readouterr().out
+
+
+def test_padrao_e_literal_publico_documentado_pelo_cnj():
+    # Valor publicado na fonte oficial, nao uma credencial privada de teste.
+    assert mod.PUBLIC_API_KEY == "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=="
 
 
 def test_feature_matrix():
