@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jus.br — Conector de Sessão (Bookmarklet)</title>
+    <style>
+        :root {
+            --primary: #0c326f;
+            --primary-hover: #07214a;
+            --accent: #1351b4;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --muted: #64748b;
+            --border: #e2e8f0;
+            --success: #16a34a;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+            max-width: 650px;
+            width: 100%;
+            padding: 36px;
+        }
+        .header {
+            border-bottom: 2px solid #e0f2fe;
+            padding-bottom: 20px;
+            margin-bottom: 24px;
+        }
+        h1 {
+            color: var(--primary);
+            font-size: 24px;
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .subtitle {
+            color: var(--muted);
+            font-size: 15px;
+            margin: 0;
+        }
+        .steps {
+            list-style: none;
+            padding: 0;
+            margin: 24px 0;
+        }
+        .steps li {
+            position: relative;
+            padding-left: 42px;
+            margin-bottom: 20px;
+            line-height: 1.5;
+            font-size: 15px;
+        }
+        .step-num {
+            position: absolute;
+            left: 0;
+            top: -2px;
+            width: 28px;
+            height: 28px;
+            background-color: #e0f2fe;
+            color: var(--accent);
+            font-weight: 700;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .bookmarklet-box {
+            background: #f1f5f9;
+            border: 2px dashed #cbd5e1;
+            border-radius: 10px;
+            padding: 24px;
+            text-align: center;
+            margin: 28px 0;
+        }
+        .bookmarklet-btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #0c326f, #1351b4);
+            color: #ffffff !important;
+            font-weight: 600;
+            font-size: 16px;
+            padding: 14px 28px;
+            border-radius: 8px;
+            text-decoration: none !important;
+            box-shadow: 0 4px 12px rgba(12, 50, 111, 0.25);
+            cursor: grab;
+            transition: transform 0.15s, box-shadow 0.15s;
+            user-select: none;
+        }
+        .bookmarklet-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(12, 50, 111, 0.35);
+        }
+        .bookmarklet-btn:active {
+            cursor: grabbing;
+        }
+        .tip {
+            font-size: 13px;
+            color: var(--muted);
+            margin-top: 10px;
+        }
+        .footer {
+            font-size: 13px;
+            color: var(--muted);
+            border-top: 1px solid var(--border);
+            padding-top: 18px;
+            margin-top: 28px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="header">
+            <h1>⚖️ PDPJ & Jus.br — Conector de Sessão</h1>
+            <p class="subtitle">Conexão segura e direta com o Portal de Serviços da PDPJ e o portal Jus.br</p>
+        </div>
+
+        <ol class="steps">
+            <li>
+                <span class="step-num">1</span>
+                <strong>Arraste o botão abaixo</strong> para a sua <strong>Barra de Favoritos</strong> do navegador (pressione <code>Ctrl + Shift + B</code> se a barra estiver oculta).
+            </li>
+            <li>
+                <span class="step-num">2</span>
+                Abra a aba onde você já se encontra autenticado: <a href="https://portaldeservicos.pdpj.jus.br" target="_blank" rel="noopener"><strong>Portal de Serviços da PDPJ</strong></a> ou <a href="https://www.jus.br" target="_blank" rel="noopener"><strong>www.jus.br</strong></a>.
+            </li>
+            <li>
+                <span class="step-num">3</span>
+                Na aba do portal, <strong>clique no favorito</strong>. Se a sessão estiver ativa, ele copia o token na hora (ou ativa o conector inteligente para capturar no próximo clique).
+            </li>
+            <li>
+                <span class="step-num">4</span>
+                <strong>Retorne ao terminal PowerShell:</strong> a CLI detectará o token automaticamente e salvará no Windows Credential Manager!
+            </li>
+        </ol>
+
+        <div class="bookmarklet-box">
+            <a class="bookmarklet-btn" href="javascript:(function(){ try { if (window.__pdpj_capturado) { if (navigator.clipboard) navigator.clipboard.writeText(window.__pdpj_capturado); alert(&#x27;✓ Token já capturado e copiado para a Área de Transferência!
+
+Retorne ao terminal PowerShell.&#x27;); return; } function salvar(raw) { if (!raw || typeof raw !== &#x27;string&#x27;) return; var clean = raw.trim(); if (clean.toLowerCase().indexOf(&#x27;bearer &#x27;) === 0) clean = clean.substring(7).trim(); if (clean.indexOf(&#x27;eyJ&#x27;) === 0 &amp;&amp; clean.split(&#x27;.&#x27;).length === 3) { window.__pdpj_capturado = clean; if (navigator.clipboard &amp;&amp; navigator.clipboard.writeText) { navigator.clipboard.writeText(clean).then(function(){ alert(&#x27;✓ Token PDPJ capturado com sucesso!
+
+Retorne ao terminal PowerShell para sincronizar.&#x27;); }).catch(function(){ prompt(&#x27;Copie o token da PDPJ abaixo (Ctrl+C):&#x27;, clean); }); } else { prompt(&#x27;Copie o token da PDPJ abaixo (Ctrl+C):&#x27;, clean); } } } if (!window.__fetch_hooked) { window.__fetch_hooked = true; var _f = window.fetch; window.fetch = function(input, init) { try { var h = init &amp;&amp; init.headers; var a = null; if (h) { if (typeof h.get === &#x27;function&#x27;) a = h.get(&#x27;Authorization&#x27;) || h.get(&#x27;authorization&#x27;); else if (typeof h === &#x27;object&#x27;) a = h.Authorization || h.authorization; } if (a) salvar(a); } catch(e){} return _f.apply(this, arguments); }; } if (!window.__xhr_hooked) { window.__xhr_hooked = true; var _set = XMLHttpRequest.prototype.setRequestHeader; XMLHttpRequest.prototype.setRequestHeader = function(header, val) { try { if (header &amp;&amp; String(header).toLowerCase() === &#x27;authorization&#x27; &amp;&amp; val) { salvar(val); } } catch(e){} return _set.apply(this, arguments); }; } alert(&#x27;⏳ Conector PDPJ Ativado!
+
+Dê um clique em &quot;Consultar&quot; (ou em qualquer menu da página) para capturar a sessão automaticamente.&#x27;); } catch(err) { alert(&#x27;Erro no conector PDPJ: &#x27; + err.message); } })();">⭐ ⚖️ Conectar Sessão PDPJ</a>
+            <div class="tip">Clique e arraste o botão acima para sua barra de favoritos do navegador.</div>
+        </div>
+
+        <div class="footer">
+            <span>PDPJ-Br &bull; Conselho Nacional de Justiça (CNJ)</span>
+            <span>Uso exclusivo com sessão oficial</span>
+        </div>
+    </div>
+</body>
+</html>
