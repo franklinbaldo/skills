@@ -15,8 +15,8 @@ from pathlib import Path
 from typing import Any
 
 import cyclopts
-from sqlglot import exp, parse_one
-from sqlglot.errors import ParseError
+from sqlglot import exp, parse_one, transpile
+from sqlglot.errors import ErrorLevel, ParseError, UnsupportedError
 
 
 class ConversionError(ValueError):
@@ -832,8 +832,25 @@ class Converter:
         return value
 
 
-def convert_sql(sql: str, *, database: str, schema: str | None = "main") -> dict[str, Any]:
-    """Convert one DuckDB SELECT into portable MBQL 5."""
+def convert_sql(
+    sql: str,
+    *,
+    database: str,
+    schema: str | None = "main",
+    source_dialect: str = "duckdb",
+) -> dict[str, Any]:
+    """Convert SQL from a source dialect to portable MBQL 5, without lossy fallback."""
+    if source_dialect.lower() != "duckdb":
+        try:
+            normalized = transpile(
+                sql, read=source_dialect, write="duckdb",
+                unsupported_level=ErrorLevel.RAISE,
+            )
+        except (ParseError, UnsupportedError, ValueError, KeyError) as exc:
+            raise ConversionError(f"Falha ao normalizar SQL {source_dialect!r}: {exc}") from exc
+        if len(normalized) != 1:
+            raise ConversionError("A conversão exige exatamente uma instrução SQL.")
+        sql = normalized[0]
     return Converter(database=database, default_schema=schema).convert(sql)
 
 
@@ -859,12 +876,13 @@ def main(
     database: str,
     file: Path | None = None,
     schema: str = "main",
+    source_dialect: str = "duckdb",
     compact: bool = False,
 ) -> int:
     """Convert one DuckDB SELECT to portable MBQL 5."""
     try:
         source = _read_sql(sql, file)
-        query = convert_sql(source, database=database, schema=schema or None)
+        query = convert_sql(source, database=database, schema=schema or None, source_dialect=source_dialect)
     except (ConversionError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
