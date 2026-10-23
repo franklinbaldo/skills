@@ -34,10 +34,7 @@ aceita SQL de outros dialetos e normaliza **estritamente** para a representaçã
 DuckDB antes de compilar MBQL 5. O padrão continua `duckdb`, para preservar
 o contrato original. Use `--source-dialect mysql` na CLI.
 
-Para uso como módulo Python distribuível, esta pasta inclui
-`mbql/pyproject.toml`. A integração consumidora deve instalar uma versão
-fixada do subdiretório `mbql` da PR/commit canônico. Não copie o conversor
-para outros projetos nem dependa do caminho físico da skill.
+O Pink mantém seu próprio código-fonte de conversão e suas dependências em `src/pink/sql_to_mbql.py`. Esta skill continua independente, sem ser uma dependência de execução do Pink. A evolução semântica deve ser verificada com testes de conformidade em ambos os projetos.
 
 A normalização SQLGlot não garante equivalência semântica entre dialetos,
 especialmente em funções, collations, datas, NULL ou casts. Só habilite uma
