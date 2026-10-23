@@ -41,6 +41,7 @@ Rode `python datajud.py -h` ou `python datajud.py <modo> -h` para detalhes.
 """
 
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -54,13 +55,15 @@ from typing import Annotated, Any, Literal
 import cyclopts
 import datajud_store as store
 from cyclopts import Parameter
+from datajud_endpoints import ALIASES, PUBLIC_API_KEY
+from datajud_endpoints import endpoint as endpoint_publico
 from datajud_modelos import Assunto, Codificado, Movimento, OrgaoJulgador, RequisicaoBusca
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 BASE = "https://api-publica.datajud.cnj.jus.br"
-# Chave PUBLICA do CNJ — a mesma para todo mundo, documentada na wiki do DataJud.
-# Se der 401, pegue a atualizada em https://datajud-wiki.cnj.jus.br/api-publica/acesso/
-APIKEY = "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=="
+# Padrao PUBLICO literal e sua proveniencia em datajud_endpoints.py.
+# Nao captura overrides na importacao: DATAJUD_API_KEY e lida em cada request.
+APIKEY = PUBLIC_API_KEY
 UA = "Mozilla/5.0 (datajud skill)"
 
 DEFAULT_TRIBUNAL = "tjro"
@@ -113,7 +116,7 @@ GRAU_LABEL = {
 # Ambos sao transitorios e pedem backoff.
 # ----------------------------------------------------------------------------
 def _endpoint(tribunal):
-    return f"{BASE}/api_publica_{tribunal.lower()}/_search"
+    return endpoint_publico(tribunal.lower())
 
 
 def _is_es_rejection(d):
@@ -140,6 +143,7 @@ def _guardar(tribunal, body, resposta=None, *, erro=None):
 
 def search(body, tribunal=DEFAULT_TRIBUNAL, timeout=90, tentativas=5):
     url = _endpoint(tribunal)
+    key = os.environ.get("DATAJUD_API_KEY") or APIKEY
     data = json.dumps(body).encode("utf-8")
     espera = 2.0
     ultimo_erro = None
@@ -148,7 +152,7 @@ def search(body, tribunal=DEFAULT_TRIBUNAL, timeout=90, tentativas=5):
             url, data=data, method="POST",
             headers={"Content-Type": "application/json",
                      "Accept": "application/json",
-                     "Authorization": f"APIKey {APIKEY}",
+                     "Authorization": f"APIKey {key}",
                      "User-Agent": UA},
         )
         try:
@@ -198,7 +202,7 @@ def search(body, tribunal=DEFAULT_TRIBUNAL, timeout=90, tentativas=5):
                 raise RuntimeError(
                     "HTTP 401: a chave publica provavelmente foi trocada pelo CNJ. "
                     "Pegue a atual em https://datajud-wiki.cnj.jus.br/api-publica/acesso/ "
-                    "e atualize APIKEY no topo deste script.") from e
+                    "e configure DATAJUD_API_KEY no ambiente.") from e
             raise RuntimeError(ultimo_erro) from e
         except (urllib.error.URLError, TimeoutError) as e:
             ultimo_erro = f"rede: {e}"
@@ -319,7 +323,7 @@ def familia_do_cnj(n):
         if uf in _TJM:
             indices.append(f"tjm{uf}")
     indices += SUPERIORES
-    return list(dict.fromkeys(indices))
+    return [indice for indice in dict.fromkeys(indices) if indice in ALIASES]
 
 
 # ----------------------------------------------------------------------------
@@ -514,7 +518,7 @@ def _imprimir(modelo: BaseModel) -> None:
     print(modelo.model_dump_json(by_alias=True, indent=2))
 
 
-def consultar(entrada: ConsultaLote) -> dict[str, ProcessoConsultado]:
+def consultar(entrada: ConsultaLote, anteriores: dict[str, ProcessoConsultado] | None = None) -> dict[str, ProcessoConsultado]:
     """Procura cada numero em todos os indices da sua familia (ou so na origem).
 
     Uma consulta `terms` por indice para ate LOTE numeros, em paralelo. Devolve
@@ -524,35 +528,71 @@ def consultar(entrada: ConsultaLote) -> dict[str, ProcessoConsultado]:
     alvo: dict[str, ProcessoConsultado] = {}
     for n in entrada.numeros:
         indices = [tribunal_do_cnj(n)] if entrada.so_origem else familia_do_cnj(n)
+        prev = (anteriores or {}).get(so_digitos(n))
         alvo[so_digitos(n)] = ProcessoConsultado(
-            processo=n, origem=tribunal_do_cnj(n), consultados=[i for i in indices if i])
+            processo=n, origem=tribunal_do_cnj(n), consultados=[i for i in indices if i],
+            registros=list(prev.registros) if prev else [],
+        )
+        if prev and not prev.falhas:
+            # O arquivo anterior ja confirmou todos os indices listados.
+            alvo[so_digitos(n)].consultados = [
+                i for i in indices if i and i not in prev.consultados
+            ]
     por_indice: dict[str, list[str]] = {}
     for d, item in alvo.items():
+        prev = (anteriores or {}).get(d)
+        anteriores_ok = set(prev.consultados) - {f.indice for f in prev.falhas} if prev else set()
         for i in item.consultados:
-            por_indice.setdefault(i, []).append(d)
+            if i not in anteriores_ok:
+                por_indice.setdefault(i, []).append(d)
+        # Mostrar todos os indices cobertos pela soma entre observacoes.
+        item.consultados = list(dict.fromkeys([*anteriores_ok, *item.consultados]))
     tarefas = [(i, ds[k:k + LOTE]) for i, ds in por_indice.items() for k in range(0, len(ds), LOTE)]
 
     def rodar(tarefa):
         i, ds = tarefa
-        d = search(RequisicaoBusca(size=LOTE * 10, query={"terms": {"numeroProcesso": ds}}).bruto(),
-                   tribunal=i)
-        hits = d.get("hits", {}).get("hits", [])
-        total = d.get("hits", {}).get("total", {}).get("value", 0)
-        if total > len(hits):
-            raise RuntimeError(f"resposta truncada em {i}: {len(hits)} de {total}")
-        return [Registro.model_validate(h) for h in hits]
+        try:
+            d = search(
+                RequisicaoBusca(
+                    size=LOTE * 10, track_total_hits=True,
+                    query={"terms": {"numeroProcesso": ds}},
+                ).bruto(),
+                tribunal=i,
+            )
+            hits = d.get("hits", {}).get("hits", [])
+            total_info = d.get("hits", {}).get("total", {})
+            total = total_info.get("value", 0) if isinstance(total_info, dict) else total_info
+            if total > len(hits) or (
+                isinstance(total_info, dict) and total_info.get("relation") == "gte"
+            ):
+                if len(ds) > 1:
+                    meio = len(ds) // 2
+                    parte_a, falhas_a = rodar((i, ds[:meio]))
+                    parte_b, falhas_b = rodar((i, ds[meio:]))
+                    return parte_a + parte_b, falhas_a + falhas_b
+                raise RuntimeError(
+                    f"resposta truncada em {i}: {len(hits)} de {total}; "
+                    "resultado incompleto nao pode ser ausencia"
+                )
+            return [Registro.model_validate(h) for h in hits], []
+        except (RuntimeError, ValidationError) as exc:
+            # A falha e atribuida apenas aos numeros desta subtarefa.
+            return [], [(numero, str(exc)[:200]) for numero in ds]
 
     with ThreadPoolExecutor(entrada.trabalhadores) as pool:
         futuros = {pool.submit(rodar, t): t for t in tarefas}
         for futuro in as_completed(futuros):
             i, ds = futuros[futuro]
             try:
-                for registro in futuro.result():
-                    if registro.numero in alvo:
-                        alvo[registro.numero].registros.append(registro)
-            except (RuntimeError, ValidationError) as e:
-                for num in ds:
-                    alvo[num].falhas.append(FalhaIndice(indice=i, erro=str(e)[:200]))
+                registros, falhas = futuro.result()
+            except Exception as exc:
+                registros = []
+                falhas = [(numero, str(exc)[:200]) for numero in ds]
+            for registro in registros:
+                if registro.numero in alvo:
+                    alvo[registro.numero].registros.append(registro)
+            for numero, mensagem in falhas:
+                alvo[numero].falhas.append(FalhaIndice(indice=i, erro=mensagem))
     for item in alvo.values():
         item.registros.sort(key=lambda r: (r.tribunal, r.grau or ""))
     return alvo
@@ -918,7 +958,11 @@ def _ja_baixado(saida: Path, numero: str, so_origem: bool) -> bool:
     """Em disco e consultado em todos os indices pedidos agora."""
     gravado = ler_processo(saida, numero)
     pedidos = [tribunal_do_cnj(numero)] if so_origem else familia_do_cnj(numero)
-    return gravado is not None and set(pedidos) <= set(gravado.consultados)
+    return (
+        gravado is not None
+        and not gravado.falhas
+        and set(pedidos) <= set(gravado.consultados)
+    )
 
 
 _CNJ = TypeAdapter(NumeroCNJ)
@@ -951,9 +995,14 @@ def cmd_lote(arquivo: Path, saida: Path | None, trabalhadores: int,
     print(f"{len(numeros)} processos; {len(pendentes)} a consultar"
           f"{' (so na origem)' if so_origem else ' (familia: origem + outros + superiores)'}",
           file=sys.stderr)
+    anteriores = {
+        so_digitos(n): gravado
+        for n in pendentes
+        if saida is not None and (gravado := ler_processo(saida, n)) is not None
+    }
     resultado = consultar(ConsultaLote(
         numeros=pendentes, so_origem=so_origem, trabalhadores=trabalhadores
-    ))
+    ), anteriores=anteriores)
     destino_descr = str(saida or store.caminho_banco())
     resumo = ResumoLote(
         processos=len(numeros), em_disco=0, encontrados=0,
@@ -965,7 +1014,7 @@ def cmd_lote(arquivo: Path, saida: Path | None, trabalhadores: int,
             resumo.falhas.append(FalhaLote(
                 processo=item.processo, indices=[f.indice for f in item.falhas]
             ))
-            continue
+        # A parte bem-sucedida nao e descartada por falhas de outros indices.
         validos[so_digitos(item.processo)] = item
         if saida is not None:
             # Compatibilidade: exporta JSON apenas quando solicitado; cada

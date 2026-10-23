@@ -1,0 +1,17 @@
+name: DataJud focused tests
+on:
+  pull_request:
+    paths:
+      - "datajud/**"
+      - ".github/workflows/datajud-tests.yml"
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Compile and test DataJud
+        run: |
+          uv run --with pytest --with cyclopts --with pydantic --with rich --with platformdirs --with fastmcp pytest -q datajud/tests/

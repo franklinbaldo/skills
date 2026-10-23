@@ -1,0 +1,38 @@
+name: DataJud live endpoint audit
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-probe:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'datajud-live-probe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    env:
+      # Optional override; an unset/empty variable uses the bundled public CNJ key.
+      DATAJUD_API_KEY: ${{ vars.DATAJUD_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Check 91 endpoints with throttling
+        continue-on-error: true
+        run: |
+          uv run datajud/scripts/datajud_endpoints.py --probe --delay 1.5 --timeout 25 --journal reports/endpoint-probes.jsonl
+      - name: Check DSL features on TJRO and representative branches
+        if: always()
+        continue-on-error: true
+        run: |
+          for tribunal in tjro trt14 trf1 tre-ro stj; do
+            uv run datajud/scripts/datajud_endpoints.py --probe --features --alias "$tribunal" --delay 1.5 --timeout 25 --journal reports/feature-probes.jsonl || true
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: datajud-live-audit-${{ github.run_id }}
+          path: reports/*.jsonl
+          if-no-files-found: warn
+          retention-days: 30
