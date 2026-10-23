@@ -1,0 +1,14 @@
+.desarq-local/
+selecionados.tsv
+*validacao*.json
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.csv
+*.log
+*.token
+*.tokens
+*.key
+*.env
+*.env.*
+.tokens/
