@@ -1,4 +1,9 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["pytest", "cyclopts>=3.0"]
+# ///
 """Testes offline: a descoberta nunca inventa rotas ou atravessa outra origem."""
+
 import importlib.util
 from pathlib import Path
 from unittest.mock import patch

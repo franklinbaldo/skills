@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
-# dependencies = []
+# dependencies = ["cyclopts>=3.0"]
 # ///
 """Descobre contratos OpenAPI públicos a partir de Swagger UI, sem autenticação.
 
 Não tenta contornar 401/403; apenas URLs informadas explicitamente e referências
 encontradas no HTML/configuração do Swagger. Não imprime respostas arbitrárias.
 """
+
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import re
 from datetime import datetime, timezone
+from typing import Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
+
+from cyclopts import App
 
 SOURCES = {
     "portal-externo": "https://portalexterno-tribunais.stg.pdpj.jus.br/swagger-ui.html",
@@ -71,8 +74,11 @@ def inspect(name: str, url: str) -> dict:
         if "json" in ctype.lower():
             data = json.loads(body)
             if isinstance(data, dict) and ("openapi" in data or "swagger" in data):
-                record.update(outcome="openapi", version=data.get("openapi", data.get("swagger")),
-                              paths_count=len(data.get("paths", {})))
+                record.update(
+                    outcome="openapi",
+                    version=data.get("openapi", data.get("swagger")),
+                    paths_count=len(data.get("paths", {})),
+                )
                 return record
         record.update(outcome="swagger_ui", explicit_references=candidates(body.decode("utf-8", "replace"), url))
     except (URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
@@ -80,13 +86,17 @@ def inspect(name: str, url: str) -> dict:
     return record
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--service", choices=sorted(SOURCES), action="append")
-    args = parser.parse_args()
-    selection = args.service or list(SOURCES)
+Service = Literal["cabecalho-processual", "portal-externo", "repositorio"]
+
+app = App(help=__doc__)
+
+
+@app.default
+def main(*, service: list[Service] | None = None) -> None:
+    """Inventaria os Swagger UI conhecidos, ou só os serviços pedidos em --service."""
+    selection = service or list(SOURCES)
     print(json.dumps([inspect(name, SOURCES[name]) for name in selection], indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
-    main()
+    app()
