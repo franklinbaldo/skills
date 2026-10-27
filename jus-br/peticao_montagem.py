@@ -93,6 +93,7 @@ def montar_rascunho(processo: dict, id_tipo_documento: int) -> dict[str, Any]:
         "sigiloso": "NAO",
         "numeroProcesso": processo["numeroProcesso"],
         "idFonteDadosCodex": tramitacao.get("idFonteDadosCodex"),
+        "idOrigemTramitacao": tramitacao.get("idOrigem"),
         "siglaTribunal": tribunal.get("sigla") or processo.get("siglaTribunal"),
         "jtrTribunal": tribunal.get("jtr"),
         "siglaSegmentoJustica": SEGMENTOS.get(tribunal.get("segmento", ""), tribunal.get("segmento")),
@@ -100,7 +101,8 @@ def montar_rascunho(processo: dict, id_tipo_documento: int) -> dict[str, Any]:
         "siglaGrau": grau.get("sigla"),
         "codOrgaoJulgadorCorporativo": orgao["id"],
         "nomeOrgaoJulgadorCorporativo": orgao.get("nome"),
-        "distribuidoEm": distribuicao["dataHora"].replace("T", " "),
+        # Os autos trazem milissegundos ("...T17:10:58.892"); o Portal só aceita "AAAA-MM-DD HH:MM:SS".
+        "distribuidoEm": distribuicao["dataHora"].replace("T", " ")[:19],
         "codClasseSgt": classe.get("codigo"),
         "codigoClasseProcessual": classe.get("codigo"),
         "nomeClasseSgt": classe.get("descricao"),
@@ -114,8 +116,9 @@ def montar_rascunho(processo: dict, id_tipo_documento: int) -> dict[str, Any]:
 
 
 def montar_documento(
-    id_peticao: int, caminho: Path, conteudo: bytes, id_tipo_documento: int, ordem: int, principal: bool
+    id_peticao: int | None, caminho: Path, conteudo: bytes, id_tipo_documento: int, ordem: int, principal: bool
 ) -> dict[str, Any]:
+    """O Portal recusa rascunho sem documento principal (422); o PDF em base64 no corpo leva 403 do servidor web."""
     return {
         "idPeticao": id_peticao,
         "nome": caminho.name,

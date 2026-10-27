@@ -152,13 +152,14 @@ def peticao_rascunho(
         console.print("[yellow]Nada foi criado. Repita com --confirmar para criar o rascunho.[/yellow]")
         return
 
+    rascunho["peticaoDocumentos"] = [
+        montar_documento(
+            None, caminho, conteudo, (tipo_principal if ordem == 0 else tipo_dos_anexos)["id"], ordem, ordem == 0
+        )
+        for ordem, (caminho, conteudo) in enumerate(arquivos)
+    ]
     try:
-        criado = portal.criar_rascunho(rascunho)
-        id_peticao = criado["id"]
-        for ordem, (caminho, conteudo) in enumerate(arquivos):
-            id_tipo = (tipo_principal if ordem == 0 else tipo_dos_anexos)["id"]
-            doc = montar_documento(id_peticao, caminho, conteudo, id_tipo, ordem, ordem == 0)
-            portal.anexar(doc, conteudo)
+        id_peticao = portal.criar_rascunho(rascunho)["id"]
     except (JusBrError, KeyError) as exc:
         _falhar("Falha ao criar o rascunho (confira em `peticao listar` e apague o que sobrou)", exc)
     console.print(f"[green]Rascunho {id_peticao} criado.[/green] Confira no Portal em Minhas petições.")

@@ -31,7 +31,7 @@ PROCESSO = {
         "valorAcao": 1000.0,
         "classe": [{"codigo": 7, "descricao": "Procedimento Comum Cível"}],
         "assunto": [{"codigo": 5922, "descricao": "Retido na fonte"}],
-        "distribuicao": [{"dataHora": "2026-08-14T16:33:14", "orgaoJulgador": [{"id": 123, "nome": "1ª Vara"}]}],
+        "distribuicao": [{"dataHora": "2026-08-14T16:33:14.892", "orgaoJulgador": [{"id": 123, "nome": "1ª Vara"}]}],
         "partes": [
             {
                 "polo": "ATIVO",
@@ -43,6 +43,7 @@ PROCESSO = {
         ],
         "movimentos": [{"dataHora": "2026-09-01T10:00:00", "descricao": "Citação"}],
         "idFonteDadosCodex": 2362,
+        "idOrigem": "13581606",
         "permitePeticionar": True,
         "documentos": [
             {
@@ -72,6 +73,7 @@ def test_rascunho_takes_every_field_from_the_records():
     assert dto["tipo"] == "A" and dto["idTipoDocumento"] == 533
     assert dto["codOrgaoJulgadorCorporativo"] == 123 and dto["idFonteDadosCodex"] == 2362
     assert dto["distribuidoEm"] == "2026-08-14 16:33:14"
+    assert dto["idOrigemTramitacao"] == "13581606"
     assert dto["siglaSegmentoJustica"] == "JCF" and dto["jtrTribunal"] == "401"
     assert dto["numeroGrau"] == "1" and dto["siglaGrau"] == "G1"
     assert [p["modalidadePolo"] for p in dto["peticaoPartes"]] == ["AT", "PA"]
@@ -151,7 +153,7 @@ def test_rascunho_without_confirm_only_shows_plan(portal, tmp_path, capsys):
     portal.anexar.assert_not_called()
 
 
-def test_rascunho_with_confirm_creates_and_attaches_in_order(portal, tmp_path, capsys):
+def test_rascunho_with_confirm_sends_documents_with_the_draft(portal, tmp_path, capsys):
     principal, anexo = tmp_path / "contestacao.pdf", tmp_path / "ficha.pdf"
     principal.write_bytes(b"%PDF-principal")
     anexo.write_bytes(b"%PDF-anexo")
@@ -160,11 +162,12 @@ def test_rascunho_with_confirm_creates_and_attaches_in_order(portal, tmp_path, c
         ["peticao", "rascunho", PROCESSO["numeroProcesso"], str(principal), "--tipo", "533"]
         + ["--anexo", str(anexo), "--tipo-anexo", "Anexo", "--confirmar"]
     )
-    docs = [c.args[0] for c in portal.anexar.call_args_list]
+    docs = portal.criar_rascunho.call_args.args[0]["peticaoDocumentos"]
     assert [(d["nome"], d["principal"], d["ordem"], d["idTipoDocumento"]) for d in docs] == [
         ("contestacao.pdf", True, 0, 533),
         ("ficha.pdf", False, 1, 9),
     ]
+    assert all("base64" not in d and len(d["hash"]) == 40 for d in docs)
     assert "Rascunho 77 criado" in capsys.readouterr().out
     portal.protocolar.assert_not_called()
 

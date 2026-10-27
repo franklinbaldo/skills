@@ -23,14 +23,14 @@ CLI `uv run jus-br/cli.py` sobre a API do **Portal de Serviços da PDPJ-Br**
 
 Tudo abaixo foi conferido em 26/10/2026 com sessão real, não presumido:
 
-| Recurso                                                         | Estado                                                      | Fonte                                                                           |
-| --------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Login gov.br pelo favorito (`auth bookmarklet`)                 | funciona                                                    | sessão do cliente `portalexterno-frontend`, cerca de 8 h                        |
-| Login pelo callback `www.jus.br` (`auth login`)                 | falha                                                       | o site gasta o código antes da CLI: `Code not valid`                            |
-| Autos (`processo`)                                              | funciona                                                    | `GET /v2/processos/{cnj}` e `/documentos/{id}/binario`                          |
-| DJEN e Domicílio Eletrônico (`comunicacoes`)                    | funciona                                                    | `GET /v1/comunicacao` e `/v1/domicilio-eletronico/comunicacao`                  |
-| Cadastro e tipos por tribunal (`peticao tribunal`, `tipos`)     | funciona                                                    | `GET /v1/tribunais/{jtr}`, `/v1/tribunal/listar`, `/v1/tipo/documento/tribunal` |
-| Rascunho, anexos e protocolo (`peticao rascunho`, `protocolar`) | implementado conforme o Swagger; primeiro uso real pendente | `POST /v1/peticoes`, `/v1/peticoes/documentos`, `/v1/peticoes/{id}/protocolo`   |
+| Recurso                                                         | Estado                                           | Fonte                                                                           |
+| --------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Login gov.br pelo favorito (`auth bookmarklet`)                 | funciona                                         | sessão do cliente `portalexterno-frontend`, cerca de 8 h                        |
+| Login pelo callback `www.jus.br` (`auth login`)                 | falha                                            | o site gasta o código antes da CLI: `Code not valid`                            |
+| Autos (`processo`)                                              | funciona                                         | `GET /v2/processos/{cnj}` e `/documentos/{id}/binario`                          |
+| DJEN e Domicílio Eletrônico (`comunicacoes`)                    | funciona                                         | `GET /v1/comunicacao` e `/v1/domicilio-eletronico/comunicacao`                  |
+| Cadastro e tipos por tribunal (`peticao tribunal`, `tipos`)     | funciona                                         | `GET /v1/tribunais/{jtr}`, `/v1/tribunal/listar`, `/v1/tipo/documento/tribunal` |
+| Rascunho, anexos e protocolo (`peticao rascunho`, `protocolar`) | **criação do rascunho ainda falha** (ver abaixo) | `POST /v1/peticoes`, `/v1/peticoes/documentos`, `/v1/peticoes/{id}/protocolo`   |
 
 O contrato está no Swagger de homologação: `uv run jus-br/openapi_discovery.py` acha os
 Swagger UI e `.../swagger-resources` lista os grupos (`/v2/api-docs?group=Interno`). Os
@@ -104,10 +104,21 @@ Regras que a CLI aplica antes de qualquer escrita:
    humana; `protocolar` mostra os documentos e exige `--confirmar`. Falha no meio do
    envio deixa o rascunho: confira em `peticao listar` antes de repetir.
 
-O primeiro rascunho real ainda não foi criado por esta CLI. No primeiro uso, crie o
-rascunho, confira no Portal que peça, anexos, tipos e partes estão certos, e só então
-protocole. Se o Portal recusar algum campo, a mensagem dele vem no erro; corrija
-`peticao_montagem.py` e registre o caso no postmortem.
+**A criação do rascunho ainda não funciona.** Testes de 26/10/2026 no TRF1, nenhum
+deixou rascunho (conferido em `peticao listar`):
+
+| `POST /v1/peticoes` com                                               | Resposta                                                               |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `peticaoDocumentos` vazio                                             | 422: "Necessário ter pelo menos um documento e marcado como principal" |
+| o PDF/A em `base64` no corpo                                          | 403 do servidor web                                                    |
+| o documento só em metadados (nome, tamanho, SHA-1, tipo, `principal`) | 500 sem mensagem                                                       |
+
+O Portal provavelmente sobe o arquivo antes (`POST /v1/peticoes/documentos` e envio à URL
+pré-assinada, já implementados em `PortalClient.anexar`) e cria a petição apontando para
+o documento. Antes de novas tentativas, capture o fluxo real no navegador (F12, Network,
+"Preserve log", criar e apagar um rascunho, copiar as chamadas `/api/v1/peticoes...` sem
+`authorization` nem cookie) e ajuste `cli_peticao.py` e `peticao_montagem.py` a ele.
+Não tente em produção às cegas: cada tentativa é uma escrita e o 500 não diz o que falta.
 
 ## Arquivos
 
@@ -143,7 +154,10 @@ Testes offline: `uv run --with pytest --with cyclopts --with httpx --with keyrin
   `www.jus.br` falhou com `Code not valid`. A API de produção só respondeu com os
   cabeçalhos do navegador (403 do servidor web sem eles). Varredura dos 61 `GET` do
   Swagger mapeou o que responde. Uma contestação ao TRF6 não pôde ir pelo Portal: o
-  tribunal não está no cadastro de peticionamento e o protocolo fica no eproc.
+  tribunal não está no cadastro de peticionamento e o protocolo fica no eproc. Os autos
+  trazem `permitePeticionar`, `idFonteDadosCodex` e `idOrigem`; a data de distribuição vem
+  com milissegundos, que o Portal não guarda. Criar rascunho no TRF1 falhou (422, 403,
+  500), sem deixar rascunho: falta capturar o fluxo do navegador.
 
 Após uso material, avalie se o roteamento foi correto, se a skill ajudou ou atrapalhou e
 que atrito houve. Havendo aprendizado acionável, registre em issue de `franklinbaldo/skills`,
