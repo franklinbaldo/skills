@@ -20,8 +20,7 @@ from pydantic import ValidationError
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from client import JusBrClient
-from errors import ExperimentalServiceUnavailableError
-from models import PeticionamentoRequest, TokenResponse
+from models import TokenResponse
 
 
 @pytest.fixture
@@ -122,45 +121,6 @@ def test_client_rejects_incomplete_or_unsuccessful_communication_contract(mock_a
         client.buscar_comunicacoes()
 
 
-def test_unconfirmed_petition_endpoint_is_disabled_without_auth_or_network(mock_auth_service):
-    sent = []
-    mock_http = httpx.Client(transport=httpx.MockTransport(lambda req: sent.append(req)))
-    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
-
-    req = PeticionamentoRequest(
-        numero_processo="70012345620248220001",
-        tipo_peticao="Manifestação",
-        sigla_tribunal="TJRO",
-        arquivo_base64="ZHVtbXk=",
-        nome_arquivo="manifestacao.pdf",
-        hash_sha256="abc123sha256",
-    )
-    with pytest.raises(ExperimentalServiceUnavailableError, match="nenhum protocolo foi transmitido"):
-        client.peticionar_intercorrente(req)
-    assert sent == []
-    mock_auth_service.ensure_valid_tokens.assert_not_called()
-
-
-def test_unconfirmed_process_endpoint_is_disabled_without_auth_or_network(mock_auth_service):
-    sent = []
-    mock_http = httpx.Client(transport=httpx.MockTransport(lambda req: sent.append(req)))
-    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
-    with pytest.raises(ExperimentalServiceUnavailableError, match="não foi confirmado"):
-        client.consultar_processo("70012345620248220001")
-    assert sent == []
-    mock_auth_service.ensure_valid_tokens.assert_not_called()
-
-
-def test_client_consultar_processo_is_disabled_without_network(mock_auth_service):
-    sent = []
-    mock_http = httpx.Client(transport=httpx.MockTransport(lambda req: sent.append(req)))
-    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
-
-    with pytest.raises(ExperimentalServiceUnavailableError):
-        client.consultar_processo("70012345620248220001")
-    assert sent == []
-
-
 def test_authenticated_request_timeout_propagates_without_success(mock_auth_service):
     mock_http = httpx.Client(
         transport=httpx.MockTransport(lambda req: (_ for _ in ()).throw(httpx.ReadTimeout("slow response")))
@@ -178,37 +138,3 @@ def test_authenticated_request_http_failures_raise(status, mock_auth_service):
     client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
     with pytest.raises(JusBrApiError, match=f"{status}"):
         client._authenticated_request("GET", "https://example.invalid")
-
-
-def test_client_get_success_and_context_manager(mock_auth_service):
-    def handle_request(req):
-        assert str(req.url) == "https://portaldeservicos.pdpj.jus.br/api/status"
-        return httpx.Response(200, json={"status": "online"}, headers={"content-type": "application/json"})
-
-    mock_http = httpx.Client(transport=httpx.MockTransport(handle_request))
-    with JusBrClient(auth_service=mock_auth_service, http_client=mock_http) as client:
-        res = client.get("status")
-        assert res == {"status": "online"}
-
-
-def test_client_get_401_retries_with_refresh(mock_auth_service):
-    attempts = 0
-
-    def handle_request(req):
-        nonlocal attempts
-        attempts += 1
-        if attempts == 1:
-            return httpx.Response(401, text="Unauthorized")
-        return httpx.Response(200, json={"ok": True}, headers={"content-type": "application/json"})
-
-    mock_auth_service.refresh.return_value = TokenResponse(
-        access_token="new_refreshed_jwt",
-        token_type="Bearer",
-        expires_in=300,
-    )
-    mock_http = httpx.Client(transport=httpx.MockTransport(handle_request))
-    client = JusBrClient(auth_service=mock_auth_service, http_client=mock_http)
-    res = client.get("/test")
-    assert res == {"ok": True}
-    assert attempts == 2
-    mock_auth_service.refresh.assert_called_once()

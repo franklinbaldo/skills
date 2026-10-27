@@ -11,22 +11,19 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, NoReturn
+from typing import Any
 
 import httpx
 from auth import AuthService, get_userinfo
-from errors import ExperimentalServiceUnavailableError, JusBrApiError, JusBrUnauthorizedError
+from errors import JusBrApiError, JusBrUnauthorizedError
 from models import (
     ComunicacaoResponse,
-    PeticionamentoRequest,
-    ProcessoConsultaItem,
     UsuarioJusBr,
 )
 
 logger = logging.getLogger(__name__)
 
 COMUNICA_API_BASE = "https://comunicaapi.pje.jus.br/api/v1"
-PDPJ_API_BASE = "https://portaldeservicos.pdpj.jus.br/api"
 
 
 class JusBrBearerAuth(httpx.Auth):
@@ -124,48 +121,6 @@ class JusBrClient:
             raise JusBrApiError(f"Erro na ComunicaAPI ({resp.status_code}): {resp.text}")
 
         return ComunicacaoResponse.model_validate(resp.json())
-
-    def consultar_processo(self, numero: str) -> ProcessoConsultaItem:
-        """Consulta experimental desabilitada até confirmação do contrato oficial.
-
-        O endpoint anteriormente presumido não consta da documentação oficial verificada.
-        Não envie credenciais nem dados processuais para um contrato não confirmado.
-        """
-        raise ExperimentalServiceUnavailableError(
-            "Consulta processual direta indisponível: o endpoint implementado anteriormente não foi confirmado "
-            "por contrato oficial. Use a consulta do Portal Jus.br ou uma API autorizada do CNJ."
-        )
-
-    def peticionar_intercorrente(self, request: PeticionamentoRequest) -> NoReturn:
-        """Peticionamento experimental desabilitado até contrato e ambiente serem confirmados.
-
-        A documentação do CNJ descreve o Portal de Serviços, Swagger de homologação e
-        callbacks assíncronos; ela não confirma o endpoint anteriormente presumido.
-        Esta operação não transmite a petição.
-        """
-        raise ExperimentalServiceUnavailableError(
-            "Peticionamento por API indisponível: o endpoint anteriormente implementado não foi confirmado "
-            "por contrato oficial, e nenhum protocolo foi transmitido ou gerado. Use o Portal de Serviços oficial."
-        )
-
-    def get(self, path: str, **params: Any) -> Any:
-        """Executa requisição GET autenticada na API base da PDPJ (descoberta de endpoints)."""
-        clean_path = path.lstrip("/")
-        url = f"{PDPJ_API_BASE}/{clean_path}"
-        tokens = self.auth.ensure_valid_tokens()
-        headers = {"Authorization": f"Bearer {tokens.access_token}", "Accept": "application/json"}
-        resp = self.http.get(url, params=params or None, headers=headers)
-        if resp.status_code == 401:
-            try:
-                new_tokens = self.auth.refresh()
-                headers["Authorization"] = f"Bearer {new_tokens.access_token}"
-                resp = self.http.get(url, params=params or None, headers=headers)
-            except Exception:
-                pass
-        if resp.status_code >= 400:
-            raise JusBrApiError(f"Erro na API da PDPJ ({resp.status_code}) em {url}: {resp.text}")
-        ctype = resp.headers.get("content-type", "")
-        return resp.json() if "json" in ctype else resp.text
 
     def close(self) -> None:
         self.http.close()

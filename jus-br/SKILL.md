@@ -1,224 +1,150 @@
-______________________________________________________________________
+---
+name: jus-br
+description: >-
+  Usa a sessão gov.br do usuário no Portal de Serviços da PDPJ/CNJ
+  (portaldeservicos.pdpj.jus.br) para ler autos de qualquer tribunal pela base
+  nacional, baixar peças, consultar comunicações (DJEN e Domicílio Judicial
+  Eletrônico) e preparar e protocolar petição intercorrente nos tribunais que o
+  Portal habilita. Use quando o processo não está no sistema da casa, para
+  conferir autos e intimações pela PDPJ, ou para peticionar pelo Portal. Não use
+  para tribunais fora do cadastro de peticionamento do Portal (ex.: TRF6): ali o
+  protocolo é no sistema do próprio tribunal.
+compatibility: >-
+  Python 3.11+ com metadados PEP 723 e `uv run`. Sessão no cofre do sistema
+  (Windows Credential Manager, macOS Keychain, Linux SecretService).
+---
 
-## name: jus-br description: >- Autenticação OIDC com PKCE para o SSO CNJ e consulta documentada à ComunicaAPI. Consulta processual direta e peticionamento por API permanecem experimentais e desabilitados. Implementa uma configuração candidata de autenticação federada via Keycloak com PKCE S256, armazenamento seguro no keyring e consulta de comunicações. Endpoints não confirmados ficam desabilitados; login real e cliente OIDC ainda dependem de validação end-to-end. compatibility: >- Requires Python 3.11+ with PEP 723 script metadata. Intended for Windows Credential Manager (WinVaultKeyring), macOS Keychain and Linux SecretService. Dependencies managed via `uv run`.
+# Jus.br / Portal de Serviços da PDPJ
 
-# Jus.br / PDPJ-Br — Acesso Unificado à Justiça Brasileira
+CLI `uv run jus-br/cli.py` sobre a API do **Portal de Serviços da PDPJ-Br**
+(`https://portaldeservicos.pdpj.jus.br/api`), com a sessão gov.br do próprio usuário.
 
-Esta skill implementa o cliente e a CLI de integração com a **Plataforma Digital do Poder Judiciário (PDPJ-Br)** e o portal unificado **Jus.br** (`https://www.jus.br`), mantido pelo Conselho Nacional de Justiça (CNJ).
+## O que foi verificado e como
 
-Ela permite autenticar via SSO CNJ e consultar comunicações na ComunicaAPI. A consulta processual direta
-e o peticionamento por API não são oferecidos operacionalmente enquanto seus contratos, permissões e
-ambientes não forem confirmados. Nenhuma dessas operações é simulada.
+Tudo abaixo foi conferido em 26/10/2026 com sessão real, não presumido:
 
-## Estado de suporte e contratos
+| Recurso                                                         | Estado                                                      | Fonte                                                                           |
+| --------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Login gov.br pelo favorito (`auth bookmarklet`)                 | funciona                                                    | sessão do cliente `portalexterno-frontend`, cerca de 8 h                        |
+| Login pelo callback `www.jus.br` (`auth login`)                 | falha                                                       | o site gasta o código antes da CLI: `Code not valid`                            |
+| Autos (`processo`)                                              | funciona                                                    | `GET /v2/processos/{cnj}` e `/documentos/{id}/binario`                          |
+| DJEN e Domicílio Eletrônico (`comunicacoes`)                    | funciona                                                    | `GET /v1/comunicacao` e `/v1/domicilio-eletronico/comunicacao`                  |
+| Cadastro e tipos por tribunal (`peticao tribunal`, `tipos`)     | funciona                                                    | `GET /v1/tribunais/{jtr}`, `/v1/tribunal/listar`, `/v1/tipo/documento/tribunal` |
+| Rascunho, anexos e protocolo (`peticao rascunho`, `protocolar`) | implementado conforme o Swagger; primeiro uso real pendente | `POST /v1/peticoes`, `/v1/peticoes/documentos`, `/v1/peticoes/{id}/protocolo`   |
 
-| Recurso                                                                  | Estado                      | Evidência/limite                                                                                                                                                                                 |
-| ------------------------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| SSO CNJ / token OIDC                                                     | Validado com dados reais    | Keycloak/realm `pje` integrado com sucesso via cliente público oficial `portalexterno-frontend` e suporte a importação de sessão assistida/bookmarklet no keyring.                               |
-| ComunicaAPI                                                              | Implementado como leitura   | O CNJ publica orientações de integração e bases distintas de homologação e produção. Consultas podem ser públicas; o CLI não exige nem envia token automaticamente.                              |
-| Consulta processual via `api.pdpj.jus.br/processos/{numero}`             | Experimental e desabilitada | A URL usada anteriormente não foi localizada em contrato oficial. O serviço documentado de Cabeçalho Processual tem Swagger e contrato próprios; esta CLI ainda não os implementa.               |
-| Petição intercorrente via `api.pdpj.jus.br/peticionamento/intercorrente` | Experimental e desabilitada | A documentação oficial descreve o Portal de Serviços, Swagger de homologação e callbacks assíncronos. Ela não comprova o path anterior. Nenhum documento é transmitido e nenhum recibo é criado. |
+O contrato está no Swagger de homologação: `uv run jus-br/openapi_discovery.py` acha os
+Swagger UI e `.../swagger-resources` lista os grupos (`/v2/api-docs?group=Interno`). Os
+valores de cada campo da petição foram conferidos contra petições reais do usuário
+(`peticao ver <id>`).
 
-Referências oficiais verificadas: [SSO da PDPJ-Br](https://docs.pdpj.jus.br/servicos-estruturantes/autenticacao-sso/), [orientações do CNJ para integração das APIs de Comunicações Processuais](https://www.cnj.jus.br/programas-e-acoes/processo-judicial-eletronico-pje/comunicacoes-processuais/orientacoes-aos-tribunais/), [Petição Intercorrente na PDPJ-Br](https://docs.pdpj.jus.br/servicos-negociais/portal-servicos/pet-intercorrente/) e [notas do Cabeçalho Processual](https://docs.pdpj.jus.br/servicos-estruturantes/release-notes/cabecalho-processual/). A documentação do SSO diz que o integrador deve solicitar cadastro de cliente ao CNJ e receber suas credenciais; não confirma que o `client_id=jusbr` sem segredo está habilitado para esse fluxo. A documentação de peticionamento aponta para o Swagger do Portal em homologação (`portalexterno-tribunais.stg.pdpj.jus.br/swagger-ui.html`) e para callbacks de resultado do tribunal.
+## A escolha consciente: cabeçalhos de navegador
 
-______________________________________________________________________
+A API de produção devolve **403 do servidor web** a chamadas que não se apresentam como
+o navegador do próprio Portal. `portal.py` envia os cabeçalhos dele
+(`CABECALHOS_NAVEGADOR`: `User-Agent`, `Referer`, `Sec-Fetch-*`). Isso funciona
+hoje, mas é frágil, e o CNJ pode mudar o bloqueio sem aviso. O caminho limpo é um cliente
+integrador cadastrado no CNJ, que a documentação do SSO manda pedir. Se o 403 voltar, a
+skill não deve insistir em contornar: registre e pare.
 
-## 1. Arquitetura de Autenticação Segura
-
-### Federação OIDC com PKCE S256
-
-A autenticação utiliza o Keycloak oficial da PDPJ/PJe:
-
-- **Realm Base**: `https://sso.cloud.pje.jus.br/auth/realms/pje`
-- **Authorization Endpoint**: `https://sso.cloud.pje.jus.br/auth/realms/pje/protocol/openid-connect/auth`
-- **Token Endpoint**: `https://sso.cloud.pje.jus.br/auth/realms/pje/protocol/openid-connect/token`
-- **Client ID**: `portalexterno-frontend` (cliente público OIDC oficial da PDPJ)
-- **Redirect URI padrão**: `https://portaldeservicos.pdpj.jus.br/consulta`
-- **Método PKCE**: `S256` (code_verifier de 64 bytes com hash SHA-256 base64url)
-
-### Callback e fluxo assistido de conexão
-
-O fluxo implementado conecta-se diretamente à infraestrutura da PDPJ/CNJ sem necessidade de scraping ou coleta de credenciais pelo agente:
-
-1. O comando `jusbr auth bookmarklet` fornece o conector em um clique para capturar a sessão ativa do navegador.
-2. O comando `jusbr auth login` gera o par PKCE (`code_verifier` e `code_challenge`) e um token anti-CSRF (`state`) direcionando para o portal oficial da PDPJ.
-3. O usuário realiza a autenticação com **Gov.br** (ouro/prata) ou **Certificado Digital (ICP-Brasil)**, incluindo qualquer MFA exigido diretamente nos servidores do governo.
-4. Ao concluir, o Keycloak deve redirecionar para `https://www.jus.br/callback?code=...&state=...` (evitando o script de recarregamento da raiz).
-5. O usuário copia a URL final da barra de endereços e a insere no prompt da CLI.
-6. A CLI valida o parâmetro `state` e tenta trocar o `authorization_code` no Token Endpoint via TLS. O sucesso depende da confirmação do cliente OIDC e do callback cadastrados no provedor.
-
-### Conector Bookmarklet (Captura Instantânea de Sessão)
-
-O conector Bookmarklet permite sincronizar a sessão de um navegador já autenticado (via Gov.br ou Certificado Digital) com o terminal, com **zero digitação de senhas**:
-
-1. **Instalação via Página Estática (Recomendada):**
-   Execute no terminal:
-
-   ```powershell
-   uv run jus-br/cli.py auth bookmarklet
-   ```
-
-   Isso abrirá a página estática local `bookmarklet.html`. Nela, basta arrastar o botão **⭐ ⚖️ Capturar Sessão Jus.br / PDPJ** diretamente para a barra de favoritos. A página também pode ser servida estaticamente via GitHub Pages.
-
-2. **Instalação Manual no Navegador:**
-   Crie um novo favorito no seu navegador (Chrome, Edge, Firefox, Brave) com o nome `⚖️ Conectar PDPJ` e cole o código abaixo no campo **URL**:
-
-   ```javascript
-   ```
-
-javascript:(function(){ try { var url = window.location.href; var host = window.location.hostname; if (host.indexOf('portaldeservicos.pdpj.jus.br') === -1 && host.indexOf('jus.br') === -1) { if (confirm('⚠️ Você NÃO está no Portal da PDPJ!
-
-Você está em: ' + url + '
-
-A página correta é:
-👉 https://portaldeservicos.pdpj.jus.br/consulta
-
-Deseja abrir a página correta agora?')) { window.location.href = 'https://portaldeservicos.pdpj.jus.br/consulta'; } return; } function concluir(token) { var clean = token.trim(); if (clean.toLowerCase().indexOf('bearer ') === 0) clean = clean.substring(7).trim(); var m = clean.match(/eyJ[a-zA-Z0-9\_-]+.[a-zA-Z0-9\_-]+.[a-zA-Z0-9\_-]+/); if (!m) return false; var jwt = m[0]; if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(jwt).then(function(){ alert('✓ Token da PDPJ copiado com sucesso!
-
-Retorne ao terminal PowerShell para concluir.'); }).catch(function(){ prompt('Copie o token abaixo (Ctrl+C) e retorne ao terminal:', jwt); }); } else { prompt('Copie o token abaixo (Ctrl+C) e retorne ao terminal:', jwt); } return true; } var token = null; if (window.keycloak && window.keycloak.token) token = window.keycloak.token; else if (window.kc && window.kc.token) token = window.kc.token; else if (window.__keycloak && window.__keycloak.token) token = window.__keycloak.token; if (!token) { var storages = [localStorage, sessionStorage]; for (var s = 0; s < storages.length; s++) { var st = storages[s]; for (var i = 0; i < st.length; i++) { var val = st.getItem(st.key(i)); if (val && val.indexOf('eyJ') !== -1) { var match = val.match(/eyJ\[a-zA-Z0-9_-\]+.\[a-zA-Z0-9_-\]+.\[a-zA-Z0-9_-\]+/); if (match) { token = match[0]; break; } } } if (token) break; } } if (!token && document.cookie && document.cookie.indexOf('eyJ') !== -1) { var cm = document.cookie.match(/eyJ\[a-zA-Z0-9_-\]+.\[a-zA-Z0-9_-\]+.\[a-zA-Z0-9_-\]+/); if (cm) token = cm[0]; } if (!token) { for (var k in window) { try { var obj = window[k]; if (!obj || typeof obj !== 'object') continue; if (typeof obj.token === 'string' && obj.token.indexOf('eyJ') === 0) { token = obj.token; break; } if (typeof obj.idToken === 'string' && obj.idToken.indexOf('eyJ') === 0) { token = obj.idToken; break; } if (typeof obj.accessToken === 'string' && obj.accessToken.indexOf('eyJ') === 0) { token = obj.accessToken; break; } for (var prop in obj) { try { var sub = obj[prop]; if (sub && typeof sub === 'object' && typeof sub.token === 'string' && sub.token.indexOf('eyJ') === 0) { token = sub.token; break; } } catch(e2){} } if (token) break; } catch(e1){} } } if (!token && window.ng) { try { var rootEl = document.querySelector('app-root') || document.querySelector('[ng-version]'); if (rootEl && typeof window.ng.getComponent === 'function') { var comp = window.ng.getComponent(rootEl); if (comp && comp.keycloak && comp.keycloak.token) token = comp.keycloak.token; } } catch(e3){} } if (token && concluir(token)) { return; } var digitado = prompt( '⚠️ O token da PDPJ está na memória de requisições da página.
-
-' + 'Como copiar em 5 segundos:
-' + '1. Pressione F12 -> aba Rede (Network)
-' + '2. Filtre por "userinfo" ou "consulta"
-' + '3. Clique na requisição -> aba Cabeçalhos (Headers)
-' + '4. Copie o valor de "Authorization" (Bearer eyJ...)
-
-' + 'Cole o token ou o cabeçalho Authorization aqui:' ); if (digitado) { if (!concluir(digitado)) { alert('❌ Não foi encontrado um token JWT válido na entrada informada.'); } } } catch(err) { alert('Erro no conector Jus.br: ' + err.message); } })();
-
-````
-
-3. **Como Utilizar no Dia a Dia:**
-
-   - Acesse o [Portal de Serviços da PDPJ](https://portaldeservicos.pdpj.jus.br) ou [Jus.br](https://www.jus.br) com seu certificado ou Gov.br.
-   - Clique no favorito: uma notificação visual verde aparecerá confirmando a cópia (ou ativará o monitor inteligente de cliques na tela).
-   - Retorne ao terminal PowerShell onde a CLI estiver aguardando: a sessão é detectada e gravada automaticamente no Windows Credential Manager.
-
-### Armazenamento Protegido (Windows Credential Manager / Keyring)
-
-- Os tokens nunca são gravados em arquivos de texto plano ou variáveis de ambiente.
-- O armazenamento utiliza o cofre de credenciais do sistema operacional (`keyring`).
-- **Suporte a Chunking no Windows (WinVaultKeyring)**: Para superar a limitação de 512 bytes da API Win32 `CredWriteW` (código de erro 1783), o módulo `credentials.py` divide os tokens em blocos transparentes (`chunk_0`, `chunk_1`, ...), preservando compatibilidade nativa sem corrupção.
-
-### Renovação Autônoma (Refresh Token)
-
-Uma vez autenticado, o agente renova o `access_token` silenciosamente chamando o Token Endpoint com `grant_type=refresh_token`, garantindo operação contínua sem necessidade de novo login interativo até a expiração da sessão do usuário.
-
-______________________________________________________________________
-
-## 2. Comandos da CLI (`jus-br/cli.py`)
-
-A CLI é executável diretamente com `uv run` utilizando metadados PEP 723:
+## Sessão
 
 ```powershell
-uv run jus-br/cli.py --help
-````
-
-### Autenticação (`auth`)
-
-```powershell
-# Abrir o assistente de Bookmarklet para captura instantânea de sessão
-uv run jus-br/cli.py auth bookmarklet
-
-# Iniciar login interativo via Gov.br / CNJ SSO (detecta tanto URL quanto Token do Bookmarklet)
-uv run jus-br/cli.py auth login
-
-# Salvar diretamente um token JWT ou export do bookmarklet no Keyring
-uv run jus-br/cli.py auth set-token --token "<token-jwt>"
-
-# Salvar par access token e refresh token capturados da sessão
-uv run jus-br/cli.py auth set-token --access "<access-jwt>" --refresh "<refresh-jwt>"
-
-# Verificar status da sessão e validade dos tokens
-uv run jus-br/cli.py auth status
-
-# Forçar renovação do access token via refresh token
-uv run jus-br/cli.py auth refresh
-
-# Encerrar sessão e remover tokens do cofre seguro
-uv run jus-br/cli.py auth logout
+uv run jus-br/cli.py auth bookmarklet   # abre a página do favorito e espera a captura
+uv run jus-br/cli.py auth status        # validade do token guardado
+uv run jus-br/cli.py auth logout        # encerra e apaga do cofre
 ```
 
-### Dados do Usuário (`usuario`)
+No Portal, já logado com o gov.br, clique no favorito **Conectar Sessão PDPJ**. Ele copia
+o token para a área de transferência e a CLI o grava no cofre. O código do favorito está em
+`bookmarklet.html`. O token é a sessão do usuário no PJe: nunca o cole em chat, issue ou log.
+
+## Autos e comunicações
 
 ```powershell
-# Obter perfil, CPF, nome e papeis do usuário autenticado
-uv run jus-br/cli.py usuario obter
+uv run jus-br/cli.py processo consultar 6009021-21.2026.4.06.3802      # capa, partes, movimentos, peças
+uv run jus-br/cli.py processo baixar <cnj> <id-da-peça> -o .cache/autos/<cnj>/peca.pdf
+uv run jus-br/cli.py comunicacoes domicilio 2026-10-20 2026-10-26       # janela de até 7 dias
+uv run jus-br/cli.py comunicacoes buscar --processo <cnj>              # ComunicaAPI pública
+uv run jus-br/cli.py api get v1/usuario                                 # rota do Swagger sem comando próprio
 ```
 
-### Consulta de Comunicações (`comunicacoes`)
+A família `v1/processos/*` responde "não encontrado" mesmo para processo existente; use
+os comandos acima, que vão pela `v2`. O texto extraído (`/texto`) nem sempre existe; o
+binário existe.
 
-Consulta a **ComunicaAPI** do CNJ para obter publicações de diários de justiça e intimações eletrônicas:
+## Petição intercorrente
+
+Escrita segue o padrão do `todos`: **sem `--confirmar` o comando só mostra o plano**.
 
 ```powershell
-# Buscar comunicações por tribunal (ex: TJRO, TJRS, TJSP, TRF1)
-uv run jus-br/cli.py comunicacoes buscar --tribunal TJRO --itens 10
-
-# Buscar publicações de um número de processo específico
-uv run jus-br/cli.py comunicacoes buscar --processo 7001234-56.2024.8.22.0001
-
-# Filtrar por data de disponibilização
-uv run jus-br/cli.py comunicacoes buscar --tribunal TJRO --data 2026-10-20
+uv run jus-br/cli.py peticao tribunal TRF1                 # recebe petição intercorrente? que arquivos?
+uv run jus-br/cli.py peticao tipos TRF1 --busca contestação
+uv run jus-br/cli.py peticao rascunho <cnj> contestacao-PDFA.pdf --tipo 533 `
+    --anexo anexo-1-PDFA.pdf --anexo anexo-2-PDFA.pdf --tipo-anexo <id> --confirmar
+uv run jus-br/cli.py peticao listar                        # confira o rascunho, também no Portal
+uv run jus-br/cli.py peticao protocolar <id> --confirmar   # não se desfaz
+uv run jus-br/cli.py peticao conferir <recibo-cnj>         # juntada, aguardando, recusada
+uv run jus-br/cli.py peticao excluir <id> --confirmar      # apaga rascunho não usado
 ```
 
-### Consulta Processual (`processo`)
+Regras que a CLI aplica antes de qualquer escrita:
 
-```powershell
-# Consultar metadados básicos de um processo na PDPJ
-uv run jus-br/cli.py processo consultar 7001234-56.2024.8.22.0001
-```
+1. **Tribunal habilitado.** Sem cadastro em `GET /v1/tribunais/{jtr}` com
+   `PETICAO_INTERCORRENTE`, para e manda peticionar no sistema do tribunal. O TRF6
+   (JTR 406) não está no cadastro, embora seus autos apareçam na consulta.
+2. **Tipo de documento do tribunal.** O `id` vem de `peticao tipos`, que muda por tribunal
+   ("Petição intercorrente" é 517 no TRF1 e "PETIÇÃO" é 90 no TJRO). Descrição ambígua é
+   erro, nunca palpite.
+3. **Arquivo aceito.** Extensão e tamanho conferidos contra `tiposArquivosAceitos` do
+   tribunal (PDF até 10 MB no TRF1). Converta para PDF/A antes, com a skill `convert-to-pdfa`.
+4. **Dados do processo saem dos autos.** Órgão julgador, distribuição, grau, classe,
+   partes e assuntos vêm de `GET /v2/processos/{cnj}` (`peticao_montagem.py`); nada é
+   digitado.
+5. **Rascunho antes de protocolo.** O rascunho fica em "Minhas petições" para conferência
+   humana; `protocolar` mostra os documentos e exige `--confirmar`. Falha no meio do
+   envio deixa o rascunho: confira em `peticao listar` antes de repetir.
 
-### Exploração de Endpoints (`api`)
+O primeiro rascunho real ainda não foi criado por esta CLI. No primeiro uso, crie o
+rascunho, confira no Portal que peça, anexos, tipos e partes estão certos, e só então
+protocole. Se o Portal recusar algum campo, a mensagem dele vem no erro; corrija
+`peticao_montagem.py` e registre o caso no postmortem.
 
-Permite inspecionar endpoints REST da base oficial da PDPJ (`https://portaldeservicos.pdpj.jus.br/api`) com renovação transparente em caso de 401:
+## Arquivos
 
-```powershell
-# Consultar endpoint relativo na API da PDPJ
-uv run jus-br/cli.py api get "/usuario/perfil"
-```
+| Arquivo                            | Papel                                                              |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| `cli.py`                           | reúne os grupos de comandos                                        |
+| `cli_auth.py`, `captura_sessao.py` | sessão: favorito, importação, status, renovação                    |
+| `cli_consultas.py`                 | perfil, comunicações, Domicílio Eletrônico, `api get`              |
+| `cli_processo.py`                  | autos e peças                                                      |
+| `cli_peticao.py`                   | cadastro, tipos, rascunho, protocolo                               |
+| `portal.py`                        | cliente HTTP do Portal (cabeçalhos, renovação em 401, envio ao S3) |
+| `peticao_montagem.py`              | monta a petição a partir dos autos, sem rede                       |
+| `auth.py`, `credentials.py`        | SSO (Keycloak `pje`) e cofre com blocos de 512 bytes               |
+| `client.py`                        | perfil (`userinfo`) e ComunicaAPI pública                          |
+| `openapi_discovery.py`             | inventário dos Swagger oficiais                                    |
 
-### Peticionamento Intercorrente (`peticionamento`)
+Testes offline: `uv run --with pytest --with cyclopts --with httpx --with keyring --with pydantic --with rich -- pytest -q jus-br/tests`.
 
-**Não disponível para transmissão por esta skill.** O comando abaixo permanece apenas como aviso de compatibilidade e encerra com código 2. Ele não lê o arquivo, não autentica, não envia requisições e não produz protocolo. A documentação oficial descreve o serviço Portal de Serviços e seu Swagger de homologação, mas não confirma o endpoint REST que havia sido usado nesta implementação.
+## Segurança
 
-```powershell
-# Submeter petição intercorrente ao barramento da PDPJ
-uv run jus-br/cli.py peticionamento intercorrente `
-  --processo "7001234-56.2024.8.22.0001" `
-  --tribunal "TJRO" `
-  --tipo "Manifestação" `
-  --descricao "Manifestação sobre laudo pericial" `
-  --arquivo "minutas/2026-10-21-manifestacao.pdf"
-```
-
-Use o Portal de Serviços oficial do CNJ para protocolar. Quando o contrato oficial for implementado, a resposta de recebimento do Portal e a confirmação ou recusa assíncrona do tribunal deverão ser representadas como estados distintos.
-
-______________________________________________________________________
-
-## 3. Diretrizes de Segurança e Confiabilidade Forense
-
-1. **Contratos de resposta explícitos:** A resposta de token exige `access_token`, `token_type` e `expires_in` válido; a resposta da ComunicaAPI exige `status=success`, `count` e `items`. JSON incompleto ou com status de erro não vira sessão ou lista vazia.
-2. **Tolerância Zero a Dados Fictícios:** O cliente e a CLI nunca simulam recibos, números de protocolo ou dados processuais. Consulta de processo e peticionamento por API lançam `ExperimentalServiceUnavailableError` antes de autenticar ou fazer rede.
-3. **Nunca Expor Credenciais:** Não faça log, print ou commit de `access_token`, `refresh_token`, `authorization_code` ou `code_verifier`.
-4. **Validação Estrita de Callback:** Só aceita URL absoluta HTTPS em `www.jus.br/callback`, com `state` e `code` únicos, sem fragmento, e `state` idêntico ao da sessão.
-5. **Hash local:** Nenhuma verificação ponta a ponta de integridade de documentos é anunciada ou realizada. SHA-256 local apenas identifica bytes locais, salvo confirmação por contrato remoto.
-6. **Persistência no Keyring:** Tokens são escritos e lidos de volta numa geração isolada antes de atualizar o ponteiro ativo. Em falha de persistência, o erro é reportado; se o estado do ponteiro for incerto, dados candidatos são preservados para evitar destruir a única sessão válida. Chunks têm no máximo 512 bytes UTF-8.
-7. **Renovação:** Quando a resposta de refresh não rotacionar `refresh_token`, a credencial anterior é mantida. A atualização em keyring só ocorre depois de validar a nova geração.
-8. **Tratamento de 401 Unauthorized:** O cliente tenta renovar uma vez após 401. Se a sessão estiver revogada, orienta novo login.
-9. **Logout:** A remoção local é validada e pode falhar com erro explícito. O comando só informa revogação remota confirmada para HTTP 200/204; em outro caso informa que não houve confirmação remota.
-
-______________________________________________________________________
+- Nunca registre, imprima ou publique `access_token`, `refresh_token`, código de
+  autorização ou o cabeçalho `Authorization`.
+- O envio ao repositório (URL pré-assinada do S3) vai sem o Bearer da PDPJ.
+- Nenhum recibo, protocolo ou dado processual é simulado: o que a CLI mostra veio do Portal.
+- Rascunho, protocolo e exclusão só com `--confirmar`, e o protocolo é decisão de quem
+  assina a peça.
 
 ## Real-use postmortem
 
-- **2026-10-21 (Descoberta do client público da PDPJ e validação end-to-end):**
-  - **Evidência:** O usuário capturou a chamada real de rede da SPA do Portal de Serviços da PDPJ (`https://portaldeservicos.pdpj.jus.br/consulta`). A troca de token usa `client_id=portalexterno-frontend`, `redirect_uri=https://portaldeservicos.pdpj.jus.br/consulta` e `grant_type=authorization_code`. O token JWT emitido pelo SSO contém claims corporativas completas (`corporativo` com OAB, CPF e vínculo).
-  - **Causa raiz:** O cliente `jusbr` do portal WordPress `www.jus.br` é confidencial (requer segredo de backend), enquanto `portalexterno-frontend` é o cliente público oficial da PDPJ/CNJ compatível com PKCE e SPAs.
-  - **Solução implementada:** Atualizado o cliente padrão para `portalexterno-frontend`, adicionada a extração automática de OAB no perfil do usuário, e integrado o fluxo híbrido (Bookmarklet assistido + importação atômica no keyring do Windows).
-  - **Validação com dados reais:** Execução bem-sucedida de `auth status` e `usuario obter` com exibição de nome, CPF mascarado e OAB, além de consulta em tempo real na ComunicaAPI com `comunicacoes buscar --tribunal TJRO` retornando publicações ativas.
+- **2026-10-21:** o cliente público do Portal é `portalexterno-frontend`; o favorito
+  captura a sessão e `usuario obter` confirmou nome, CPF mascarado e OAB.
+- **2026-10-26:** login gov.br pelo favorito funcionou; `auth login` pelo callback do
+  `www.jus.br` falhou com `Code not valid`. A API de produção só respondeu com os
+  cabeçalhos do navegador (403 do servidor web sem eles). Varredura dos 61 `GET` do
+  Swagger mapeou o que responde. Uma contestação ao TRF6 não pôde ir pelo Portal: o
+  tribunal não está no cadastro de peticionamento e o protocolo fica no eproc.
 
-Após qualquer uso material desta skill, realize uma breve auto-avaliação antes de encerrar a tarefa:
-avalie se o roteamento foi correto, se a skill melhorou, foi neutra ou degradou o resultado, qual
-instrução concreta fez diferença e eventuais atritos ou contornos necessários. O sucesso de rotina
-permanece efêmero. Havendo aprendizado acionável, pesquise as issues de `franklinbaldo/skills` e acrescente
-evidências a uma issue existente ou abra uma issue de feedback devidamente saneada. Nunca publique
-segredos, credenciais, dados pessoais ou fatos sigilosos.
+Após uso material, avalie se o roteamento foi correto, se a skill ajudou ou atrapalhou e
+que atrito houve. Havendo aprendizado acionável, registre em issue de `franklinbaldo/skills`,
+sem segredos, dados pessoais ou fatos sigilosos.

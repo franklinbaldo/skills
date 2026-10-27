@@ -46,7 +46,3 @@ class JusBrApiError(JusBrError):
 
 class JusBrUnauthorizedError(JusBrApiError):
     """Acesso não autorizado às APIs da PDPJ (HTTP 401)."""
-
-
-class ExperimentalServiceUnavailableError(JusBrApiError):
-    """Endpoint não habilitado: contrato/ambiente ainda não foi confirmado oficialmente."""

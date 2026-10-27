@@ -26,9 +26,10 @@ from models import ComunicacaoItem, ComunicacaoResponse, TokenResponse, UsuarioJ
 @pytest.fixture
 def mock_client_and_auth():
     with (
-        patch("cli.AuthService") as mock_auth_cls,
-        patch("cli.JusBrClient") as mock_client_cls,
-        patch("cli.CredentialStore") as mock_store_cls,
+        patch("cli_comum.AuthService") as mock_auth_cls,
+        patch("cli_comum.JusBrClient") as mock_client_cls,
+        patch("cli_comum.CredentialStore") as mock_store_cls,
+        patch("cli_comum.PortalClient") as mock_portal_cls,
     ):
         mock_auth = MagicMock()
         mock_client = MagicMock()
@@ -37,11 +38,14 @@ def mock_client_and_auth():
         mock_auth_cls.return_value = mock_auth
         mock_client_cls.return_value = mock_client
         mock_store_cls.return_value = mock_store
+        mock_portal = MagicMock()
+        mock_portal_cls.return_value = mock_portal
 
         yield {
             "auth": mock_auth,
             "client": mock_client,
             "store": mock_store,
+            "portal": mock_portal,
         }
 
 
@@ -129,45 +133,6 @@ def test_cli_comunicacoes_buscar(mock_client_and_auth, capsys):
     assert "TJRO" in captured.out
 
 
-def test_cli_processo_consultar_never_presents_unconfirmed_endpoint_as_supported(mock_client_and_auth, capsys):
-    from errors import ExperimentalServiceUnavailableError
-
-    mock_client_and_auth["client"].consultar_processo.side_effect = ExperimentalServiceUnavailableError(
-        "endpoint não confirmado"
-    )
-    with pytest.raises(SystemExit):
-        app(["processo", "consultar", "70012345620248220001"], exit_on_error=False, result_action=None)
-    captured = capsys.readouterr()
-    assert "endpoint não confirmado" in captured.out
-    assert "Vara de Fazenda" not in captured.out
-
-
-def test_cli_peticionamento_is_disabled_without_reading_or_sending_file(mock_client_and_auth, tmp_path, capsys):
-    dummy_pdf = tmp_path / "peticao.pdf"
-    dummy_pdf.write_bytes(b"%PDF-1.4 dummy")
-    with patch("pathlib.Path.read_bytes", side_effect=AssertionError("file must not be read")):
-        with pytest.raises(SystemExit) as exc:
-            app(
-                [
-                    "peticionamento",
-                    "intercorrente",
-                    "--processo",
-                    "70012345620248220001",
-                    "--tribunal",
-                    "TJRO",
-                    "--arquivo",
-                    str(dummy_pdf),
-                ],
-                exit_on_error=False,
-                result_action=None,
-            )
-    captured = capsys.readouterr()
-    assert exc.value.code == 2
-    assert "nenhum arquivo foi lido ou transmitido" in captured.out
-    assert "nenhum protocolo foi gerado" in captured.out
-    mock_client_and_auth["client"].peticionar_intercorrente.assert_not_called()
-
-
 def test_cli_auth_set_token(mock_client_and_auth, capsys):
     tokens = TokenResponse(access_token="sample_jwt_123", token_type="Bearer", expires_in=3600)
     mock_client_and_auth["auth"].import_session.return_value = tokens
@@ -190,7 +155,7 @@ def test_cli_auth_bookmarklet(mock_client_and_auth, capsys):
         name="Usuario Bookmarklet",
         cpf="12345678900",
     )
-    with patch("webbrowser.open") as mock_open, patch("cli._aguardar_callback_url", return_value="sample_jwt_123"):
+    with patch("webbrowser.open") as mock_open, patch("cli_auth._aguardar_callback_url", return_value="sample_jwt_123"):
         app(["auth", "bookmarklet"], exit_on_error=False, result_action=None)
         captured = capsys.readouterr()
         assert "Conector Bookmarklet Jus.br" in captured.out
@@ -222,8 +187,8 @@ def test_cli_auth_set_token_access_and_refresh(mock_client_and_auth, capsys):
 
 
 def test_cli_api_get(mock_client_and_auth, capsys):
-    mock_client_and_auth["client"].get.return_value = {"status": "ok", "items": [1, 2, 3]}
-    app(["api", "get", "status"], exit_on_error=False, result_action=None)
+    mock_client_and_auth["portal"].get.return_value = {"status": "ok", "items": [1, 2, 3]}
+    app(["api", "get", "v1/usuario"], exit_on_error=False, result_action=None)
     captured = capsys.readouterr()
     assert "ok" in captured.out
-    mock_client_and_auth["client"].get.assert_called_once_with("status")
+    mock_client_and_auth["portal"].get.assert_called_once_with("v1/usuario")

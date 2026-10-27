@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -116,36 +116,6 @@ class ComunicacaoResponse(BaseModel):
     message: str | None = None
     count: int = Field(ge=0)
     items: list[ComunicacaoItem]
-
-
-class ProcessoConsultaItem(BaseModel):
-    """Dados consolidados de processo judicial retornado na consulta."""
-
-    model_config = ConfigDict(extra="ignore")
-
-    numero: str
-    tribunal: str | None = None
-    orgao_julgador: str | None = None
-    classe: str | None = None
-    assuntos: list[str] = Field(default_factory=list)
-    data_ajuizamento: str | None = None
-    partes: list[dict[str, Any]] = Field(default_factory=list)
-    movimentacoes: list[dict[str, Any]] = Field(default_factory=list)
-
-
-class PeticionamentoRequest(BaseModel):
-    """Estrutura para protocolo de petição inicial ou intercorrente."""
-
-    model_config = ConfigDict(extra="ignore")
-
-    numero_processo: str
-    tipo_peticao: str
-    sigla_tribunal: str
-    descricao: str | None = None
-    arquivo_base64: str
-    nome_arquivo: str
-    hash_sha256: str | None = None
-    documentos_anexos: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class PeticionamentoResponse(BaseModel):
