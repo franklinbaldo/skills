@@ -63,6 +63,7 @@ def processo_consultar(
     capa.add_row("Assunto", ", ".join(a.get("descricao", "") for a in tram.get("assunto", [])) or "-")
     capa.add_row("Ajuizamento", str(tram.get("dataHoraAjuizamento", "-")))
     capa.add_row("Valor da causa", str(tram.get("valorAcao", "-")))
+    capa.add_row("Aceita petição pelo Portal", {True: "sim", False: "não"}.get(tram.get("permitePeticionar"), "-"))
     for parte in tram.get("partes", []):
         advs = ", ".join(r["nome"] for r in parte.get("representantes", []))
         capa.add_row(f"Polo {parte.get('polo', '').lower()}", parte["nome"] + (f" — {advs}" if advs else ""))
@@ -78,7 +79,7 @@ def processo_consultar(
     pecas = Table(title="Peças (use o id em `processo baixar`)", border_style="green")
     for coluna in ("Seq.", "Juntada", "Tipo", "Nome", "Id"):
         pecas.add_column(coluna)
-    for doc in proc.get("documentos", []):
+    for doc in tram.get("documentos") or proc.get("documentos") or []:
         pecas.add_row(
             str(doc.get("sequencia", "")),
             str(doc.get("dataHoraJuntada", "")),

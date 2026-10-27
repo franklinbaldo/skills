@@ -82,12 +82,17 @@ def montar_rascunho(processo: dict, id_tipo_documento: int) -> dict[str, Any]:
     tribunal = tramitacao.get("tribunal") or orgao.get("tribunal") or {}
     classe = (tramitacao.get("classe") or [{}])[0]
     grau = tramitacao.get("grau") or {}
+    if tramitacao.get("permitePeticionar") is False:
+        raise MontagemError(
+            "O processo não aceita petição pelo Portal (permitePeticionar=false): use o sistema do tribunal."
+        )
     if not orgao.get("id") or not distribuicao.get("dataHora"):
         raise MontagemError("Os autos não trazem órgão julgador e data de distribuição: confira o processo no Portal.")
     return {
         "tipo": "A",
         "sigiloso": "NAO",
         "numeroProcesso": processo["numeroProcesso"],
+        "idFonteDadosCodex": tramitacao.get("idFonteDadosCodex"),
         "siglaTribunal": tribunal.get("sigla") or processo.get("siglaTribunal"),
         "jtrTribunal": tribunal.get("jtr"),
         "siglaSegmentoJustica": SEGMENTOS.get(tribunal.get("segmento", ""), tribunal.get("segmento")),

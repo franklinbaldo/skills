@@ -42,15 +42,17 @@ PROCESSO = {
             {"polo": "PASSIVO", "nome": "AUTARQUIA RE", "documentosPrincipais": [{"numero": "1", "tipo": "CNPJ"}]},
         ],
         "movimentos": [{"dataHora": "2026-09-01T10:00:00", "descricao": "Citação"}],
+        "idFonteDadosCodex": 2362,
+        "permitePeticionar": True,
+        "documentos": [
+            {
+                "sequencia": 1,
+                "nome": "inicial.pdf",
+                "tipo": {"nome": "PETIÇÃO"},
+                "hrefBinario": "/processos/1000001-00.2026.4.01.4100/documentos/abc-uuid/binario",
+            }
+        ],
     },
-    "documentos": [
-        {
-            "sequencia": 1,
-            "nome": "inicial.pdf",
-            "tipo": {"nome": "PETIÇÃO"},
-            "hrefBinario": "/processos/1000001-00.2026.4.01.4100/documentos/abc-uuid/binario",
-        }
-    ],
 }
 CADASTRO = {
     "codigoJTR": "401",
@@ -68,13 +70,19 @@ TIPOS = [
 def test_rascunho_takes_every_field_from_the_records():
     dto = montar_rascunho(PROCESSO, 533)
     assert dto["tipo"] == "A" and dto["idTipoDocumento"] == 533
-    assert dto["codOrgaoJulgadorCorporativo"] == 123
+    assert dto["codOrgaoJulgadorCorporativo"] == 123 and dto["idFonteDadosCodex"] == 2362
     assert dto["distribuidoEm"] == "2026-08-14 16:33:14"
     assert dto["siglaSegmentoJustica"] == "JCF" and dto["jtrTribunal"] == "401"
     assert dto["numeroGrau"] == "1" and dto["siglaGrau"] == "G1"
     assert [p["modalidadePolo"] for p in dto["peticaoPartes"]] == ["AT", "PA"]
     assert dto["peticaoPartes"][0]["advogados"][0]["pessoa"]["nome"] == "ADVOGADA FICTICIA"
     assert dto["peticaoAssuntos"] == [{"codigo": 5922, "nome": "Retido na fonte"}]
+
+
+def test_rascunho_refuses_process_that_does_not_accept_petitions():
+    fechado = {**PROCESSO, "tramitacaoAtual": {**PROCESSO["tramitacaoAtual"], "permitePeticionar": False}}
+    with pytest.raises(MontagemError, match="permitePeticionar"):
+        montar_rascunho(fechado, 533)
 
 
 def test_rascunho_refuses_records_without_court_or_distribution():
