@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """Enforce ~5k tokens (20,000 UTF-8 bytes) on new or modified source files."""
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 LIMIT = 20_000
 

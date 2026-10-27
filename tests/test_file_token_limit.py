@@ -1,10 +1,14 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """Black-box tests for the changed-files-only size gate."""
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 CHECKER = Path(__file__).resolve().parents[1] / "scripts/check_file_token_limit.py"
 

@@ -1,0 +1,13 @@
+.tokens/
+*.token
+*.tokens
+*.key
+*.env
+*.env.*
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.log
+__pycache__/
+*.pyc
+.pytest_cache/
