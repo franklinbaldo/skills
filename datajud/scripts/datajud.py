@@ -592,6 +592,9 @@ def consultar(entrada: ConsultaLote) -> dict[str, ProcessoConsultado]:
                         alvo[registro.numero].registros.append(registro)
                 for num, erro in falhas:
                     alvo[num].falhas.append(FalhaIndice(indice=i, erro=erro))
+            except (RuntimeError, ValidationError) as e:
+                for num in ds:
+                    alvo[num].falhas.append(FalhaIndice(indice=i, erro=str(e)[:200]))
     for item in alvo.values():
         item.registros.sort(key=lambda r: (r.tribunal, r.grau or ""))
     return alvo
