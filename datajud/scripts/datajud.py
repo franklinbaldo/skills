@@ -140,6 +140,14 @@ def _guardar(tribunal, body, resposta=None, *, erro=None):
         raise RuntimeError(f"falha ao persistir a observacao no SQLite: {e}") from e
 
 
+class FalhaHTTPTransitoria(RuntimeError):
+    """Falha HTTP temporaria apos esgotar as tentativas."""
+
+    def __init__(self, codigo, mensagem):
+        super().__init__(mensagem)
+        self.codigo = codigo
+
+
 def _espera_retry_after(cabecalhos, espera):
     """Respeita a janela informada pelo CNJ, limitada a 120 segundos."""
     valor = cabecalhos.get("Retry-After") if cabecalhos else None
@@ -149,10 +157,12 @@ def _espera_retry_after(cabecalhos, espera):
         except (ValueError, TypeError):
             try:
                 data = email.utils.parsedate_to_datetime(valor)
+                if data.tzinfo is None:
+                    data = data.replace(tzinfo=datetime.timezone.utc)
                 segundos = (data - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
             except (ValueError, TypeError, OverflowError):
                 segundos = espera
-        return max(0, min(120, segundos))
+        return min(120, max(espera, segundos))
     return espera
 
 
@@ -217,6 +227,8 @@ def search(body, tribunal=DEFAULT_TRIBUNAL, timeout=90, tentativas=5):
                     "HTTP 401: a chave publica provavelmente foi trocada pelo CNJ. "
                     "Pegue a atual em https://datajud-wiki.cnj.jus.br/api-publica/acesso/ "
                     "e atualize APIKEY no topo deste script.") from e
+            if e.code in (429, 500, 502, 503, 504):
+                raise FalhaHTTPTransitoria(e.code, ultimo_erro) from e
             raise RuntimeError(ultimo_erro) from e
         except (urllib.error.URLError, TimeoutError) as e:
             ultimo_erro = f"rede: {e}"
@@ -567,10 +579,7 @@ def consultar(entrada: ConsultaLote) -> dict[str, ProcessoConsultado]:
             except (RuntimeError, ValidationError) as e:
                 # Uma falha em 100 numeros nao deve invalidar os 100:
                 # tente partes menores, mas sem recursao ilimitada.
-                if subdividir and len(numeros) > 25 and (
-                    "HTTP 429" in str(e) or "HTTP 504" in str(e)
-                    or "HTTP 503" in str(e) or "HTTP 502" in str(e)
-                ):
+                if subdividir and len(numeros) > 25 and isinstance(e, FalhaHTTPTransitoria):
                     registros, falhas = [], []
                     for k in range(0, len(numeros), 25):
                         encontrados, erros = consultar_parte(numeros[k:k + 25], False)
