@@ -183,3 +183,38 @@ def test_mcp_so_origem_consulta_so_o_tribunal_de_origem(monkeypatch, tmp_path, c
     vistos.clear()
     mod.app(["processo", "0000774-14.2019.4.01.4102", "--so-origem", "--json"], result_action="return_value")
     assert vistos == ["trf1"], "a CLI da MCP aceita --so-origem, como a SKILL.md promete"
+
+
+def test_recuperacao_parcial_http_500(monkeypatch):
+    """Tres quartos respondem; apenas os 25 restantes sao inconclusivos."""
+    numeros = [f"{i:07d}0020248220001" for i in range(100)]
+    chamadas = []
+
+    def search(body, tribunal="tjro", **_):
+        parte = body["query"]["terms"]["numeroProcesso"]
+        chamadas.append(len(parte))
+        if len(parte) == 100 or parte[0] == numeros[75]:
+            raise dj.FalhaHTTPTransitoria(500, "HTTP 500: indisponivel")
+        hits = [_hit(n, "tjro") for n in parte]
+        return {"hits": {"total": {"value": len(hits)}, "hits": hits}}
+
+    monkeypatch.setattr(dj, "search", search)
+    resultado = dj.consultar(dj.ConsultaLote(numeros=numeros, so_origem=True, trabalhadores=1))
+    assert chamadas == [100, 25, 25, 25, 25]
+    assert sum(bool(x.registros) for x in resultado.values()) == 75
+    assert sum(bool(x.falhas) for x in resultado.values()) == 25
+    assert all(x.falhas[0].indice == "tjro" for x in list(resultado.values())[75:])
+    assert all(not x.falhas for x in list(resultado.values())[:75])
+
+
+def test_retry_after_datas_e_limites():
+    from email.utils import format_datetime
+    from datetime import datetime, timedelta, timezone
+
+    futuro = datetime.now(timezone.utc) + timedelta(seconds=80)
+    assert 60 <= dj._espera_retry_after({"Retry-After": format_datetime(futuro)}, 2) <= 81
+    sem_fuso = futuro.strftime("%a, %d %b %Y %H:%M:%S")
+    assert 60 <= dj._espera_retry_after({"Retry-After": sem_fuso}, 2) <= 81
+    assert dj._espera_retry_after({"Retry-After": "-10"}, 2) == 2
+    assert dj._espera_retry_after({"Retry-After": "99999"}, 2) == 120
+    assert dj._espera_retry_after({"Retry-After": "invalido"}, 2) == 2
