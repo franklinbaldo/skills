@@ -41,6 +41,8 @@ Rode `python datajud.py -h` ou `python datajud.py <modo> -h` para detalhes.
 """
 
 import json
+import email.utils
+import datetime
 import re
 import sqlite3
 import sys
@@ -138,6 +140,22 @@ def _guardar(tribunal, body, resposta=None, *, erro=None):
         raise RuntimeError(f"falha ao persistir a observacao no SQLite: {e}") from e
 
 
+def _espera_retry_after(cabecalhos, espera):
+    """Respeita a janela informada pelo CNJ, limitada a 120 segundos."""
+    valor = cabecalhos.get("Retry-After") if cabecalhos else None
+    if valor:
+        try:
+            segundos = float(valor)
+        except (ValueError, TypeError):
+            try:
+                data = email.utils.parsedate_to_datetime(valor)
+                segundos = (data - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+            except (ValueError, TypeError, OverflowError):
+                segundos = espera
+        return max(0, min(120, segundos))
+    return espera
+
+
 def search(body, tribunal=DEFAULT_TRIBUNAL, timeout=90, tentativas=5):
     url = _endpoint(tribunal)
     data = json.dumps(body).encode("utf-8")
@@ -190,8 +208,8 @@ def search(body, tribunal=DEFAULT_TRIBUNAL, timeout=90, tentativas=5):
                 pass
             ultimo_erro = f"HTTP {e.code}: {corpo}"
             _guardar(tribunal, body, erro=ultimo_erro)
-            if e.code == 429 and n < tentativas:
-                time.sleep(espera)
+            if e.code in (429, 500, 502, 503, 504) and n < tentativas:
+                time.sleep(_espera_retry_after(e.headers, espera))
                 espera = min(espera * 2, 30)
                 continue
             if e.code == 401:
@@ -534,25 +552,46 @@ def consultar(entrada: ConsultaLote) -> dict[str, ProcessoConsultado]:
 
     def rodar(tarefa):
         i, ds = tarefa
-        d = search(RequisicaoBusca(size=LOTE * 10, query={"terms": {"numeroProcesso": ds}}).bruto(),
-                   tribunal=i)
-        hits = d.get("hits", {}).get("hits", [])
-        total = d.get("hits", {}).get("total", {}).get("value", 0)
-        if total > len(hits):
-            raise RuntimeError(f"resposta truncada em {i}: {len(hits)} de {total}")
-        return [Registro.model_validate(h) for h in hits]
+
+        def consultar_parte(numeros, subdividir=True):
+            try:
+                d = search(RequisicaoBusca(
+                    size=len(numeros) * 10,
+                    query={"terms": {"numeroProcesso": numeros}},
+                ).bruto(), tribunal=i)
+                hits = d.get("hits", {}).get("hits", [])
+                total = d.get("hits", {}).get("total", {}).get("value", 0)
+                if total > len(hits):
+                    raise RuntimeError(f"resposta truncada em {i}: {len(hits)} de {total}")
+                return [Registro.model_validate(h) for h in hits], []
+            except (RuntimeError, ValidationError) as e:
+                # Uma falha em 100 numeros nao deve invalidar os 100:
+                # tente partes menores, mas sem recursao ilimitada.
+                if subdividir and len(numeros) > 25 and (
+                    "HTTP 429" in str(e) or "HTTP 504" in str(e)
+                    or "HTTP 503" in str(e) or "HTTP 502" in str(e)
+                ):
+                    registros, falhas = [], []
+                    for k in range(0, len(numeros), 25):
+                        encontrados, erros = consultar_parte(numeros[k:k + 25], False)
+                        registros.extend(encontrados)
+                        falhas.extend(erros)
+                    return registros, falhas
+                return [], [(n, str(e)[:200]) for n in numeros]
+
+        return consultar_parte(ds)
 
     with ThreadPoolExecutor(entrada.trabalhadores) as pool:
         futuros = {pool.submit(rodar, t): t for t in tarefas}
         for futuro in as_completed(futuros):
             i, ds = futuros[futuro]
             try:
-                for registro in futuro.result():
+                registros, falhas = futuro.result()
+                for registro in registros:
                     if registro.numero in alvo:
                         alvo[registro.numero].registros.append(registro)
-            except (RuntimeError, ValidationError) as e:
-                for num in ds:
-                    alvo[num].falhas.append(FalhaIndice(indice=i, erro=str(e)[:200]))
+                for num, erro in falhas:
+                    alvo[num].falhas.append(FalhaIndice(indice=i, erro=erro))
     for item in alvo.values():
         item.registros.sort(key=lambda r: (r.tribunal, r.grau or ""))
     return alvo
