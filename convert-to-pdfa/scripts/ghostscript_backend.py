@@ -1,3 +1,6 @@
+# /// script
+# requires-python = ">=3.11"
+# ///
 """Find and run Ghostscript for PDF/A conversion: native, Scoop shim, or WSL.
 
 Holds everything that depends on where Ghostscript lives: backend choice, the
