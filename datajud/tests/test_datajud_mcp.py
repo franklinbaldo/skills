@@ -5,7 +5,7 @@
 """Testes das duas propriedades que a superfície do DataJud precisa manter.
 
 Nenhum toca a rede: `datajud_processo` recebe a resposta do Elasticsearch por
-monkeypatch em `dj.search`.
+monkeypatch em `datajud_api.search`.
 """
 
 from __future__ import annotations
@@ -17,9 +17,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+import datajud_api as dj_api  # noqa: E402
 import datajud_mcp as mod  # noqa: E402
-
-import datajud as dj  # noqa: E402
 
 
 def _hit(grau: str, movimentos: list[dict]) -> dict:
@@ -49,7 +48,7 @@ def _responder(monkeypatch, hits: list[dict]) -> None:
         achados = hits if tribunal == "tjro" else []
         return {"hits": {"total": {"value": len(achados)}, "hits": achados}}
 
-    monkeypatch.setattr(dj, "search", search)
+    monkeypatch.setattr(dj_api, "search", search)
 
 
 def test_ultimo_marco_desempata_por_segundo_entre_graus(monkeypatch):

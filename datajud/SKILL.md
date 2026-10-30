@@ -198,6 +198,8 @@ Regras que o desenho garante:
   é gerado dele. A resposta da API também tem modelos (`datajud_modelos.py`),
   com campo extra aceito: campo novo do CNJ não derruba a consulta.
 - Triggers impedem UPDATE e DELETE em todas as tabelas.
+- Módulos da CLI: `datajud_api` (HTTP e `search`, que os testes simulam),
+  `_cnj`, `_formatos`, `_saidas`, `_consulta` (`processo`, `lote`), `_comandos`.
 
 Banco de versão anterior (#125, documento inteiro por versão; #128, primeira
 versão relacional): na primeira abertura, o acervo é convertido num arquivo
