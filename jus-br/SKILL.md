@@ -23,14 +23,14 @@ CLI `uv run jus-br/cli.py` sobre a API do **Portal de Serviços da PDPJ-Br**
 
 Tudo abaixo foi conferido em 26/10/2026 com sessão real, não presumido:
 
-| Recurso                                                         | Estado                                           | Fonte                                                                           |
-| --------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------- |
-| Login gov.br pelo favorito (`auth bookmarklet`)                 | funciona                                         | sessão do cliente `portalexterno-frontend`, cerca de 8 h                        |
-| Login pelo callback `www.jus.br` (`auth login`)                 | falha                                            | o site gasta o código antes da CLI: `Code not valid`                            |
-| Autos (`processo`)                                              | funciona                                         | `GET /v2/processos/{cnj}` e `/documentos/{id}/binario`                          |
-| DJEN e Domicílio Eletrônico (`comunicacoes`)                    | funciona                                         | `GET /v1/comunicacao` e `/v1/domicilio-eletronico/comunicacao`                  |
-| Cadastro e tipos por tribunal (`peticao tribunal`, `tipos`)     | funciona                                         | `GET /v1/tribunais/{jtr}`, `/v1/tribunal/listar`, `/v1/tipo/documento/tribunal` |
-| Rascunho, anexos e protocolo (`peticao rascunho`, `protocolar`) | **criação do rascunho ainda falha** (ver abaixo) | `POST /v1/peticoes`, `/v1/peticoes/documentos`, `/v1/peticoes/{id}/protocolo`   |
+| Recurso                                                         | Estado                              | Fonte                                                                                  |
+| --------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------- |
+| Login gov.br pelo favorito (`auth bookmarklet`)                 | funciona                            | sessão do cliente `portalexterno-frontend`, cerca de 8 h                               |
+| Login pelo callback `www.jus.br` (`auth login`)                 | falha                               | o site gasta o código antes da CLI: `Code not valid`                                   |
+| Autos (`processo`)                                              | funciona                            | `GET /v2/processos/{cnj}` e `/documentos/{id}/binario`                                 |
+| DJEN e Domicílio Eletrônico (`comunicacoes`)                    | funciona                            | `GET /v1/comunicacao` e `/v1/domicilio-eletronico/comunicacao`                         |
+| Cadastro e tipos por tribunal (`peticao tribunal`, `tipos`)     | funciona                            | `GET /v1/tribunais/{jtr}`, `/v1/tribunal/listar`, `/v1/tipo/documento/tribunal`        |
+| Rascunho, anexos e protocolo (`peticao rascunho`, `protocolar`) | **envio ao S3 negado** (ver abaixo) | `POST /v1/documentos/{cnj}/upload/url`, `POST /v1/peticoes`, `/v1/peticoes/protocolar` |
 
 O contrato está no Swagger de homologação: `uv run jus-br/openapi_discovery.py` acha os
 Swagger UI e `.../swagger-resources` lista os grupos (`/v2/api-docs?group=Interno`). Os
@@ -93,8 +93,8 @@ Regras que a CLI aplica antes de qualquer escrita:
    `PETICAO_INTERCORRENTE`, para e manda peticionar no sistema do tribunal. O TRF6
    (JTR 406) não está no cadastro, embora seus autos apareçam na consulta.
 2. **Tipo de documento do tribunal.** O `id` vem de `peticao tipos`, que muda por tribunal
-   ("Petição intercorrente" é 517 no TRF1 e "PETIÇÃO" é 90 no TJRO). Descrição ambígua é
-   erro, nunca palpite.
+   ("Petição intercorrente" é 517 no TRF1, "PETIÇÃO" é 90 no TJRO e "Petição (Outras)" é 209
+   na TPU, usada pelo TJMS). Descrição ambígua é erro, nunca palpite.
 3. **Arquivo aceito.** Extensão e tamanho conferidos contra `tiposArquivosAceitos` do
    tribunal (PDF até 10 MB no TRF1). Converta para PDF/A antes, com a skill `convert-to-pdfa`.
 4. **Dados do processo saem dos autos.** Órgão julgador, distribuição, grau, classe,
@@ -104,21 +104,31 @@ Regras que a CLI aplica antes de qualquer escrita:
    humana; `protocolar` mostra os documentos e exige `--confirmar`. Falha no meio do
    envio deixa o rascunho: confira em `peticao listar` antes de repetir.
 
-**A criação do rascunho ainda não funciona.** Testes de 26/10/2026 no TRF1, nenhum
-deixou rascunho (conferido em `peticao listar`):
+**O fluxo é o do formulário do Portal**, lido no JavaScript público dele
+(`portaldeservicos.pdpj.jus.br`, chunks do módulo de petição) e conferido contra uma
+petição real do usuário (`peticao ver`):
 
-| `POST /v1/peticoes` com                                               | Resposta                                                               |
-| --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `peticaoDocumentos` vazio                                             | 422: "Necessário ter pelo menos um documento e marcado como principal" |
-| o PDF/A em `base64` no corpo                                          | 403 do servidor web                                                    |
-| o documento só em metadados (nome, tamanho, SHA-1, tipo, `principal`) | 500 sem mensagem                                                       |
+1. Tipos de documento pela origem do tribunal (`GET /v1/tribunal/listar?jtrTribunal=`,
+   campo `origemTipoDocumento`): `1` é a TPU do CNJ (`GET /v1/tpu/tipoDocumentos`, o
+   `id` é o `cod_item`; caso do TJMS, cuja lista própria vem vazia); `2` é a lista do
+   tribunal (`/v1/tipo/documento/tribunal`, caso do TJRO). Na TPU há duas entradas
+   "Manifestação (Outras)" (180 e 128): use o id.
+2. Cada arquivo vai antes ao repositório do processo:
+   `POST /v1/documentos/{numeroProcesso}/upload/url` com os metadados (SHA-1 em hex,
+   tipo, `idOrigemTipoDocumento`, `sigiloso` booleano), e o PDF segue por `PUT` na
+   `urlPreSigned` da resposta. Sem `urlPreSigned`, aquele SHA-1 já está registrado.
+3. O rascunho (`POST /v1/peticoes`) só referencia os arquivos, aninhados:
+   `peticaoDocumentos: [{"documento": {...}}]`. Era o formato que faltava (o 500 de
+   26/10 vinha dos campos soltos, sem o envio antes).
+4. O protocolo do formulário é `POST /v1/peticoes/protocolar` com a petição inteira.
 
-O Portal provavelmente sobe o arquivo antes (`POST /v1/peticoes/documentos` e envio à URL
-pré-assinada, já implementados em `PortalClient.anexar`) e cria a petição apontando para
-o documento. Antes de novas tentativas, capture o fluxo real no navegador (F12, Network,
-"Preserve log", criar e apagar um rascunho, copiar as chamadas `/api/v1/peticoes...` sem
-`authorization` nem cookie) e ajuste `cli_peticao.py` e `peticao_montagem.py` a ele.
-Não tente em produção às cegas: cada tentativa é uma escrita e o 500 não diz o que falta.
+**Bloqueio atual (30/10/2026): o `PUT` no S3 é negado.** O registro (passo 2) é aceito,
+mas o S3 responde `AccessDenied` com *explicit deny in an identity-based policy* do usuário
+IAM `pdpj`, com ou sem `Origin`/`Referer` do Portal. A URL só assina `host` e vale 10
+minutos. Não insista: cada tentativa registra um documento órfão (sem conteúdo nem
+petição, sem rota para apagar). Antes de nova tentativa, confira no navegador se o envio
+pelo Portal funciona e capture o `PUT` (F12, Network, sem `authorization` nem cookie): se o
+navegador também recebe 403, é indisponibilidade do Portal; se não, compare os cabeçalhos.
 
 ## Arquivos
 
@@ -158,6 +168,12 @@ Testes offline: `uv run --with pytest --with cyclopts --with httpx --with keyrin
   trazem `permitePeticionar`, `idFonteDadosCodex` e `idOrigem`; a data de distribuição vem
   com milissegundos, que o Portal não guarda. Criar rascunho no TRF1 falhou (422, 403,
   500), sem deixar rascunho: falta capturar o fluxo do navegador.
+- **2026-10-30:** usucapião no TJMS (manifestação de desinteresse do Estado de RO). O TJMS
+  usa tipos da TPU, que a CLI não consultava: `peticao tipos TJMS` vinha vazio. O fluxo
+  real foi lido no JS do Portal e o formato confirmado numa petição já juntada (documentos
+  aninhados em `documento`). Registro do arquivo aceito; `PUT` no S3 negado por política IAM
+  do Portal (4 tentativas, documentos órfãos). Conversão para PDF/A exigiu seguir o shim do
+  Scoop no `convert-to-pdfa`.
 
 Após uso material, avalie se o roteamento foi correto, se a skill ajudou ou atrapalhou e
 que atrito houve. Havendo aprendizado acionável, registre em issue de `franklinbaldo/skills`,

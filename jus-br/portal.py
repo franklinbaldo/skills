@@ -129,8 +129,21 @@ class PortalClient:
                 return None
             raise
 
+    def origem_tipo_documento(self, jtr: str) -> dict:
+        """De onde vêm os tipos de documento do tribunal: `{"id": 1, "descricao": "TPU"}` (2 é o
+        próprio tribunal, 3 é complemento). É a rota que o formulário de petição do Portal consulta."""
+        itens = self._json("GET", "v1/tribunal/listar", params={"jtrTribunal": jtr}) or []
+        tribunal = next((t for t in itens if str(t.get("jtrTribunal")) == str(jtr)), None)
+        return (tribunal or {}).get("origemTipoDocumento") or {}
+
     def tipos_documento(self, sigla_tribunal: str) -> list[dict]:
+        """Tipos cadastrados pelo próprio tribunal; vazio para quem usa a TPU (ex.: TJMS)."""
         return self._json("GET", "v1/tipo/documento/tribunal", params={"tribunal": sigla_tribunal}) or []
+
+    def tipos_documento_tpu(self) -> list[dict]:
+        """Tipos de documento da TPU do CNJ, no formato que o Portal usa: o `id` é o `cod_item`."""
+        itens = self._json("GET", "v1/tpu/tipoDocumentos") or []
+        return [{"id": t["cod_item"], "codigo": t["cod_item"], "descricao": t["nome"].strip()} for t in itens]
 
     # Petições
 
@@ -149,19 +162,22 @@ class PortalClient:
     def criar_rascunho(self, peticao: dict) -> dict:
         return self._json("POST", "v1/peticoes", json=peticao)
 
-    def anexar(self, documento: dict, conteudo: bytes) -> dict:
-        """Registra o documento na petição e envia o arquivo à URL pré-assinada que o Portal devolve."""
-        resposta = self._json("POST", "v1/peticoes/documentos", json=documento)
-        url = (resposta or {}).get("url")
-        if not url:
-            raise JusBrApiError("O Portal registrou o documento mas não devolveu a URL de envio.")
-        envio = self.http.put(url, content=conteudo)  # S3: sem o Bearer da PDPJ
-        if envio.status_code >= 400:
-            raise JusBrApiError(f"Envio do arquivo recusado pelo repositório ({envio.status_code}).")
-        return resposta.get("documentoSalvo") or resposta
+    def enviar_documento(self, numero_processo: str, documento: dict, conteudo: bytes) -> dict:
+        """Registra o arquivo no repositório do processo e o envia à URL pré-assinada, antes da petição.
 
-    def protocolar(self, id_peticao: int) -> dict:
-        return self._json("POST", f"v1/peticoes/{id_peticao}/protocolo")
+        É o que o formulário do Portal faz (`obterUrlPreAssinada` + `PUT`): sem `urlPreSigned` na
+        resposta o arquivo (mesmo SHA-1) já está no repositório e não há o que enviar."""
+        resposta = self._json("POST", f"v1/documentos/{numero_processo}/upload/url", json=documento) or {}
+        url = resposta.get("urlPreSigned")
+        if url:
+            envio = self.http.put(url, content=conteudo, headers={"Content-Type": documento["mimeType"]})
+            if envio.status_code >= 400:  # S3: sem o Bearer da PDPJ
+                raise JusBrApiError(f"Envio do arquivo recusado pelo repositório ({envio.status_code}).")
+        return resposta
+
+    def protocolar(self, peticao: dict) -> dict:
+        """Protocola o rascunho como o Portal faz: a petição inteira em `POST /v1/peticoes/protocolar`."""
+        return self._json("POST", "v1/peticoes/protocolar", json=peticao)
 
     def excluir(self, id_peticao: int) -> None:
         self._requisitar("DELETE", f"v1/peticoes/{id_peticao}")
