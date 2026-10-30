@@ -2,81 +2,36 @@
 # requires-python = ">=3.11"
 # dependencies = ["pytest", "cyclopts>=3.0", "pydantic>=2.6"]
 # ///
-"""Regressao do acervo relacional append-only; so SQLite local e HTTP simulado."""
+"""Regressao do acervo relacional append-only: modelo, historico e migracao; so SQLite local."""
 
 from __future__ import annotations
 
-import io
 import json
 import sqlite3
 import sys
 from contextlib import closing
 from datetime import datetime, timedelta
 from pathlib import Path
-from urllib.error import HTTPError
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-import datajud_api as dj_api  # noqa: E402
 import datajud_store as store  # noqa: E402
+from datajud_dados_teste import (  # noqa: E402
+    _V2,
+    ANTIGOS,
+    NUMERO,
+    REQUISICAO,
+    TRANSITO,
+    _legado,
+    hit,
+    mov,
+    registrar,
+    tabelas,
+)
 
 import datajud as dj  # noqa: E402
-
-NUMERO = "70095117120248220001"
-REQUISICAO = {"query": {"terms": {"numeroProcesso": [NUMERO]}}}
-
-
-def mov(codigo, data, nome="ato", **extra):
-    return {"codigo": codigo, "nome": nome, "dataHora": data,
-            "orgaoJulgador": {"codigo": "101", "nome": "1a Vara"}, **extra}
-
-
-ANTIGOS = [mov(26, "2024-01-10T10:00:00Z", "Distribuicao"),
-           mov(51, "2024-01-11T10:00:00Z", "Conclusao")]
-TRANSITO = mov(848, "2026-10-18T09:00:00Z", "Transito em julgado",
-               complementosTabelados=[{"codigo": 5, "valor": 1, "nome": "x", "descricao": "tipo"}])
-
-
-def hit(movimentos=None, *, score=1.0, timestamp="2026-10-01T00:00:00Z", classe=7):
-    return {
-        "_index": "api_publica_tjro",
-        "_id": "TJRO_G1_" + NUMERO,
-        "_score": score,
-        "_source": {
-            "numeroProcesso": NUMERO,
-            "grau": "G1",
-            "tribunal": "TJRO",
-            "id": "TJRO_G1_" + NUMERO,
-            "@timestamp": timestamp,
-            "dataHoraUltimaAtualizacao": timestamp,
-            "classe": {"codigo": classe, "nome": "Procedimento Comum"},
-            "sistema": {"codigo": 1, "nome": "PJe"},
-            "formato": {"codigo": 1, "nome": "Eletronico"},
-            "orgaoJulgador": {"codigo": 101, "nome": "1a Vara", "codigoMunicipioIBGE": 1100205},
-            "nivelSigilo": 0,
-            "dataAjuizamento": "20240110100000",
-            "assuntos": [{"codigo": 10288, "nome": "Pensao"}],
-            "movimentos": list(ANTIGOS if movimentos is None else movimentos),
-        },
-    }
-
-
-def resposta(*hits):
-    return {
-        "took": 17,
-        "_shards": {"total": 1, "successful": 1, "failed": 0},
-        "hits": {"total": {"value": len(hits), "relation": "eq"}, "hits": list(hits)},
-    }
-
-
-def registrar(banco, *hits, requisicao=REQUISICAO):
-    return store.registrar_resposta("tjro", requisicao, resposta(*hits), banco=banco)
-
-
-def tabelas(banco):
-    return store.estatisticas(banco=banco).tabelas
 
 
 def test_ddl_sai_do_modelo_e_as_colunas_batem(tmp_path):
@@ -284,43 +239,6 @@ def test_consulta_sem_hit_e_agregacoes_tambem_ficam_no_banco(tmp_path):
     assert falha[0] == "erro" and "504" in falha[2]
 
 
-_V1 = (
-    """CREATE TABLE consultas (id INTEGER PRIMARY KEY AUTOINCREMENT, observado_em TEXT NOT NULL,
-        tribunal TEXT NOT NULL, requisicao_json TEXT NOT NULL, resultado TEXT NOT NULL,
-        resposta_meta_json TEXT, erro TEXT)""",
-    """CREATE TABLE versoes_documento (id INTEGER PRIMARY KEY AUTOINCREMENT, identidade TEXT NOT NULL,
-        tribunal TEXT NOT NULL, numero_processo TEXT NOT NULL, grau TEXT, sha256 TEXT NOT NULL,
-        conteudo_json TEXT NOT NULL, primeira_observacao TEXT NOT NULL, UNIQUE(identidade, sha256))""",
-    """CREATE TABLE observacoes_documento (id INTEGER PRIMARY KEY AUTOINCREMENT,
-        observado_em TEXT NOT NULL, consulta_id INTEGER NOT NULL, versao_id INTEGER NOT NULL,
-        atributos_hit_json TEXT NOT NULL)""",
-)
-
-
-def _legado(banco, observacoes):
-    """Monta o banco no formato da #125: documento inteiro por versao."""
-    with closing(sqlite3.connect(banco)) as con, con:
-        for sql in _V1:
-            con.execute(sql)
-        for i, (quando, documento) in enumerate(observacoes, 1):
-            conteudo = store._json({k: documento[k] for k in ("_index", "_id", "_source")})
-            con.execute(
-                "INSERT INTO consultas (observado_em, tribunal, requisicao_json, resultado, "
-                "resposta_meta_json) VALUES (?, 'tjro', ?, 'ok', '{}')",
-                (quando, json.dumps(REQUISICAO)))
-            con.execute(
-                "INSERT OR IGNORE INTO versoes_documento (identidade, tribunal, numero_processo, "
-                "grau, sha256, conteudo_json, primeira_observacao) "
-                "VALUES (?, 'tjro', ?, 'G1', ?, ?, ?)",
-                (store._identidade(documento, "tjro"), NUMERO, store._sha(conteudo), conteudo, quando))
-            versao = con.execute("SELECT id FROM versoes_documento WHERE sha256 = ?",
-                                 (store._sha(conteudo),)).fetchone()[0]
-            con.execute(
-                "INSERT INTO observacoes_documento (observado_em, consulta_id, versao_id, "
-                "atributos_hit_json) VALUES (?, ?, ?, ?)",
-                (quando, i, versao, json.dumps({"_score": documento["_score"]})))
-
-
 def test_migracao_do_legado_reconstroi_cada_data(tmp_path):
     banco = tmp_path / "v1.sqlite"
     _legado(banco, [
@@ -341,33 +259,6 @@ def test_migracao_do_legado_reconstroi_cada_data(tmp_path):
 
     registrar(banco, hit([*ANTIGOS, TRANSITO]))
     assert tabelas(banco)["movimentos"] == 3, "escrita nova continua a linhagem"
-
-
-_V2 = (
-    "CREATE TABLE consultas (id INTEGER PRIMARY KEY, observado_em TEXT, tribunal TEXT, requisicao_json TEXT,"
-    " resultado TEXT, resposta_meta_json TEXT, erro TEXT)",
-    "CREATE TABLE registros (id INTEGER PRIMARY KEY, identidade TEXT, indice TEXT, doc_id TEXT, tribunal TEXT,"
-    " numero_processo TEXT, grau TEXT, fonte_id TEXT, primeira_observacao TEXT)",
-    "CREATE TABLE orgaos (id INTEGER PRIMARY KEY, hash64 INTEGER, codigo TEXT, nome TEXT, municipio_ibge INTEGER,"
-    " extras_json TEXT)",
-    "CREATE TABLE tipos_movimento (id INTEGER PRIMARY KEY, hash64 INTEGER, codigo INTEGER, nome TEXT)",
-    "CREATE TABLE complementos (id INTEGER PRIMARY KEY, hash64 INTEGER, codigo INTEGER, valor INTEGER,"
-    " nome TEXT, descricao TEXT, extras_json TEXT)",
-    "CREATE TABLE capas (id INTEGER PRIMARY KEY, registro_id INTEGER, hash64 INTEGER, classe_codigo INTEGER,"
-    " classe_nome TEXT, sistema_codigo INTEGER, sistema_nome TEXT, formato_codigo INTEGER, formato_nome TEXT,"
-    " orgao_id INTEGER, nivel_sigilo INTEGER, data_ajuizamento TEXT, extras_json TEXT)",
-    "CREATE TABLE assuntos (id INTEGER PRIMARY KEY, registro_id INTEGER, hash64 INTEGER, ocorrencia INTEGER,"
-    " codigo INTEGER, nome TEXT, extras_json TEXT)",
-    "CREATE TABLE movimentos (id INTEGER PRIMARY KEY, registro_id INTEGER, hash64 INTEGER, ocorrencia INTEGER,"
-    " tipo_id INTEGER, data_hora TEXT, orgao_id INTEGER, extras_json TEXT)",
-    "CREATE TABLE movimento_complementos (movimento_id INTEGER, ordem INTEGER, complemento_id INTEGER)",
-    "CREATE TABLE observacoes (id INTEGER PRIMARY KEY, consulta_id INTEGER, registro_id INTEGER,"
-    " observado_em TEXT, capa_id INTEGER, projecao_json TEXT, volateis_json TEXT, mudou INTEGER,"
-    " observacao_v1_id INTEGER)",
-    "CREATE TABLE presencas_movimento (movimento_id INTEGER, observacao_id INTEGER, evento TEXT)",
-    "CREATE TABLE presencas_assunto (assunto_id INTEGER, observacao_id INTEGER, evento TEXT)",
-    "CREATE TABLE fontes_brutas (id INTEGER PRIMARY KEY, observacao_id INTEGER, sha256 TEXT, conteudo_zlib BLOB)",
-)
 
 
 def test_migracao_da_v2_preserva_estado_e_historico(tmp_path):
@@ -409,295 +300,3 @@ def test_migracao_da_v2_preserva_estado_e_historico(tmp_path):
     historico = store.historico(NUMERO, detalhar=True, banco=banco).registros[0]
     assert historico.observacoes == 3
     assert [(i.evento, i.nome) for i in historico.mudancas[0].itens] == [("saiu", "Conclusao")]
-
-
-def test_search_realmente_registra_toda_resposta_sem_configuracao_extra(monkeypatch, tmp_path):
-    banco = tmp_path / "acervo.sqlite"
-    monkeypatch.setenv("DATAJUD_SQLITE", str(banco))
-    recebidas = [resposta(hit(score=1.0)), resposta(hit(score=2.0))]
-
-    class HTTPResposta:
-        def __init__(self, body):
-            self.body = body
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_):
-            return False
-
-        def read(self):
-            return json.dumps(self.body).encode("utf-8")
-
-    monkeypatch.setattr(dj.urllib.request, "urlopen",
-                        lambda *_a, **_kw: HTTPResposta(recebidas.pop(0)))
-    assert dj.search(REQUISICAO, tribunal="tjro")["hits"]
-    assert dj.search(REQUISICAO, tribunal="tjro")["hits"]
-    t = tabelas(banco)
-    assert (t["consultas"], t["registros"], t["observacoes"], t["vistas"]) == (2, 1, 1, 1)
-
-
-def test_search_registra_falha_sem_criar_falso_nao_encontrado(monkeypatch, tmp_path):
-    banco = tmp_path / "erros.sqlite"
-    monkeypatch.setenv("DATAJUD_SQLITE", str(banco))
-
-    def erro(*_a, **_kw):
-        raise HTTPError(
-            "https://example.test", 503, "service unavailable", {}, io.BytesIO(b"gateway")
-        )
-
-    monkeypatch.setattr(dj.urllib.request, "urlopen", erro)
-    with pytest.raises(RuntimeError, match="HTTP 503"):
-        dj.search({"query": {"match_all": {}}}, tribunal="tjro", tentativas=1)
-
-    t = tabelas(banco)
-    assert t["consultas"] == 1 and t["observacoes"] == 0
-    with sqlite3.connect(banco) as con:
-        assert con.execute("SELECT resultado FROM consultas").fetchone()[0] == "erro"
-
-
-def test_lote_padrao_nao_exporta_json_e_observa_outra_vez(monkeypatch, tmp_path):
-    banco = tmp_path / "acervo.sqlite"
-    monkeypatch.setenv("DATAJUD_SQLITE", str(banco))
-    entrada = tmp_path / "processos.txt"
-    entrada.write_text("7009511-71.2024.8.22.0001\n", encoding="utf-8")
-
-    class HTTPResposta:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_):
-            return False
-
-        def read(self):
-            return json.dumps(resposta(hit())).encode()
-
-    monkeypatch.setattr(dj.urllib.request, "urlopen",
-                        lambda *_a, **_kw: HTTPResposta())
-    assert dj.cmd_lote(entrada, None, 1, True, True) == 0
-    assert dj.cmd_lote(entrada, None, 1, True, True) == 0
-    t = tabelas(banco)
-    assert (t["consultas"], t["registros"], t["observacoes"], t["vistas"], t["movimentos"]) == (
-        2, 1, 1, 1, 2)
-    assert not list(tmp_path.rglob("*.json"))
-
-
-def test_cli_estado_historico_e_banco_emitem_os_modelos(monkeypatch, tmp_path, capsys):
-    banco = tmp_path / "acervo.sqlite"
-    monkeypatch.setenv("DATAJUD_SQLITE", str(banco))
-    registrar(banco, hit())
-
-    assert dj.app(result_action="return_value", tokens=["estado", NUMERO, "--json"]) == 0
-    saida = store.EstadoProcesso.model_validate_json(capsys.readouterr().out)
-    assert len(saida.registros[0].movimentos) == 2
-
-    assert dj.app(result_action="return_value", tokens=["historico", NUMERO, "--json"]) == 0
-    assert store.HistoricoProcesso.model_validate_json(capsys.readouterr().out).registros
-
-    assert dj.app(result_action="return_value", tokens=["banco", "--json"]) == 0
-    assert store.Estatisticas.model_validate_json(capsys.readouterr().out)["movimentos"] == 2
-
-    assert dj.app(result_action="return_value", tokens=["estado", "0000000-00.2024.8.22.0001"]) == 1
-
-
-def test_roteamento_df_e_justica_militar():
-    assert dj.tribunal_do_cnj("0000001-00.2024.6.07.0001") == "tre-dft"
-    assert "tre-dft" in dj.familia_do_cnj("0000001-00.2024.8.07.0001")
-    assert "tre-df" not in dj.familia_do_cnj("0000001-00.2024.8.07.0001")
-    assert dj.tribunal_do_cnj("0000001-00.2024.7.01.0001") == "stm"
-
-
-def test_numero_sem_indice_nao_e_ausencia_confirmada(monkeypatch, tmp_path, capsys):
-    """Número do STF: nenhum índice consultado, logo nada foi observado."""
-    import datajud_mcp as mod
-
-    monkeypatch.setenv("DATAJUD_SQLITE", str(tmp_path / "datajud.sqlite"))
-    monkeypatch.setattr(dj_api, "search", lambda *a, **k: pytest.fail("não deveria consultar"))
-    saida = mod.datajud_processo("0126778-57.2022.1.00.0000")
-    assert saida.encontrado is False and saida.completo is False
-
-    assert dj.cmd_processo("0126778-57.2022.1.00.0000", None, False, False) == 1
-    assert "incompleta" in capsys.readouterr().err
-
-
-def test_falha_de_indice_nao_vira_nenhum_encontrado(monkeypatch, tmp_path, capsys):
-    monkeypatch.setenv("DATAJUD_SQLITE", str(tmp_path / "datajud.sqlite"))
-
-    def search(body, tribunal="tjro", **_):
-        if tribunal == "stj":
-            raise RuntimeError("HTTP 504: NSX LB")
-        return {"hits": {"total": {"value": 0}, "hits": []}}
-
-    monkeypatch.setattr(dj_api, "search", search)
-    assert dj.cmd_processo("7009511-71.2024.8.22.0001", None, False, False) == 1
-    erro = capsys.readouterr().err
-    assert "incompleta" in erro and "Nenhum processo" not in erro
-
-
-def test_novidades_separa_linha_de_base_marco_e_rotina(tmp_path):
-    banco = tmp_path / "a.sqlite"
-    registrar(banco, hit())
-    base = store.novidades("2000-01-01", ruido=dj.RUIDO, banco=banco)
-    (processo,) = base.processos
-    assert processo.processo_novo and processo.registros[0].registro_novo
-    assert processo.registros[0].movimentos_iniciais == 2 and processo.registros[0].movimentos == []
-
-    with sqlite3.connect(banco) as con:
-        depois_da_base = con.execute("SELECT MAX(observado_em) FROM observacoes").fetchone()[0]
-    marco = mov(848, "2026-10-18T09:00:00Z", "Transito em julgado")
-    rotina = mov(581, "2026-10-18T10:00:00Z", "Juntada")
-    registrar(banco, hit([*ANTIGOS, marco, rotina]))
-    stj = hit([mov(26, "2026-10-18T11:00:00Z", "Distribuicao")])
-    stj["_index"], stj["_id"] = "api_publica_stj", "STJ_SUP_" + NUMERO
-    stj["_source"]["grau"] = "SUP"
-    store.registrar_resposta("stj", REQUISICAO, resposta(stj), banco=banco)
-
-    agora = store.novidades(datetime.fromisoformat(depois_da_base) + timedelta(microseconds=1),
-                            ruido=dj.RUIDO, banco=banco)
-    (processo,) = agora.processos
-    assert not processo.processo_novo
-    tjro, stj_reg = sorted(processo.registros, key=lambda r: r.registro.tribunal, reverse=True)
-    assert [(m.codigo, m.marco, m.evento) for m in tjro.movimentos] == [
-        (848, True, "entrou"), (581, False, "entrou")]
-    assert stj_reg.registro_novo and stj_reg.movimentos_iniciais == 1
-    assert store.novidades("2000-01-01", numeros=["0000000-00.2024.8.22.0001"], banco=banco).processos == []
-
-
-def test_cli_novidades_emite_o_modelo(monkeypatch, tmp_path, capsys):
-    banco = tmp_path / "acervo.sqlite"
-    monkeypatch.setenv("DATAJUD_SQLITE", str(banco))
-    registrar(banco, hit())
-    assert dj.app(result_action="return_value", tokens=["novidades", "2000-01-01", "--json"]) == 0
-    saida = store.Novidades.model_validate_json(capsys.readouterr().out)
-    assert saida.processos[0].processo_novo
-    assert dj.app(result_action="return_value", tokens=["novidades", "2000-01-01"]) == 0
-    assert "primeira observacao" in capsys.readouterr().out
-
-
-def _v2_em_troca(banco):
-    with closing(sqlite3.connect(banco)) as con, con:
-        for sql in _V2:
-            con.execute(sql)
-        con.execute(f"PRAGMA user_version = {store.EM_TROCA}")
-
-
-def test_escrita_durante_a_troca_espera_o_arquivo_novo(tmp_path, monkeypatch):
-    """Antigo ja copiado e carimbado: quem chega nao grava nele, espera o novo."""
-    import threading
-    import time
-
-    banco = tmp_path / "acervo.sqlite"
-    _v2_em_troca(banco)
-    novo = tmp_path / "novo.sqlite"
-    store._abrir(novo, novo=True).close()
-
-    def trocar():
-        time.sleep(0.5)
-        banco.replace(tmp_path / "backup.sqlite")
-        novo.replace(banco)
-
-    threading.Thread(target=trocar).start()
-    registrar(banco, hit())
-    assert tabelas(banco)["consultas"] == 1, "a escrita foi para o arquivo novo"
-    with closing(sqlite3.connect(tmp_path / "backup.sqlite")) as con:
-        assert con.execute("SELECT COUNT(*) FROM consultas").fetchone()[0] == 0, "nada no antigo"
-    with pytest.raises(store._ArquivoTrocado):
-        store._abrir(tmp_path / "backup.sqlite")
-
-
-def test_troca_que_morreu_no_meio_e_refeita(tmp_path, monkeypatch):
-    monkeypatch.setattr(store, "ESPERA_TROCA", 0.3)
-    banco = tmp_path / "acervo.sqlite"
-    _v2_em_troca(banco)
-    registrar(banco, hit())
-    dados = store.estatisticas(banco=banco)
-    assert dados.versao == store.VERSAO and dados["consultas"] == 1
-    assert list(tmp_path.glob("acervo-antes-v3-*.sqlite")), "o antigo ficou como backup"
-
-
-def test_dois_processos_convertendo_o_mesmo_banco(tmp_path):
-    """So um converte; o outro espera e abre o novo. Nunca some o acervo."""
-    import subprocess
-
-    banco = tmp_path / "v1.sqlite"
-    _legado(banco, [("2026-10-01T00:00:00.000000+00:00", hit())])
-    scripts = Path(store.__file__).parent
-    codigo = (f"import sys; sys.path.insert(0, {str(scripts)!r}); import datajud_store as s; "
-              f"from pathlib import Path; print(s.migrar(banco=Path({str(banco)!r})).origem)")
-    processos = [subprocess.Popen([sys.executable, "-c", codigo], stdout=subprocess.PIPE, text=True)
-                 for _ in range(2)]
-    origens = sorted(p.communicate(timeout=120)[0].strip() for p in processos)
-    assert all(p.returncode == 0 for p in processos)
-    assert origens == ["legado", "nada"], "um converteu, o outro achou pronto"
-    assert banco.exists() and store.estatisticas(banco=banco).versao == store.VERSAO
-    assert len(list(tmp_path.glob("v1-antes-v3-*.sqlite"))) == 1
-    assert not list(tmp_path.glob("*em-construcao*")), "nenhum temporario sobra"
-
-
-def test_troca_que_falha_deixa_o_antigo_no_lugar(tmp_path, monkeypatch):
-    """O caminho principal nunca fica vazio: falhou a troca, o antigo segue intacto."""
-    banco = tmp_path / "v1.sqlite"
-    _legado(banco, [("2026-10-01T00:00:00.000000+00:00", hit())])
-
-    def recusa(*_a, **_k):
-        raise PermissionError("aberto")
-
-    monkeypatch.setattr(store.os, "replace", recusa)
-    monkeypatch.setattr(store.relogio, "monotonic", iter(range(0, 10_000, 100)).__next__)
-    with pytest.raises(RuntimeError, match="aberto noutro processo"):
-        store.migrar(banco=banco)
-    with closing(sqlite3.connect(banco)) as con:
-        assert con.execute("PRAGMA user_version").fetchone()[0] == 0, "versao restaurada"
-        assert con.execute("SELECT COUNT(*) FROM observacoes_documento").fetchone()[0] == 1
-    assert sorted(x.name for x in tmp_path.iterdir() if x.suffix == ".sqlite") == ["v1.sqlite"]
-
-    monkeypatch.undo()
-    assert store.migrar(banco=banco).origem == "legado", "a proxima abertura converte"
-
-
-def test_carimbo_acompanha_a_ordem_das_gravacoes(tmp_path):
-    """Gravacoes concorrentes: id maior nunca tem horario anterior."""
-    import threading
-
-    banco = tmp_path / "a.sqlite"
-    linhas = [threading.Thread(target=registrar, args=(banco, hit())) for _ in range(8)]
-    for linha in linhas:
-        linha.start()
-    for linha in linhas:
-        linha.join()
-    with closing(sqlite3.connect(banco)) as con:
-        horarios = [h for (h,) in con.execute("SELECT observado_em FROM consultas ORDER BY id")]
-    assert len(horarios) == 8 and horarios == sorted(horarios)
-
-
-def test_checkpoint_incompleto_desiste_com_tudo_intacto(tmp_path, monkeypatch):
-    """Leitor segurando o WAL: nada se apaga, nada se troca, a versao volta."""
-    banco = tmp_path / "v1.sqlite"
-    _legado(banco, [("2026-10-01T00:00:00.000000+00:00", hit())])
-    monkeypatch.setattr(store, "_consolidar_wal", lambda *_a, **_k: False)
-    with pytest.raises(RuntimeError, match="se repete na proxima abertura"):
-        store.migrar(banco=banco)
-    with closing(sqlite3.connect(banco)) as con:
-        assert con.execute("PRAGMA user_version").fetchone()[0] == 0
-        assert con.execute("SELECT COUNT(*) FROM observacoes_documento").fetchone()[0] == 1
-    assert sorted(x.name for x in tmp_path.iterdir() if x.suffix == ".sqlite") == ["v1.sqlite"]
-    monkeypatch.undo()
-    assert store.migrar(banco=banco).origem == "legado"
-
-
-def test_consolidar_wal_detecta_leitor_segurando(tmp_path):
-    banco = tmp_path / "w.sqlite"
-    escritor = sqlite3.connect(banco, isolation_level=None)
-    escritor.execute("PRAGMA journal_mode = WAL")
-    escritor.execute("CREATE TABLE t (x)")
-    escritor.execute("INSERT INTO t VALUES (1)")
-    leitor = sqlite3.connect(banco, isolation_level=None)
-    leitor.execute("BEGIN")
-    leitor.execute("SELECT * FROM t").fetchall()
-    escritor.execute("INSERT INTO t VALUES (2)")
-    escritor.execute("PRAGMA busy_timeout = 50")
-    assert store._consolidar_wal(escritor, espera=0.3) is False, "o leitor segura frames"
-    leitor.execute("COMMIT")
-    leitor.close()
-    assert store._consolidar_wal(escritor, espera=1) is True
-    escritor.close()
