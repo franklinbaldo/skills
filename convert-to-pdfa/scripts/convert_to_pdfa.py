@@ -4,11 +4,13 @@
 # dependencies = [
 #     "pymupdf",
 #     "cyclopts>=3.0",
+#     "pikepdf[pdfa]>=10.17",
 # ]
 # ///
 """Convert a PDF to PDF/A-1b, PDF/A-2b, or PDF/A-3b.
 
-Ghostscript performs the standards-aware conversion. PyMuPDF provides
+pikepdf.pdfa promotes the file first (no Ghostscript); when its validator
+reports a violation, Ghostscript performs the conversion. PyMuPDF provides
 preflight checks, an explicit raster fallback, and structural verification.
 veraPDF is used when its official CLI is available.
 """
@@ -21,6 +23,7 @@ import shutil
 import sys
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -38,6 +41,9 @@ from ghostscript_backend import (  # noqa: F401 - _scoop_target re-exported for 
     _wsl_available,
     _wsl_path,
 )
+from pikepdf_backend import convert_pikepdf
+
+BackendChoice = Literal["auto", "pikepdf", "native", "wsl"]
 
 SUPPORTED_PARTS = (1, 2, 3)
 PAGE_SIZE_TOLERANCE = 0.05
@@ -52,6 +58,9 @@ class Verification:
     pdf_format: str
     text_similarity: float | None
     verapdf: str
+    backend: str = "unknown"
+    unchecked: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
 
 
 def _default_output(input_path: Path) -> Path:
@@ -269,18 +278,47 @@ def _run_verapdf(output_path: Path, *, part: int, required: bool) -> str:
     return f"compliant with PDF/A-{flavour}"
 
 
+def _try_pikepdf(
+    source: Path,
+    candidate: Path,
+    *,
+    part: int,
+    backend: BackendChoice,
+    creation_date: datetime | None,
+) -> tuple[str | None, tuple[str, ...], tuple[str, ...]]:
+    """Promote with pikepdf; return (backend used or None to fall back, unchecked, notes)."""
+    if backend not in ("auto", "pikepdf"):
+        return None, (), ()
+    try:
+        result = convert_pikepdf(source, candidate, part=part, creation_date=creation_date)
+    except Exception as error:  # noqa: BLE001 - any pikepdf failure means "use Ghostscript"
+        if backend == "pikepdf":
+            raise PdfaError(f"pikepdf promotion failed: {error}") from error
+        candidate.unlink(missing_ok=True)
+        return None, (), (f"pikepdf failed ({error}); fell back to Ghostscript",)
+    if result.blocking:
+        candidate.unlink(missing_ok=True)
+        listing = "\n".join(f"  - {finding}" for finding in result.blocking)
+        if backend == "pikepdf":
+            raise PdfaError(f"pikepdf found PDF/A-{part}b violations or undecided rules:\n{listing}")
+        note = f"pikepdf found {len(result.blocking)} blocking finding(s); fell back to Ghostscript:\n{listing}"
+        return None, (), (note,)
+    return "pikepdf (no Ghostscript)", result.unchecked, result.changes
+
+
 def convert(
     input_path: Path,
     output_path: Path,
     *,
     part: int,
     policy: int,
-    backend: Backend,
+    backend: BackendChoice,
     ghostscript: str | None,
     rasterize: bool,
     dpi: int,
     require_verapdf: bool,
     allow_signed: bool,
+    creation_date: datetime | None = None,
 ) -> Verification:
     """Convert atomically and expose the final file only after verification."""
     pages, sizes, input_text = _preflight(input_path, allow_signed=allow_signed)
@@ -299,15 +337,25 @@ def convert(
             candidate = Path(candidate_file.name)
         candidate.unlink()
         try:
-            if backend == "native":
-                if ghostscript is None:
-                    raise PdfaError("Internal error: missing native Ghostscript path.")
-                _convert_native(
-                    ghostscript, source, candidate, part=part, policy=policy
-                )
-            else:
-                _convert_wsl(source, candidate, part=part, policy=policy)
-            _ghostscript_parse(backend, ghostscript, candidate)
+            used, unchecked, notes = _try_pikepdf(
+                source, candidate, part=part, backend=backend, creation_date=creation_date
+            )
+            if used is None:
+                gs_backend: Backend
+                if backend in ("auto", "pikepdf"):
+                    gs_backend, ghostscript = _select_backend("auto")
+                else:
+                    gs_backend = backend
+                if gs_backend == "native":
+                    if ghostscript is None:
+                        raise PdfaError("Internal error: missing native Ghostscript path.")
+                    _convert_native(
+                        ghostscript, source, candidate, part=part, policy=policy
+                    )
+                else:
+                    _convert_wsl(source, candidate, part=part, policy=policy)
+                _ghostscript_parse(gs_backend, ghostscript, candidate)
+                used = f"ghostscript ({gs_backend})"
             verification = _structural_verify(
                 candidate,
                 expected_pages=pages,
@@ -323,6 +371,9 @@ def convert(
                 pdf_format=verification.pdf_format,
                 text_similarity=verification.text_similarity,
                 verapdf=verapdf,
+                backend=used,
+                unchecked=unchecked,
+                notes=notes,
             )
         finally:
             candidate.unlink(missing_ok=True)
@@ -337,13 +388,14 @@ def main(
     *,
     output: Path | None = None,
     part: Literal[1, 2, 3] = 2,
-    backend: Literal["auto", "native", "wsl"] = "auto",
+    backend: BackendChoice = "auto",
     compatibility_policy: Literal[1, 2] = 2,
     rasterize: bool = False,
     dpi: int = 300,
     require_verapdf: bool = False,
     allow_signed: bool = False,
     force: bool = False,
+    creation_date: str | None = None,
 ) -> int:
     """Convert one PDF to PDF/A.
 
@@ -356,7 +408,8 @@ def main(
     part
         PDF/A part to target.
     backend
-        Ghostscript backend; auto prefers native and falls back to WSL on Windows.
+        auto tries pikepdf first and falls back to Ghostscript (native, then WSL) on violations;
+        pikepdf fails instead of falling back; native/wsl force Ghostscript.
     compatibility_policy
         2 aborts on incompatible content; 1 drops incompatible operations with warnings.
     rasterize
@@ -369,6 +422,8 @@ def main(
         convert despite signature fields; the new file will not retain signature validity.
     force
         replace an existing output after validation.
+    creation_date
+        ISO 8601 date written as /CreationDate when the source has none (pikepdf path); default now.
     """
     try:
         if dpi < 72 or dpi > 600:
@@ -376,24 +431,33 @@ def main(
         resolved_input, output_path = _resolve_paths(
             str(input_path), str(output) if output else None, force=force
         )
-        selected_backend, ghostscript = _select_backend(backend)
+        when = datetime.fromisoformat(creation_date) if creation_date else None
+        ghostscript = None
+        if backend in ("native", "wsl"):
+            backend, ghostscript = _select_backend(backend)
         verification = convert(
             resolved_input,
             output_path,
             part=part,
             policy=compatibility_policy,
-            backend=selected_backend,
+            backend=backend,
             ghostscript=ghostscript,
             rasterize=rasterize,
             dpi=dpi,
             require_verapdf=require_verapdf,
             allow_signed=allow_signed,
+            creation_date=when,
         )
-    except (PdfaError, pymupdf.FileDataError) as error:
+    except (PdfaError, ValueError, pymupdf.FileDataError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
     print(f"Created: {output_path}")
+    print(f"Backend: {verification.backend}")
+    for note in verification.notes:
+        print(f"Note: {note}")
+    for item in verification.unchecked:
+        print(f"Não verificado pelo pikepdf: {item}")
     print(f"Format: PDF/A-{part}b ({verification.pdf_format})")
     print(f"Pages: {verification.pages}")
     if rasterize:

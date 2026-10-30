@@ -4,6 +4,7 @@
 # dependencies = [
 #     "cyclopts>=3.0",
 #     "pymupdf",
+#     "pikepdf[pdfa]>=10.17",
 # ]
 # ///
 """Regression tests for convert_to_pdfa.py."""
@@ -13,9 +14,13 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import convert_to_pdfa
+import pikepdf
+import pikepdf.pdfa
 import pymupdf
+from test_pikepdf_backend import make_vector_pdf
 
 
 class ConvertToPdfaTests(unittest.TestCase):
@@ -111,6 +116,68 @@ class ConvertToPdfaTests(unittest.TestCase):
             self.assertIsNone(verification.text_similarity)
             with pymupdf.open(output) as document:
                 self.assertEqual(document[0].get_text(), "")
+
+    def _convert(self, source: Path, output: Path, backend: str) -> convert_to_pdfa.Verification:
+        return convert_to_pdfa.convert(
+            source,
+            output,
+            part=2,
+            policy=2,
+            backend=backend,
+            ghostscript=None,
+            rasterize=False,
+            dpi=300,
+            require_verapdf=False,
+            allow_signed=False,
+        )
+
+    @staticmethod
+    def _violation_report() -> pikepdf.pdfa.Report:
+        finding = pikepdf.pdfa.Finding("ISO_19005_2:6.2.4.3-2", "page 1", "simulated violation", "violation")
+        return pikepdf.pdfa.Report(flavour="2b", findings=[finding])
+
+    def test_auto_promotes_with_pikepdf_without_ghostscript(self) -> None:
+        """A document pikepdf can promote never reaches Ghostscript."""
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.object(
+            convert_to_pdfa, "_select_backend", side_effect=AssertionError("Ghostscript was used")
+        ):
+            source = Path(temp_dir) / "source.pdf"
+            make_vector_pdf(source)
+            verification = self._convert(source, Path(temp_dir) / "out.pdf", "auto")
+        self.assertEqual(verification.backend, "pikepdf (no Ghostscript)")
+        self.assertEqual(verification.pages, 1)
+
+    def test_auto_falls_back_to_ghostscript_on_a_pikepdf_violation(self) -> None:
+        """A violation discards pikepdf's output and runs the Ghostscript path instead."""
+
+        def fake_ghostscript(_gs: str, source: Path, candidate: Path, **_kwargs: object) -> None:
+            with pikepdf.open(source) as pdf:
+                pikepdf.pdfa.prepare(pdf, "2b")
+                pdf.save(candidate, **pikepdf.pdfa.resolve_save_kwargs("2b"))
+
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.object(
+            pikepdf.pdfa, "validate_written", return_value=self._violation_report()
+        ), mock.patch.object(convert_to_pdfa, "_select_backend", return_value=("native", "gs")), mock.patch.object(
+            convert_to_pdfa, "_convert_native", side_effect=fake_ghostscript
+        ) as ghostscript, mock.patch.object(convert_to_pdfa, "_ghostscript_parse"):
+            source = Path(temp_dir) / "source.pdf"
+            make_vector_pdf(source)
+            verification = self._convert(source, Path(temp_dir) / "out.pdf", "auto")
+        ghostscript.assert_called_once()
+        self.assertEqual(verification.backend, "ghostscript (native)")
+        self.assertIn("fell back to Ghostscript", verification.notes[0])
+        self.assertIn("simulated violation", verification.notes[0])
+
+    def test_pikepdf_backend_fails_loudly_instead_of_falling_back(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.object(
+            pikepdf.pdfa, "validate_written", return_value=self._violation_report()
+        ), mock.patch.object(convert_to_pdfa, "_select_backend", side_effect=AssertionError("Ghostscript was used")):
+            source = Path(temp_dir) / "source.pdf"
+            output = Path(temp_dir) / "out.pdf"
+            make_vector_pdf(source)
+            with self.assertRaisesRegex(convert_to_pdfa.PdfaError, "simulated violation"):
+                self._convert(source, output, "pikepdf")
+            self.assertFalse(output.exists())
 
     def _backend_or_skip(self) -> tuple[convert_to_pdfa.Backend, str | None]:
         try:

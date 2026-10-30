@@ -2,7 +2,9 @@
 name: convert-to-pdfa
 description: Convert PDFs to archival PDF/A-1b, PDF/A-2b, or PDF/A-3b across Windows, WSL, macOS, and Linux. Use when a user asks for PDF/A, archival PDF, ISO 19005 conversion, or a PDF accepted by SEI, PJe, courts, and document-management validators.
 compatibility: >-
-  Requires Python/uv and Ghostscript (native or WSL) for conversion. Official
+  Requires Python/uv. The default pikepdf path needs nothing else (a ~4 MB
+  wheel installed by uv, Windows included); Ghostscript (native or WSL) is the
+  fallback for files pikepdf cannot promote. Official
   veraPDF CLI is optional unless normative validation is required. Locked-down
   Windows without Ghostscript/WSL needs the documented LiteBox adaptation route.
 ---
@@ -18,7 +20,8 @@ modern PDF features better than PDF/A-1b while targeting visual fidelity.
 - Prefer vector conversion so text, links, and geometry survive.
 - Treat XMP as a claim, not proof. A conforming file also needs the applicable
   PDF/A rules, including an ICC-backed OutputIntent.
-- Use Ghostscript for conversion. PyMuPDF alone is not a general PDF/A writer.
+- Promote with `pikepdf.pdfa` first; use Ghostscript when pikepdf's validator
+  blocks. PyMuPDF alone is not a general PDF/A writer.
 - Call a result “veraPDF compliant” only when veraPDF actually reports
   `isCompliant="true"`. Otherwise say “structurally verified”.
 - Expect any full rewrite to invalidate digital signatures. The script refuses
@@ -33,6 +36,27 @@ conversion would not have helped. Convert when the destination asks for PDF/A:
 the PDPJ Portal's upload form, for instance, refuses a PDF without XMP
 metadata (`xmp:createdate`), which this conversion adds.
 
+## Backends
+
+- **pikepdf (tried first by `--backend auto`)**: `pikepdf.pdfa.prepare` repairs
+  structure and metadata (output intent, XMP, annotation flags, JavaScript)
+  without touching page content, so text and layout come out byte-identical.
+  No Ghostscript; `uv` installs the wheel on any OS. The written file is
+  re-checked by `validate_written`.
+- **When it falls back**: any `violation`, and any `unsupported` finding other
+  than `pikepdf:schema-*`. pikepdf reports some real ISO rules as
+  `unsupported` (a non-embedded font is one), so those block too. Only
+  schema-only findings (unknown keys such as `/Type` in `/MarkInfo` or `/SE`
+  in an outline item — all three appear in Google Docs exports) are accepted
+  and listed as "Não verificado pelo pikepdf". pikepdf does not embed fonts,
+  convert colour or flatten transparency; Ghostscript does.
+- **CreationDate**: `prepare` writes `xmp:CreateDate` only from
+  `/CreationDate`, which Google Docs exports lack, and the PDPJ portal refuses
+  a PDF without `xmp:createdate`. The pikepdf path fills a missing
+  `/CreationDate`/`/ModDate` (now, or `--creation-date`) before `prepare`.
+- **Ghostscript (`native`/`wsl`)**: the standards-aware rewrite for everything
+  else, as before.
+
 ## Workflow
 
 1. Identify the input and a distinct output path. If the user did not name the
@@ -44,12 +68,13 @@ metadata (`xmp:createdate`), which this conversion adds.
    uv run <skill-dir>/scripts/convert_to_pdfa.py "/path/input.pdf" --part 2
    ```
 
-   On Windows, the script prefers native `gswin64c.exe` and automatically uses
-   Ghostscript in WSL when no native executable exists.
+   The report names the backend used. When pikepdf blocks, Ghostscript runs:
+   on Windows native `gswin64c.exe` first, then WSL.
 
 3. Read the final report. Completion requires the same page count and page
-   dimensions, a PDF/A-Xb XMP identifier, ICC OutputIntent, successful
-   Ghostscript parse, and no material searchable-text loss.
+   dimensions, a PDF/A-Xb XMP identifier, ICC OutputIntent, no material
+   searchable-text loss, and either pikepdf's `validate_written` without
+   blocking findings or a successful Ghostscript parse.
 
 4. If the official veraPDF CLI is installed, it runs automatically. For a
    filing that requires normative validation, add `--require-verapdf`; absence
@@ -73,7 +98,11 @@ metadata (`xmp:createdate`), which this conversion adds.
 
 - `--output PATH`: explicit destination.
 - `--part {1,2,3}`: create PDF/A-1b, 2b, or 3b; default `2`.
-- `--backend {auto,native,wsl}`: choose Ghostscript execution path.
+- `--backend {auto,pikepdf,native,wsl}`: `auto` tries pikepdf, then
+  Ghostscript; `pikepdf` fails on a blocking finding instead of falling back;
+  `native`/`wsl` force Ghostscript.
+- `--creation-date ISO`: `/CreationDate` to write when the source has none
+  (pikepdf path); default now, local time with offset.
 - `--compatibility-policy 2`: strict default; abort on incompatible content.
 - `--compatibility-policy 1`: allow Ghostscript to omit incompatible
   operations with warnings; use only after reviewing the loss.
@@ -139,9 +168,11 @@ neither native Ghostscript nor WSL Ghostscript is available.
 
 ```bash
 uv run <skill-dir>/scripts/test_convert_to_pdfa.py -v
+uv run <skill-dir>/scripts/test_pikepdf_backend.py -v
 ```
 
 Authoritative references:
+[pikepdf PDF/A](https://pikepdf.readthedocs.io/),
 [Ghostscript PDF/A creation](https://ghostscript.readthedocs.io/en/latest/VectorDevices.html#creating-a-pdf-a-document)
 and [veraPDF CLI validation](https://docs.verapdf.org/cli/validation/).
 
