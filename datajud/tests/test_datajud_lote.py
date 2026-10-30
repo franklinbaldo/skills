@@ -208,8 +208,8 @@ def test_recuperacao_parcial_http_500(monkeypatch):
 
 
 def test_retry_after_datas_e_limites():
-    from datetime import datetime, timedelta, timezone
     from email.utils import format_datetime
+    from datetime import datetime, timedelta, timezone
 
     futuro = datetime.now(timezone.utc) + timedelta(seconds=80)
     assert 60 <= dj._espera_retry_after({"Retry-After": format_datetime(futuro)}, 2) <= 81
@@ -218,4 +218,3 @@ def test_retry_after_datas_e_limites():
     assert dj._espera_retry_after({"Retry-After": "-10"}, 2) == 2
     assert dj._espera_retry_after({"Retry-After": "99999"}, 2) == 120
     assert dj._espera_retry_after({"Retry-After": "invalido"}, 2) == 2
-
