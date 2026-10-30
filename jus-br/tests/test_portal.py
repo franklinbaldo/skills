@@ -107,26 +107,70 @@ def test_comunicacoes_sends_digits_only_and_skips_empty_filters(auth):
     cliente(auth, handler).comunicacoes("6009021-21.2026.4.06.3802", "2026-08-01", "2026-10-26")
 
 
-def test_anexar_uploads_to_presigned_url_without_pdpj_bearer(auth):
+def test_enviar_documento_registers_then_puts_to_presigned_url_without_pdpj_bearer(auth):
     vistos = []
 
     def handler(req):
         vistos.append(req)
         if req.url.host == "portaldeservicos.pdpj.jus.br":
-            assert json.loads(req.content)["idPeticao"] == 7
-            return httpx.Response(200, json={"url": "https://s3.example/obj?sig=1", "documentoSalvo": {"id": 9}})
+            assert req.url.path == "/api/v1/documentos/5032404-98.2026.8.12.0001/upload/url"
+            assert json.loads(req.content)["hash"] == "a9993e364706816aba3e25717850c26c9cd0d89d"
+            return httpx.Response(
+                200, json={"dadosResposta": {"hash": "a99", "urlPreSigned": "https://s3.example/o?s=1"}}
+            )
         assert "authorization" not in req.headers
-        assert req.content == b"%PDF-1.7"
+        assert req.headers["content-type"] == "application/pdf"
+        assert req.content == b"abc"
         return httpx.Response(200)
 
-    salvo = cliente(auth, handler).anexar({"idPeticao": 7}, b"%PDF-1.7")
-    assert salvo == {"id": 9}
+    doc = {"hash": "a9993e364706816aba3e25717850c26c9cd0d89d", "mimeType": "application/pdf"}
+    resposta = cliente(auth, handler).enviar_documento("5032404-98.2026.8.12.0001", doc, b"abc")
+    assert resposta["hash"] == "a99"
     assert [r.method for r in vistos] == ["POST", "PUT"]
 
 
-def test_anexar_without_url_fails_loudly(auth):
-    with pytest.raises(JusBrApiError, match="URL de envio"):
-        cliente(auth, lambda req: httpx.Response(200, json={"documentoSalvo": {}})).anexar({}, b"x")
+def test_enviar_documento_skips_put_when_file_already_in_repository(auth):
+    vistos = []
+
+    def handler(req):
+        vistos.append(req.method)
+        return httpx.Response(200, json={"dadosResposta": {"hash": "a99"}})
+
+    cliente(auth, handler).enviar_documento("1", {"mimeType": "application/pdf"}, b"abc")
+    assert vistos == ["POST"]
+
+
+def test_enviar_documento_reports_s3_refusal(auth):
+    def handler(req):
+        if req.method == "POST":
+            return httpx.Response(200, json={"urlPreSigned": "https://s3.example/o"})
+        return httpx.Response(403)
+
+    with pytest.raises(JusBrApiError, match="recusado pelo repositório"):
+        cliente(auth, handler).enviar_documento("1", {"mimeType": "application/pdf"}, b"abc")
+
+
+def test_tpu_types_use_cod_item_as_id(auth):
+    corpo = [{"cod_item": 180, "cod_item_pai": 1, "nome": "Manifestação (Outras) ", "situacao": "A"}]
+    tipos = cliente(auth, lambda req: httpx.Response(200, json=corpo)).tipos_documento_tpu()
+    assert tipos == [{"id": 180, "codigo": 180, "descricao": "Manifestação (Outras)"}]
+
+
+def test_origem_tipo_documento_reads_court_listing(auth):
+    def handler(req):
+        assert req.url.params["jtrTribunal"] == "812"
+        return httpx.Response(200, json=[{"jtrTribunal": "812", "origemTipoDocumento": {"id": 1, "descricao": "TPU"}}])
+
+    assert cliente(auth, handler).origem_tipo_documento("812") == {"id": 1, "descricao": "TPU"}
+
+
+def test_protocolar_posts_whole_petition(auth):
+    def handler(req):
+        assert req.url.path == "/api/v1/peticoes/protocolar"
+        assert json.loads(req.content)["id"] == 77
+        return httpx.Response(200, json={"numeroReciboCnj": "2026", "idPeticao": 77})
+
+    assert cliente(auth, handler).protocolar({"id": 77})["idPeticao"] == 77
 
 
 def test_sha1_matches_portal_hash_format():

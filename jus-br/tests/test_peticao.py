@@ -129,6 +129,7 @@ def portal():
         mock = MagicMock()
         mock.processo.return_value = PROCESSO
         mock.tribunal.return_value = CADASTRO
+        mock.origem_tipo_documento.return_value = {"id": 2, "descricao": "Tribunal"}
         mock.tipos_documento.return_value = TIPOS
         cls.return_value = mock
         yield mock
@@ -150,26 +151,60 @@ def test_rascunho_without_confirm_only_shows_plan(portal, tmp_path, capsys):
     _rodar(["peticao", "rascunho", PROCESSO["numeroProcesso"], str(pdf), "--tipo", "Contestação"])
     assert "Nada foi criado" in capsys.readouterr().out
     portal.criar_rascunho.assert_not_called()
-    portal.anexar.assert_not_called()
+    portal.enviar_documento.assert_not_called()
 
 
-def test_rascunho_with_confirm_sends_documents_with_the_draft(portal, tmp_path, capsys):
+def test_rascunho_with_confirm_uploads_files_then_references_them(portal, tmp_path, capsys):
     principal, anexo = tmp_path / "contestacao.pdf", tmp_path / "ficha.pdf"
     principal.write_bytes(b"%PDF-principal")
     anexo.write_bytes(b"%PDF-anexo")
-    portal.criar_rascunho.return_value = {"id": 77}
+    ordem_chamadas = []
+    portal.enviar_documento.side_effect = lambda *a: ordem_chamadas.append("envio") or {}
+    portal.criar_rascunho.side_effect = lambda dto: ordem_chamadas.append("rascunho") or {"id": 77}
     _rodar(
         ["peticao", "rascunho", PROCESSO["numeroProcesso"], str(principal), "--tipo", "533"]
         + ["--anexo", str(anexo), "--tipo-anexo", "Anexo", "--confirmar"]
     )
-    docs = portal.criar_rascunho.call_args.args[0]["peticaoDocumentos"]
-    assert [(d["nome"], d["principal"], d["ordem"], d["idTipoDocumento"]) for d in docs] == [
-        ("contestacao.pdf", True, 0, 533),
-        ("ficha.pdf", False, 1, 9),
+    assert ordem_chamadas == ["envio", "envio", "rascunho"]
+    enviados = [c.args for c in portal.enviar_documento.call_args_list]
+    assert [(n, d["nome"], c) for n, d, c in enviados] == [
+        (PROCESSO["numeroProcesso"], "contestacao.pdf", b"%PDF-principal"),
+        (PROCESSO["numeroProcesso"], "ficha.pdf", b"%PDF-anexo"),
     ]
-    assert all("base64" not in d and len(d["hash"]) == 40 for d in docs)
+    docs = [item["documento"] for item in portal.criar_rascunho.call_args.args[0]["peticaoDocumentos"]]
+    assert [(d["nome"], d["principal"], d["ordem"], d["idTipoDocumento"], d["nomeTipoDocumento"]) for d in docs] == [
+        ("contestacao.pdf", True, 0, 533, "Contestação"),
+        ("ficha.pdf", False, 1, 9, "Anexo"),
+    ]
+    assert all(d["base64"] is None and len(d["hash"]) == 40 and d["sigiloso"] is False for d in docs)
+    assert {d["idOrigemTipoDocumento"] for d in docs} == {"2"}
     assert "Rascunho 77 criado" in capsys.readouterr().out
     portal.protocolar.assert_not_called()
+
+
+def test_tpu_court_takes_types_from_the_cnj_table(portal, tmp_path):
+    portal.origem_tipo_documento.return_value = {"id": 1, "descricao": "TPU"}
+    portal.tipos_documento.return_value = []
+    portal.tipos_documento_tpu.return_value = [{"id": 180, "codigo": 180, "descricao": "Manifestação (Outras)"}]
+    portal.criar_rascunho.return_value = {"id": 78}
+    pdf = tmp_path / "manifestacao.pdf"
+    pdf.write_bytes(b"%PDF")
+    _rodar(["peticao", "rascunho", PROCESSO["numeroProcesso"], str(pdf), "--tipo", "180", "--confirmar"])
+    dto = portal.criar_rascunho.call_args.args[0]
+    assert dto["idTipoDocumento"] == 180
+    assert dto["peticaoDocumentos"][0]["documento"]["idOrigemTipoDocumento"] == "1"
+
+
+def test_failed_upload_creates_no_draft(portal, tmp_path, capsys):
+    from errors import JusBrApiError
+
+    portal.enviar_documento.side_effect = JusBrApiError("Envio do arquivo recusado pelo repositório (403).")
+    pdf = tmp_path / "contestacao.pdf"
+    pdf.write_bytes(b"%PDF")
+    with pytest.raises(SystemExit):
+        _rodar(["peticao", "rascunho", PROCESSO["numeroProcesso"], str(pdf), "--tipo", "533", "--confirmar"])
+    assert "nenhum rascunho foi criado" in capsys.readouterr().out
+    portal.criar_rascunho.assert_not_called()
 
 
 def test_rascunho_stops_when_court_does_not_accept_petitions(portal, tmp_path, capsys):
@@ -183,19 +218,20 @@ def test_rascunho_stops_when_court_does_not_accept_petitions(portal, tmp_path, c
 
 
 def test_protocolar_requires_confirm(portal, capsys):
-    portal.peticao.return_value = {
+    rascunho = {
         "siglaTribunal": "TRF1",
         "numeroProcesso": PROCESSO["numeroProcesso"],
         "peticaoDocumentos": [
             {"documento": {"ordem": 0, "nome": "contestacao.pdf", "nomeTipoDocumento": "Contestação"}}
         ],
     }
+    portal.peticao.return_value = rascunho
     _rodar(["peticao", "protocolar", "77"])
     assert "Nada foi protocolado" in capsys.readouterr().out
     portal.protocolar.assert_not_called()
     portal.protocolar.return_value = {"numeroReciboCnj": "20264000000000001", "status": "AJ"}
     _rodar(["peticao", "protocolar", "77", "--confirmar"])
-    portal.protocolar.assert_called_once_with(77)
+    portal.protocolar.assert_called_once_with(rascunho)
     assert "20264000000000001" in capsys.readouterr().out
 
 

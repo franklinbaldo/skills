@@ -261,10 +261,22 @@ def _ghostscript_install_hint() -> str:
     )
 
 
+def _scoop_target(executable: Path) -> Path:
+    """Follow a Scoop shim (`gswin64c.exe` + `gswin64c.shim`) to the real install's executable."""
+    shim = executable.with_suffix(".shim")
+    if not shim.is_file():
+        return executable
+    for line in shim.read_text(encoding="utf-8", errors="replace").splitlines():
+        key, _, value = line.partition("=")
+        if key.strip() == "path" and value.strip():
+            return Path(value.strip().strip('"'))
+    return executable
+
+
 def _native_support_files(ghostscript: str) -> tuple[Path, Path]:
     """Locate Ghostscript's PDF/A definition and an sRGB ICC profile."""
     version = _run([ghostscript, "--version"]).stdout.strip()
-    executable = Path(ghostscript).resolve()
+    executable = _scoop_target(Path(ghostscript).resolve())
     install_root = executable.parent.parent
     roots = [
         install_root,

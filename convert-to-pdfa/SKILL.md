@@ -24,6 +24,15 @@ modern PDF features better than PDF/A-1b while targeting visual fidelity.
 - Expect any full rewrite to invalidate digital signatures. The script refuses
   signature fields unless `--allow-signed` is explicitly supplied.
 
+## Before converting: is PDF/A the problem?
+
+When a court system rejects a file, check size against the destination's limit
+first. In the case behind `franklinbaldo/pink#454`, three documents refused by
+the TJRO MNI with "serviço não respondeu" were too large, not non-PDF/A, and
+conversion would not have helped. Convert when the destination asks for PDF/A:
+the PDPJ Portal's upload form, for instance, refuses a PDF without XMP
+metadata (`xmp:createdate`), which this conversion adds.
+
 ## Workflow
 
 1. Identify the input and a distinct output path. If the user did not name the
@@ -84,6 +93,9 @@ available:
 - macOS: `brew install ghostscript`
 - Windows: install the official 64-bit Ghostscript build and add
   `gswin64c.exe` to `PATH`, or install `ghostscript` inside WSL.
+- Windows with Scoop (no admin): `scoop install ghostscript`. The `gswin64c`
+  on `PATH` is a Scoop shim; the script follows its `.shim` file to the real
+  install, where `lib\PDFA_def.ps` and `iccprofiles\srgb.icc` live.
 
 **No admin rights on Windows? Try extraction before WSL or LiteBox.** The
 official Windows installer (`gs<version>w64.exe` from

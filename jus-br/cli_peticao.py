@@ -32,6 +32,7 @@ from peticao_montagem import (
     escolher_tipo,
     montar_documento,
     montar_rascunho,
+    tipos_do_tribunal,
 )
 from rich.table import Table
 
@@ -63,10 +64,14 @@ def peticao_tipos(
     sigla: Annotated[str, Parameter(help="Sigla do tribunal.")],
     busca: Annotated[str, Parameter(help="Trecho da descrição para filtrar.")] = "",
 ) -> None:
-    """Tipos de documento do tribunal; o `id` é o que `peticao rascunho --tipo` aceita."""
+    """Tipos de documento do tribunal (TPU do CNJ ou lista própria); o `id` é o que `--tipo` aceita."""
+    portal = comum.PortalClient()
     try:
-        tipos = comum.PortalClient().tipos_documento(sigla.upper())
-    except JusBrError as exc:
+        cadastro = next((t for t in portal.tribunais() if t.get("siglaTribunal") == sigla.upper()), None)
+        if not cadastro:
+            raise MontagemError(f"{sigla.upper()} não está no cadastro de tribunais do Portal.")
+        tipos, _ = tipos_do_tribunal(portal, cadastro["jtrTribunal"], sigla.upper())
+    except (JusBrError, MontagemError) as exc:
         _falhar("Erro ao listar tipos", exc)
     tabela = Table(title=f"Tipos de documento — {sigla.upper()}")
     tabela.add_column("Id", justify="right")
@@ -133,9 +138,10 @@ def peticao_rascunho(
     try:
         proc = portal.processo(cnj)
         sigla = proc["siglaTribunal"]
-        cadastro = portal.tribunal(proc["tramitacaoAtual"]["tribunal"]["jtr"])
+        jtr = proc["tramitacaoAtual"]["tribunal"]["jtr"]
+        cadastro = portal.tribunal(jtr)
         conferir_tribunal(cadastro, sigla)
-        tipos = portal.tipos_documento(sigla)
+        tipos, origem = tipos_do_tribunal(portal, jtr, sigla)
         tipo_principal = escolher_tipo(tipos, tipo)
         tipo_dos_anexos = escolher_tipo(tipos, tipo_anexo) if anexos else None
         arquivos = [(principal, conferir_arquivo(cadastro, principal))]
@@ -152,12 +158,20 @@ def peticao_rascunho(
         console.print("[yellow]Nada foi criado. Repita com --confirmar para criar o rascunho.[/yellow]")
         return
 
-    rascunho["peticaoDocumentos"] = [
+    # Como o formulário do Portal: cada arquivo vai antes ao repositório do processo, e a petição
+    # só referencia os documentos (`{"documento": ...}`), sem conteúdo no corpo.
+    documentos = [
         montar_documento(
-            None, caminho, conteudo, (tipo_principal if ordem == 0 else tipo_dos_anexos)["id"], ordem, ordem == 0
+            caminho, conteudo, tipo_principal if ordem == 0 else tipo_dos_anexos, origem, ordem, ordem == 0
         )
         for ordem, (caminho, conteudo) in enumerate(arquivos)
     ]
+    try:
+        for documento, (_, conteudo) in zip(documentos, arquivos, strict=True):
+            portal.enviar_documento(rascunho["numeroProcesso"], documento, conteudo)
+    except JusBrError as exc:
+        _falhar("Arquivo não enviado; nenhum rascunho foi criado", exc)
+    rascunho["peticaoDocumentos"] = [{"documento": d} for d in documentos]
     try:
         id_peticao = portal.criar_rascunho(rascunho)["id"]
     except (JusBrError, KeyError) as exc:
@@ -187,7 +201,7 @@ def peticao_protocolar(
         console.print("[yellow]Nada foi protocolado. Repita com --confirmar para protocolar.[/yellow]")
         return
     try:
-        protocolo = portal.protocolar(id_peticao)
+        protocolo = portal.protocolar(pet)
     except JusBrError as exc:
         _falhar("Protocolo não confirmado (confira em `peticao listar` antes de repetir)", exc)
     console.print(

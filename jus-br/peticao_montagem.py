@@ -116,21 +116,42 @@ def montar_rascunho(processo: dict, id_tipo_documento: int) -> dict[str, Any]:
 
 
 def montar_documento(
-    id_peticao: int | None, caminho: Path, conteudo: bytes, id_tipo_documento: int, ordem: int, principal: bool
+    caminho: Path, conteudo: bytes, tipo: dict, id_origem_tipo: int, ordem: int, principal: bool
 ) -> dict[str, Any]:
-    """O Portal recusa rascunho sem documento principal (422); o PDF em base64 no corpo leva 403 do servidor web."""
+    """Um arquivo como o formulário do Portal o descreve (`formatarDadosDocumento`).
+
+    Serve tanto para registrar o arquivo (`enviar_documento`) quanto, dentro de
+    `{"documento": ...}`, para a lista `peticaoDocumentos`; o conteúdo vai ao S3, nunca no corpo.
+    """
     return {
-        "idPeticao": id_peticao,
+        "id": None,
         "nome": caminho.name,
         "descricao": caminho.stem,
         "mimeType": "application/pdf" if caminho.suffix.lower() == ".pdf" else "application/octet-stream",
         "tamanho": len(conteudo),
         "hash": sha1_hex(conteudo),
-        "idTipoDocumento": id_tipo_documento,
+        "idTipoDocumento": tipo["id"],
+        "nomeTipoDocumento": tipo["descricao"],
+        "idOrigemTipoDocumento": str(id_origem_tipo),
         "ordem": ordem,
         "principal": principal,
-        "sigiloso": "NAO",
+        "sigiloso": False,
+        "base64": None,
     }
+
+
+ORIGEM_TPU = 1
+
+
+def tipos_do_tribunal(portal: Any, jtr: str, sigla: str) -> tuple[list[dict], int]:
+    """Os tipos que o formulário do Portal oferece: TPU do CNJ ou lista própria do tribunal."""
+    origem = portal.origem_tipo_documento(jtr)
+    if not origem.get("id"):
+        raise MontagemError(f"O Portal não informa a origem dos tipos de documento de {sigla}.")
+    tipos = portal.tipos_documento_tpu() if origem["id"] == ORIGEM_TPU else portal.tipos_documento(sigla)
+    if not tipos:
+        raise MontagemError(f"{sigla} não tem tipos de documento ({origem.get('descricao')}) no Portal.")
+    return tipos, origem["id"]
 
 
 def escolher_tipo(tipos: list[dict], termo: str) -> dict:

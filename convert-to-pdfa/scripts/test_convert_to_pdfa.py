@@ -31,6 +31,19 @@ class ConvertToPdfaTests(unittest.TestCase):
         self.assertTrue(convert_to_pdfa._pdfa_claim(element, 2))
         self.assertFalse(convert_to_pdfa._pdfa_claim(attribute, 1))
 
+    def test_scoop_shim_is_followed_to_the_real_install(self) -> None:
+        """A Scoop shim points elsewhere; PDFA_def.ps lives next to the real binary."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            shims = Path(temp_dir) / "shims"
+            shims.mkdir()
+            shim_exe = shims / "gswin64c.exe"
+            shim_exe.write_bytes(b"MZ")
+            real = Path(temp_dir) / "apps" / "ghostscript" / "current" / "bin" / "gswin64c.exe"
+            shim_exe.with_suffix(".shim").write_text(f'path = "{real}"\n', encoding="utf-8")
+            self.assertEqual(convert_to_pdfa._scoop_target(shim_exe), real)
+            plain = Path(temp_dir) / "gs"
+            self.assertEqual(convert_to_pdfa._scoop_target(plain), plain)
+
     def test_resolve_paths_refuses_in_place_and_existing_output(self) -> None:
         """Conversion never overwrites input or output without explicit force."""
         with tempfile.TemporaryDirectory() as temp_dir:
