@@ -40,9 +40,9 @@ Modos:
 Rode `python datajud.py -h` ou `python datajud.py <modo> -h` para detalhes.
 """
 
-import datetime
-import email.utils
 import json
+import email.utils
+import datetime
 import re
 import sqlite3
 import sys
