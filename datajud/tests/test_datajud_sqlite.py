@@ -19,6 +19,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+import datajud_api as dj_api  # noqa: E402
 import datajud_store as store  # noqa: E402
 
 import datajud as dj  # noqa: E402
@@ -511,7 +512,7 @@ def test_numero_sem_indice_nao_e_ausencia_confirmada(monkeypatch, tmp_path, caps
     import datajud_mcp as mod
 
     monkeypatch.setenv("DATAJUD_SQLITE", str(tmp_path / "datajud.sqlite"))
-    monkeypatch.setattr(dj, "search", lambda *a, **k: pytest.fail("não deveria consultar"))
+    monkeypatch.setattr(dj_api, "search", lambda *a, **k: pytest.fail("não deveria consultar"))
     saida = mod.datajud_processo("0126778-57.2022.1.00.0000")
     assert saida.encontrado is False and saida.completo is False
 
@@ -527,7 +528,7 @@ def test_falha_de_indice_nao_vira_nenhum_encontrado(monkeypatch, tmp_path, capsy
             raise RuntimeError("HTTP 504: NSX LB")
         return {"hits": {"total": {"value": 0}, "hits": []}}
 
-    monkeypatch.setattr(dj, "search", search)
+    monkeypatch.setattr(dj_api, "search", search)
     assert dj.cmd_processo("7009511-71.2024.8.22.0001", None, False, False) == 1
     erro = capsys.readouterr().err
     assert "incompleta" in erro and "Nenhum processo" not in erro

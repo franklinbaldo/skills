@@ -4,7 +4,7 @@
 # ///
 """Família do número, lote e retomada: o que torna viável levantar um acervo grande.
 
-Nenhum teste toca a rede: `dj.search` é substituído por monkeypatch.
+Nenhum teste toca a rede: `datajud_api.search` é substituído por monkeypatch.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+import datajud_api as dj_api  # noqa: E402
 import datajud_mcp as mod  # noqa: E402
 
 import datajud as dj  # noqa: E402
@@ -73,7 +74,7 @@ def test_lote_procura_na_familia_grava_cru_e_retoma(monkeypatch, tmp_path):
             hits = [_hit(tjro, "stj", "SUP")]  # subiu ao STJ com o mesmo número
         return {"hits": {"total": {"value": len(hits)}, "hits": hits}}
 
-    monkeypatch.setattr(dj, "search", search)
+    monkeypatch.setattr(dj_api, "search", search)
     lista = tmp_path / "numeros.txt"
     lista.write_text(
         f"7009511-71.2024.8.22.0001\n{tjro}\n"  # duplicata sem máscara
@@ -108,7 +109,7 @@ def test_indice_que_falha_nao_vira_ausencia(monkeypatch, tmp_path):
             raise RuntimeError("HTTP 504: NSX LB")
         return {"hits": {"total": {"value": 0}, "hits": []}}
 
-    monkeypatch.setattr(dj, "search", search)
+    monkeypatch.setattr(dj_api, "search", search)
     lista = tmp_path / "numeros.txt"
     lista.write_text("7009511-71.2024.8.22.0001\n", encoding="utf-8")
 
@@ -117,8 +118,7 @@ def test_indice_que_falha_nao_vira_ausencia(monkeypatch, tmp_path):
 
 
 def test_lote_truncado_e_erro(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        dj, "search", lambda body, tribunal="tjro", **_: {"hits": {"total": {"value": 5000}, "hits": []}}
+    monkeypatch.setattr(dj_api, "search", lambda body, tribunal="tjro", **_: {"hits": {"total": {"value": 5000}, "hits": []}}
     )
     lista = tmp_path / "numeros.txt"
     lista.write_text("7009511-71.2024.8.22.0001\n", encoding="utf-8")
@@ -137,8 +137,7 @@ def test_modelos_de_entrada_validam_e_normalizam():
 
 
 def test_lote_separa_linha_invalida(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr(
-        dj, "search", lambda body, tribunal="tjro", **_: {"hits": {"total": {"value": 0}, "hits": []}}
+    monkeypatch.setattr(dj_api, "search", lambda body, tribunal="tjro", **_: {"hits": {"total": {"value": 0}, "hits": []}}
     )
     lista = tmp_path / "numeros.txt"
     lista.write_text("7009511-71.2024.8.22.0001\nprocesso sem número\n\n", encoding="utf-8")
@@ -158,7 +157,7 @@ def test_mcp_procura_na_familia_e_marca_o_tribunal(monkeypatch):
         hits = [_hit(numero, tribunal, "G2" if tribunal == "trf1" else "SUP")] if tribunal in ("trf1", "stj") else []
         return {"hits": {"total": {"value": len(hits)}, "hits": hits}}
 
-    monkeypatch.setattr(dj, "search", search)
+    monkeypatch.setattr(dj_api, "search", search)
     saida = mod.datajud_processo("0000774-14.2019.4.01.4102")
     assert sorted(vistos) == sorted(dj.familia_do_cnj(numero))
     assert sorted(d.tribunal for d in saida.documentos) == ["STJ", "TRF1"]
@@ -176,7 +175,7 @@ def test_mcp_so_origem_consulta_so_o_tribunal_de_origem(monkeypatch, tmp_path, c
         vistos.append(tribunal)
         return {"hits": {"total": {"value": 0}, "hits": []}}
 
-    monkeypatch.setattr(dj, "search", search)
+    monkeypatch.setattr(dj_api, "search", search)
     mod.datajud_processo("0000774-14.2019.4.01.4102", so_origem=True)
     assert vistos == ["trf1"]
 
@@ -198,7 +197,7 @@ def test_recuperacao_parcial_http_500(monkeypatch):
         hits = [_hit(n, "tjro") for n in parte]
         return {"hits": {"total": {"value": len(hits)}, "hits": hits}}
 
-    monkeypatch.setattr(dj, "search", search)
+    monkeypatch.setattr(dj_api, "search", search)
     resultado = dj.consultar(dj.ConsultaLote(numeros=numeros, so_origem=True, trabalhadores=1))
     assert chamadas == [100, 25, 25, 25, 25]
     assert sum(bool(x.registros) for x in resultado.values()) == 75
