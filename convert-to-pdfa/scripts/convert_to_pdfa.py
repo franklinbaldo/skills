@@ -9,8 +9,8 @@
 # ///
 """Convert a PDF to PDF/A-1b, PDF/A-2b, or PDF/A-3b.
 
-pikepdf.pdfa promotes the file first (no Ghostscript); when its validator
-reports a violation, Ghostscript performs the conversion. PyMuPDF provides
+pikepdf.pdfa is the default (no Ghostscript). Unsupported inputs fail
+explicitly; Ghostscript is used only when an alternative backend is requested. PyMuPDF provides
 preflight checks, an explicit raster fallback, and structural verification.
 veraPDF is used when its official CLI is available.
 """
@@ -388,7 +388,7 @@ def main(
     *,
     output: Path | None = None,
     part: Literal[1, 2, 3] = 2,
-    backend: BackendChoice = "auto",
+    backend: BackendChoice = "pikepdf",
     compatibility_policy: Literal[1, 2] = 2,
     rasterize: bool = False,
     dpi: int = 300,
@@ -408,8 +408,8 @@ def main(
     part
         PDF/A part to target.
     backend
-        auto tries pikepdf first and falls back to Ghostscript (native, then WSL) on violations;
-        pikepdf fails instead of falling back; native/wsl force Ghostscript.
+        pikepdf (default) fails explicitly on unsupported input, without Ghostscript.
+        auto explicitly opts into Ghostscript fallback; native/wsl force Ghostscript.
     compatibility_policy
         2 aborts on incompatible content; 1 drops incompatible operations with warnings.
     rasterize

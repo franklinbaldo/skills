@@ -40,9 +40,9 @@ Modos:
 Rode `python datajud.py -h` ou `python datajud.py <modo> -h` para detalhes.
 """
 
-import json
-import email.utils
 import datetime
+import email.utils
+import json
 import re
 import sqlite3
 import sys
@@ -1440,3 +1440,4 @@ def main(tokens=None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

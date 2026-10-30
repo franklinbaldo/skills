@@ -38,7 +38,7 @@ class PikepdfResult:
     violations: tuple[str, ...]
     #: Unsupported findings that pikepdf could not decide; they block like violations.
     undecided: tuple[str, ...]
-    #: Schema-only unsupported findings, reported as "não verificados pelo pikepdf".
+    #: Reserved for diagnostic compatibility; no unchecked finding is accepted.
     unchecked: tuple[str, ...]
     changes: tuple[str, ...] = field(default_factory=tuple)
 

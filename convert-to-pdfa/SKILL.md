@@ -2,11 +2,11 @@
 name: convert-to-pdfa
 description: Convert PDFs to archival PDF/A-1b, PDF/A-2b, or PDF/A-3b across Windows, WSL, macOS, and Linux. Use when a user asks for PDF/A, archival PDF, ISO 19005 conversion, or a PDF accepted by SEI, PJe, courts, and document-management validators.
 compatibility: >-
-  Requires Python/uv. The default pikepdf path needs nothing else (a ~4 MB
-  wheel installed by uv, Windows included); Ghostscript (native or WSL) is the
-  fallback for files pikepdf cannot promote. Official
-  veraPDF CLI is optional unless normative validation is required. Locked-down
-  Windows without Ghostscript/WSL needs the documented LiteBox adaptation route.
+  Requires Python/uv. The default pikepdf path uses Python dependencies installed by uv, including
+  bundled qpdf on supported wheel platforms. Ghostscript is optional and used
+  only with an explicitly selected alternative backend. Official
+  veraPDF CLI is optional unless normative validation is required. Locked-down Windows without a supported wheel may need the documented
+  adaptation route.
 ---
 
 # Convert to PDF/A
@@ -20,8 +20,8 @@ modern PDF features better than PDF/A-1b while targeting visual fidelity.
 - Prefer vector conversion so text, links, and geometry survive.
 - Treat XMP as a claim, not proof. A conforming file also needs the applicable
   PDF/A rules, including an ICC-backed OutputIntent.
-- Promote with `pikepdf.pdfa` first; use Ghostscript when pikepdf's validator
-  blocks. PyMuPDF alone is not a general PDF/A writer.
+- Use `pikepdf.pdfa` by default and fail clearly when its validator blocks.
+  Never silently switch to Ghostscript. PyMuPDF alone is not a general PDF/A writer.
 - Call a result “veraPDF compliant” only when veraPDF actually reports
   `isCompliant="true"`. Otherwise say “structurally verified”.
 - Expect any full rewrite to invalidate digital signatures. The script refuses
@@ -38,12 +38,12 @@ metadata (`xmp:createdate`), which this conversion adds.
 
 ## Backends
 
-- **pikepdf (tried first by `--backend auto`)**: `pikepdf.pdfa.prepare` repairs
+- **pikepdf (default)**: `pikepdf.pdfa.prepare` repairs
   structure and metadata (output intent, XMP, annotation flags, JavaScript)
   without touching page content, preserving page drawing operations.
-  No Ghostscript; `uv` installs the wheel on any OS. The written file is
+  No Ghostscript is required; `uv` installs Python dependencies on supported platforms. The written file is
   re-checked by `validate_written`.
-- **When it falls back**: any `violation`, and any `unsupported` finding. pikepdf reports some real ISO rules as
+- **When it fails**: any `violation`, and any `unsupported` finding. pikepdf reports some real ISO rules as
   `unsupported` (a non-embedded font is one), so those block too. Unknown schema keys also block: unrecognized constructs cannot prove
   conformance. pikepdf does not embed fonts,
   convert colour or flatten transparency; Ghostscript does.
@@ -51,33 +51,34 @@ metadata (`xmp:createdate`), which this conversion adds.
   `/CreationDate`, which Google Docs exports lack, and the PDPJ portal refuses
   a PDF without `xmp:createdate`. The pikepdf path fills a missing
   `/CreationDate`/`/ModDate` (now, or `--creation-date`) before `prepare`.
-- **Ghostscript (`native`/`wsl`)**: the standards-aware rewrite for everything
-  else, as before.
+- **Ghostscript (`native`/`wsl`)**: optional, explicitly requested rewrite.
+  `--backend auto` explicitly opts into pikepdf followed by Ghostscript; it is
+  not the default.
 
 ## Workflow
 
 1. Identify the input and a distinct output path. If the user did not name the
    output, let the script create `<name>-PDFA.pdf` beside the source.
 
-1. Run strict, non-raster conversion:
+2. Run strict, non-raster conversion:
 
    ```bash
    uv run <skill-dir>/scripts/convert_to_pdfa.py "/path/input.pdf" --part 2
    ```
 
-   The report names the backend used. When pikepdf blocks, Ghostscript runs:
-   on Windows native `gswin64c.exe` first, then WSL.
+   The report names the backend used. Unsupported input fails clearly without
+   invoking Ghostscript. Select an alternative backend only intentionally.
 
-1. Read the final report. Completion requires the same page count and page
+3. Read the final report. Completion requires the same page count and page
    dimensions, a PDF/A-Xb XMP identifier, ICC OutputIntent, no material
    searchable-text loss, and either pikepdf's `validate_written` without
    blocking findings or a successful Ghostscript parse.
 
-1. If the official veraPDF CLI is installed, it runs automatically. For a
+4. If the official veraPDF CLI is installed, it runs automatically. For a
    filing that requires normative validation, add `--require-verapdf`; absence
    or rejection must fail the task.
 
-1. Only if strict conversion fails because of incompatible source content,
+5. Only if strict conversion fails because of incompatible source content,
    explain the loss and retry with:
 
    ```bash
@@ -88,15 +89,16 @@ metadata (`xmp:createdate`), which this conversion adds.
    Rasterization is a last resort: it removes searchable text, links,
    accessibility structure, forms, and signature validity.
 
-1. Return the output path, PDF/A part/conformance, page count, text-preservation
+6. Return the output path, PDF/A part/conformance, page count, text-preservation
    result, and whether validation was veraPDF or structural.
 
 ## Options
 
 - `--output PATH`: explicit destination.
 - `--part {1,2,3}`: create PDF/A-1b, 2b, or 3b; default `2`.
-- `--backend {auto,pikepdf,native,wsl}`: `auto` tries pikepdf, then
-  Ghostscript; `pikepdf` fails on a blocking finding instead of falling back;
+- `--backend {auto,pikepdf,native,wsl}`: `pikepdf` is the default and fails on
+  blocking findings without invoking Ghostscript. `auto` explicitly opts into
+  pikepdf then Ghostscript;
   `native`/`wsl` force Ghostscript.
 - `--creation-date ISO`: `/CreationDate` to write when the source has none
   (pikepdf path); default now, local time with offset.
@@ -110,8 +112,9 @@ metadata (`xmp:createdate`), which this conversion adds.
 
 ## Dependencies
 
-Install Ghostscript when neither a native executable nor WSL backend is
-available:
+The default path needs only Python/uv and its declared Python dependencies;
+no Ghostscript executable is required. Install Ghostscript only if you choose
+an optional `native`, `wsl`, or `auto` backend:
 
 - Debian/Ubuntu: `sudo apt-get install ghostscript`
 - Fedora: `sudo dnf install ghostscript`
@@ -160,8 +163,9 @@ Ghostscript supports PDF/A parts 1–3 at conformance level **b**. Do not promis
 
 ## Tests
 
-Run the self-contained regression suite. Real conversion tests skip only when
-neither native Ghostscript nor WSL Ghostscript is available.
+Run the self-contained regression suite. Real pikepdf tests run without
+Ghostscript. Only the optional Ghostscript integration tests skip when neither
+a native executable nor WSL Ghostscript is available.
 
 ```bash
 uv run <skill-dir>/scripts/test_convert_to_pdfa.py -v

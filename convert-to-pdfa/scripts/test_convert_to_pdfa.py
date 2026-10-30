@@ -5,6 +5,7 @@
 #     "cyclopts>=3.0",
 #     "pymupdf",
 #     "pikepdf[pdfa]>=10.17",
+#     "reportlab",
 # ]
 # ///
 """Regression tests for convert_to_pdfa.py."""
@@ -20,6 +21,10 @@ import convert_to_pdfa
 import pikepdf
 import pikepdf.pdfa
 import pymupdf
+import reportlab
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 from test_pikepdf_backend import make_vector_pdf
 
 
@@ -116,6 +121,87 @@ class ConvertToPdfaTests(unittest.TestCase):
             self.assertIsNone(verification.text_similarity)
             with pymupdf.open(output) as document:
                 self.assertEqual(document[0].get_text(), "")
+
+    def test_default_cli_uses_pikepdf_without_ghostscript(self) -> None:
+        """The default never discovers or invokes Ghostscript."""
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.object(
+            convert_to_pdfa, "_select_backend", side_effect=AssertionError("Ghostscript was used")
+        ), mock.patch.object(convert_to_pdfa, "_native_verapdf", return_value=None), mock.patch.object(
+            convert_to_pdfa, "_wsl_verapdf_available", return_value=False
+        ):
+            source = Path(temp_dir) / "source.pdf"
+            output = Path(temp_dir) / "out.pdf"
+            make_vector_pdf(source)
+            self.assertEqual(convert_to_pdfa.main(source, output=output), 0)
+            self.assertTrue(output.is_file())
+
+    def test_default_cli_blocks_unembedded_font_without_ghostscript(self) -> None:
+        """A real unsupported font must fail instead of silently using Ghostscript."""
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.object(
+            convert_to_pdfa, "_select_backend", side_effect=AssertionError("Ghostscript was used")
+        ):
+            source = Path(temp_dir) / "source.pdf"
+            output = Path(temp_dir) / "out.pdf"
+            make_vector_pdf(source, font=True)
+            original = source.read_bytes()
+            self.assertEqual(convert_to_pdfa.main(source, output=output), 1)
+            self.assertFalse(output.exists())
+            self.assertEqual(source.read_bytes(), original)
+            self.assertEqual(list(Path(temp_dir).glob("*.candidate.pdf")), [])
+
+    def test_required_verapdf_absent_preserves_existing_output(self) -> None:
+        """Even --force must not publish a candidate without required validation."""
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.object(
+            convert_to_pdfa, "_select_backend", side_effect=AssertionError("Ghostscript was used")
+        ), mock.patch.object(convert_to_pdfa, "_native_verapdf", return_value=None), mock.patch.object(
+            convert_to_pdfa, "_wsl_verapdf_available", return_value=False
+        ):
+            source = Path(temp_dir) / "source.pdf"
+            output = Path(temp_dir) / "out.pdf"
+            make_vector_pdf(source)
+            output.write_bytes(b"existing output remains untouched")
+            self.assertEqual(
+                convert_to_pdfa.main(source, output=output, force=True, require_verapdf=True), 1
+            )
+            self.assertEqual(output.read_bytes(), b"existing output remains untouched")
+            self.assertEqual(list(Path(temp_dir).glob("*.candidate.pdf")), [])
+
+    def test_real_pikepdf_preserves_embedded_text_without_ghostscript(self) -> None:
+        """Validate real embedded-font text, not only a font-free drawing."""
+        font_path = Path(reportlab.__file__).parent / "fonts" / "Vera.ttf"
+        pdfmetrics.registerFont(TTFont("PdfaFixtureVera", str(font_path)))
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.object(
+            convert_to_pdfa, "_select_backend", side_effect=AssertionError("Ghostscript was used")
+        ), mock.patch.object(convert_to_pdfa, "_native_verapdf", return_value=None), mock.patch.object(
+            convert_to_pdfa, "_wsl_verapdf_available", return_value=False
+        ):
+            source = Path(temp_dir) / "source.pdf"
+            raw = Path(temp_dir) / "raw.pdf"
+            document = canvas.Canvas(str(raw), initialFontName="PdfaFixtureVera")
+            document.setFont("PdfaFixtureVera", 12)
+            document.drawString(70, 700, "Texto pesquisável PDF/A")
+            document.save()
+            # ReportLab emits an empty transition dictionary. Remove only this
+            # empty generator artifact to make a fully recognized fixture;
+            # production does not bypass schema findings.
+            with pikepdf.open(raw) as pdf:
+                for page in pdf.pages:
+                    transition = page.obj.get("/Trans")
+                    self.assertEqual(len(transition), 0)
+                    del page.obj["/Trans"]
+                pdf.save(source)
+            for part in convert_to_pdfa.SUPPORTED_PARTS:
+                with self.subTest(part=part):
+                    output = Path(temp_dir) / f"out-{part}.pdf"
+                    result = convert_to_pdfa.convert(
+                        source, output, part=part, policy=2, backend="pikepdf",
+                        ghostscript=None, rasterize=False, dpi=300,
+                        require_verapdf=False, allow_signed=False,
+                    )
+                    self.assertEqual(result.backend, "pikepdf (no Ghostscript)")
+                    self.assertEqual(result.text_similarity, 1.0)
+                    with pymupdf.open(output) as written:
+                        self.assertIn("Texto pesquisável PDF/A", written[0].get_text())
 
     def _convert(self, source: Path, output: Path, backend: str) -> convert_to_pdfa.Verification:
         return convert_to_pdfa.convert(
