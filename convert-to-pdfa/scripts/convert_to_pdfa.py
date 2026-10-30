@@ -4,11 +4,13 @@
 # dependencies = [
 #     "pymupdf",
 #     "cyclopts>=3.0",
+#     "pikepdf[pdfa]>=10.17",
 # ]
 # ///
 """Convert a PDF to PDF/A-1b, PDF/A-2b, or PDF/A-3b.
 
-Ghostscript performs the standards-aware conversion. PyMuPDF provides
+pikepdf.pdfa is the default (no Ghostscript). Unsupported inputs fail
+explicitly; Ghostscript is used only when an alternative backend is requested. PyMuPDF provides
 preflight checks, an explicit raster fallback, and structural verification.
 veraPDF is used when its official CLI is available.
 """
@@ -18,89 +20,34 @@ from __future__ import annotations
 import difflib
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import Annotated, Literal
 
 import cyclopts
 import pymupdf
 from cyclopts import Parameter
+from ghostscript_backend import (  # noqa: F401 - _scoop_target re-exported for tests
+    Backend,
+    PdfaError,
+    _convert_native,
+    _convert_wsl,
+    _run,
+    _scoop_target,
+    _select_backend,
+    _wsl_available,
+    _wsl_path,
+)
+from pikepdf_backend import convert_pikepdf
 
-if TYPE_CHECKING:
-    from collections.abc import Sequence
+BackendChoice = Literal["auto", "pikepdf", "native", "wsl"]
 
-Backend = Literal["native", "wsl"]
 SUPPORTED_PARTS = (1, 2, 3)
 PAGE_SIZE_TOLERANCE = 0.05
 TEXT_SIMILARITY_FLOOR = 0.98
-WSL_GS_SCRIPT = r"""#!/usr/bin/env bash
-set -euo pipefail
-
-input=$1
-output=$2
-part=$3
-policy=$4
-
-version="$(gs --version)"
-pdfa_def=""
-for candidate in \
-  "/usr/share/ghostscript/$version/lib/PDFA_def.ps" \
-  "/usr/local/share/ghostscript/$version/lib/PDFA_def.ps" \
-  "/opt/homebrew/share/ghostscript/$version/lib/PDFA_def.ps"; do
-  if [[ -f "$candidate" ]]; then
-    pdfa_def="$candidate"
-    break
-  fi
-done
-
-icc=""
-for candidate in \
-  "/usr/share/color/icc/ghostscript/srgb.icc" \
-  "/usr/local/share/color/icc/ghostscript/srgb.icc" \
-  "/opt/homebrew/share/color/icc/ghostscript/srgb.icc" \
-  "/usr/share/ghostscript/$version/iccprofiles/default_rgb.icc"; do
-  if [[ -f "$candidate" ]]; then
-    icc="$candidate"
-    break
-  fi
-done
-
-if [[ -z "$pdfa_def" || -z "$icc" ]]; then
-  echo "Ghostscript PDF/A resources not found (PDFA_def.ps and sRGB ICC)." >&2
-  exit 4
-fi
-
-prefix="$(mktemp --suffix=.ps)"
-trap 'rm -f "$prefix"' EXIT
-sed \
-  -e '/\[ \/Title (Title)/,/\/DOCINFO pdfmark/d' \
-  -e "s|/ICCProfile ([^)]*)|/ICCProfile ($icc)|" \
-  "$pdfa_def" >"$prefix"
-
-gs \
-  "-dPDFA=$part" \
-  -dBATCH \
-  -dNOPAUSE \
-  -dNOOUTERSAVE \
-  -dAutoRotatePages=/None \
-  -dEmbedAllFonts=true \
-  -dSubsetFonts=true \
-  -sDEVICE=pdfwrite \
-  "-dPDFACompatibilityPolicy=$policy" \
-  -sColorConversionStrategy=RGB \
-  -sProcessColorModel=DeviceRGB \
-  "-sOutputFile=$output" \
-  "--permit-file-read=$icc" \
-  "$prefix" \
-  "$input"
-"""
-
-
-class PdfaError(RuntimeError):
-    """Raised when conversion or validation cannot complete safely."""
 
 
 @dataclass(frozen=True)
@@ -111,31 +58,9 @@ class Verification:
     pdf_format: str
     text_similarity: float | None
     verapdf: str
-
-
-def _run(
-    command: Sequence[str],
-    *,
-    check: bool = True,
-) -> subprocess.CompletedProcess[str]:
-    """Run a subprocess without a shell and retain diagnostic output."""
-    result = subprocess.run(
-        list(command),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
-    if check and result.returncode != 0:
-        details = "\n".join(
-            part.strip() for part in (result.stdout, result.stderr) if part.strip()
-        )
-        msg = f"Command failed ({result.returncode}): {' '.join(command)}"
-        if details:
-            msg = f"{msg}\n{details}"
-        raise PdfaError(msg)
-    return result
+    backend: str = "unknown"
+    unchecked: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
 
 
 def _default_output(input_path: Path) -> Path:
@@ -205,190 +130,6 @@ def _rasterize(input_path: Path, output_path: Path, *, dpi: int) -> None:
             )
             page.insert_image(page.rect, pixmap=pixmap)
         target.save(output_path, garbage=4, deflate=True)
-
-
-def _native_ghostscript() -> str | None:
-    """Find a native Ghostscript executable."""
-    names = ("gswin64c", "gswin32c", "gs") if sys.platform == "win32" else ("gs",)
-    return next((path for name in names if (path := shutil.which(name))), None)
-
-
-def _wsl_available() -> bool:
-    """Return whether Windows has WSL with Ghostscript installed."""
-    if sys.platform != "win32" or shutil.which("wsl.exe") is None:
-        return False
-    result = _run(
-        ["wsl.exe", "-e", "sh", "-lc", "command -v gs >/dev/null 2>&1"],
-        check=False,
-    )
-    return result.returncode == 0
-
-
-def _select_backend(requested: str) -> tuple[Backend, str | None]:
-    """Choose native Ghostscript first, then WSL on Windows."""
-    native = _native_ghostscript()
-    if requested == "native":
-        if native is None:
-            raise PdfaError(_ghostscript_install_hint())
-        return "native", native
-    if requested == "wsl":
-        if not _wsl_available():
-            raise PdfaError(
-                "WSL is unavailable or its distribution does not have `gs` installed."
-            )
-        return "wsl", None
-    if native is not None:
-        return "native", native
-    if _wsl_available():
-        return "wsl", None
-    raise PdfaError(_ghostscript_install_hint())
-
-
-def _ghostscript_install_hint() -> str:
-    """Return platform-specific installation guidance."""
-    if sys.platform == "win32":
-        return (
-            "Ghostscript was not found. Install the official 64-bit Windows build and add "
-            "`gswin64c.exe` to PATH, or install it in WSL with "
-            "`sudo apt-get update && sudo apt-get install -y ghostscript`."
-        )
-    if sys.platform == "darwin":
-        return "Ghostscript was not found. Install it with `brew install ghostscript`."
-    return (
-        "Ghostscript was not found. Install it with your package manager, for example "
-        "`sudo apt-get install ghostscript`, `sudo dnf install ghostscript`, or "
-        "`sudo pacman -S ghostscript`."
-    )
-
-
-def _native_support_files(ghostscript: str) -> tuple[Path, Path]:
-    """Locate Ghostscript's PDF/A definition and an sRGB ICC profile."""
-    version = _run([ghostscript, "--version"]).stdout.strip()
-    executable = Path(ghostscript).resolve()
-    install_root = executable.parent.parent
-    roots = [
-        install_root,
-        Path("/usr/share/ghostscript") / version,
-        Path("/usr/local/share/ghostscript") / version,
-        Path("/opt/homebrew/share/ghostscript") / version,
-    ]
-    pdfa_candidates = [root / "lib" / "PDFA_def.ps" for root in roots]
-    icc_candidates = [
-        install_root / "iccprofiles" / "srgb.icc",
-        install_root / "iccprofiles" / "default_rgb.icc",
-        Path("/usr/share/color/icc/ghostscript/srgb.icc"),
-        Path("/usr/local/share/color/icc/ghostscript/srgb.icc"),
-        Path("/opt/homebrew/share/color/icc/ghostscript/srgb.icc"),
-    ]
-    pdfa_def = next((path for path in pdfa_candidates if path.is_file()), None)
-    icc = next((path for path in icc_candidates if path.is_file()), None)
-    if pdfa_def is None or icc is None:
-        raise PdfaError(
-            "Ghostscript is installed, but PDFA_def.ps or an sRGB ICC profile was not found."
-        )
-    return pdfa_def, icc
-
-
-def _postscript_path(path: Path) -> str:
-    """Encode an absolute path for a PostScript string."""
-    return path.as_posix().replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-
-
-def _patched_pdfa_definition(pdfa_def: Path, icc: Path, destination: Path) -> None:
-    """Create a temporary PDFA_def.ps with a fully qualified ICC path."""
-    text = pdfa_def.read_text(encoding="latin-1")
-    text, replacements = re.subn(
-        r"/ICCProfile\s+\([^)]*\)",
-        f"/ICCProfile ({_postscript_path(icc)})",
-        text,
-        count=1,
-    )
-    if replacements != 1:
-        raise PdfaError(f"Could not patch ICCProfile in {pdfa_def}")
-    text = re.sub(
-        r"\[\s*/Title\s+\(Title\).*?/DOCINFO\s+pdfmark",
-        "",
-        text,
-        count=1,
-        flags=re.DOTALL,
-    )
-    destination.write_text(text, encoding="latin-1", newline="\n")
-
-
-def _convert_native(
-    ghostscript: str,
-    input_path: Path,
-    output_path: Path,
-    *,
-    part: int,
-    policy: int,
-) -> None:
-    """Convert through a native Ghostscript installation."""
-    pdfa_def, icc = _native_support_files(ghostscript)
-    with tempfile.TemporaryDirectory(prefix="convert_to_pdfa_") as temp_dir:
-        prefix = Path(temp_dir) / "PDFA_def.ps"
-        _patched_pdfa_definition(pdfa_def, icc, prefix)
-        _run(
-            [
-                ghostscript,
-                f"-dPDFA={part}",
-                "-dBATCH",
-                "-dNOPAUSE",
-                "-dNOOUTERSAVE",
-                "-dAutoRotatePages=/None",
-                "-dEmbedAllFonts=true",
-                "-dSubsetFonts=true",
-                "-sDEVICE=pdfwrite",
-                f"-dPDFACompatibilityPolicy={policy}",
-                "-sColorConversionStrategy=RGB",
-                "-sProcessColorModel=DeviceRGB",
-                f"-sOutputFile={output_path}",
-                f"--permit-file-read={icc}",
-                str(prefix),
-                str(input_path),
-            ]
-        )
-
-
-def _wsl_path(path: Path) -> str:
-    """Translate a Windows path for the default WSL distribution."""
-    result = _run(["wsl.exe", "-e", "wslpath", "-a", "-u", str(path)])
-    return result.stdout.strip()
-
-
-def _convert_wsl(
-    input_path: Path,
-    output_path: Path,
-    *,
-    part: int,
-    policy: int,
-) -> None:
-    """Convert through Ghostscript installed in WSL."""
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        suffix=".sh",
-        prefix="convert_to_pdfa_",
-        encoding="utf-8",
-        newline="\n",
-        delete=False,
-    ) as script_file:
-        script_file.write(WSL_GS_SCRIPT)
-        script_path = Path(script_file.name)
-    try:
-        _run(
-            [
-                "wsl.exe",
-                "-e",
-                "bash",
-                _wsl_path(script_path),
-                _wsl_path(input_path),
-                _wsl_path(output_path),
-                str(part),
-                str(policy),
-            ]
-        )
-    finally:
-        script_path.unlink(missing_ok=True)
 
 
 def _ghostscript_parse(
@@ -537,18 +278,47 @@ def _run_verapdf(output_path: Path, *, part: int, required: bool) -> str:
     return f"compliant with PDF/A-{flavour}"
 
 
+def _try_pikepdf(
+    source: Path,
+    candidate: Path,
+    *,
+    part: int,
+    backend: BackendChoice,
+    creation_date: datetime | None,
+) -> tuple[str | None, tuple[str, ...], tuple[str, ...]]:
+    """Promote with pikepdf; return (backend used or None to fall back, unchecked, notes)."""
+    if backend not in ("auto", "pikepdf"):
+        return None, (), ()
+    try:
+        result = convert_pikepdf(source, candidate, part=part, creation_date=creation_date)
+    except Exception as error:  # noqa: BLE001 - any pikepdf failure means "use Ghostscript"
+        if backend == "pikepdf":
+            raise PdfaError(f"pikepdf promotion failed: {error}") from error
+        candidate.unlink(missing_ok=True)
+        return None, (), (f"pikepdf failed ({error}); fell back to Ghostscript",)
+    if result.blocking:
+        candidate.unlink(missing_ok=True)
+        listing = "\n".join(f"  - {finding}" for finding in result.blocking)
+        if backend == "pikepdf":
+            raise PdfaError(f"pikepdf found PDF/A-{part}b violations or undecided rules:\n{listing}")
+        note = f"pikepdf found {len(result.blocking)} blocking finding(s); fell back to Ghostscript:\n{listing}"
+        return None, (), (note,)
+    return "pikepdf (no Ghostscript)", result.unchecked, result.changes
+
+
 def convert(
     input_path: Path,
     output_path: Path,
     *,
     part: int,
     policy: int,
-    backend: Backend,
+    backend: BackendChoice,
     ghostscript: str | None,
     rasterize: bool,
     dpi: int,
     require_verapdf: bool,
     allow_signed: bool,
+    creation_date: datetime | None = None,
 ) -> Verification:
     """Convert atomically and expose the final file only after verification."""
     pages, sizes, input_text = _preflight(input_path, allow_signed=allow_signed)
@@ -567,15 +337,25 @@ def convert(
             candidate = Path(candidate_file.name)
         candidate.unlink()
         try:
-            if backend == "native":
-                if ghostscript is None:
-                    raise PdfaError("Internal error: missing native Ghostscript path.")
-                _convert_native(
-                    ghostscript, source, candidate, part=part, policy=policy
-                )
-            else:
-                _convert_wsl(source, candidate, part=part, policy=policy)
-            _ghostscript_parse(backend, ghostscript, candidate)
+            used, unchecked, notes = _try_pikepdf(
+                source, candidate, part=part, backend=backend, creation_date=creation_date
+            )
+            if used is None:
+                gs_backend: Backend
+                if backend in ("auto", "pikepdf"):
+                    gs_backend, ghostscript = _select_backend("auto")
+                else:
+                    gs_backend = backend
+                if gs_backend == "native":
+                    if ghostscript is None:
+                        raise PdfaError("Internal error: missing native Ghostscript path.")
+                    _convert_native(
+                        ghostscript, source, candidate, part=part, policy=policy
+                    )
+                else:
+                    _convert_wsl(source, candidate, part=part, policy=policy)
+                _ghostscript_parse(gs_backend, ghostscript, candidate)
+                used = f"ghostscript ({gs_backend})"
             verification = _structural_verify(
                 candidate,
                 expected_pages=pages,
@@ -591,6 +371,9 @@ def convert(
                 pdf_format=verification.pdf_format,
                 text_similarity=verification.text_similarity,
                 verapdf=verapdf,
+                backend=used,
+                unchecked=unchecked,
+                notes=notes,
             )
         finally:
             candidate.unlink(missing_ok=True)
@@ -605,13 +388,14 @@ def main(
     *,
     output: Path | None = None,
     part: Literal[1, 2, 3] = 2,
-    backend: Literal["auto", "native", "wsl"] = "auto",
+    backend: BackendChoice = "pikepdf",
     compatibility_policy: Literal[1, 2] = 2,
     rasterize: bool = False,
     dpi: int = 300,
     require_verapdf: bool = False,
     allow_signed: bool = False,
     force: bool = False,
+    creation_date: str | None = None,
 ) -> int:
     """Convert one PDF to PDF/A.
 
@@ -624,7 +408,8 @@ def main(
     part
         PDF/A part to target.
     backend
-        Ghostscript backend; auto prefers native and falls back to WSL on Windows.
+        pikepdf (default) fails explicitly on unsupported input, without Ghostscript.
+        auto explicitly opts into Ghostscript fallback; native/wsl force Ghostscript.
     compatibility_policy
         2 aborts on incompatible content; 1 drops incompatible operations with warnings.
     rasterize
@@ -637,6 +422,8 @@ def main(
         convert despite signature fields; the new file will not retain signature validity.
     force
         replace an existing output after validation.
+    creation_date
+        ISO 8601 date written as /CreationDate when the source has none (pikepdf path); default now.
     """
     try:
         if dpi < 72 or dpi > 600:
@@ -644,24 +431,33 @@ def main(
         resolved_input, output_path = _resolve_paths(
             str(input_path), str(output) if output else None, force=force
         )
-        selected_backend, ghostscript = _select_backend(backend)
+        when = datetime.fromisoformat(creation_date) if creation_date else None
+        ghostscript = None
+        if backend in ("native", "wsl"):
+            backend, ghostscript = _select_backend(backend)
         verification = convert(
             resolved_input,
             output_path,
             part=part,
             policy=compatibility_policy,
-            backend=selected_backend,
+            backend=backend,
             ghostscript=ghostscript,
             rasterize=rasterize,
             dpi=dpi,
             require_verapdf=require_verapdf,
             allow_signed=allow_signed,
+            creation_date=when,
         )
-    except (PdfaError, pymupdf.FileDataError) as error:
+    except (PdfaError, ValueError, pymupdf.FileDataError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
     print(f"Created: {output_path}")
+    print(f"Backend: {verification.backend}")
+    for note in verification.notes:
+        print(f"Note: {note}")
+    for item in verification.unchecked:
+        print(f"Não verificado pelo pikepdf: {item}")
     print(f"Format: PDF/A-{part}b ({verification.pdf_format})")
     print(f"Pages: {verification.pages}")
     if rasterize:
@@ -678,3 +474,4 @@ def main(
 
 if __name__ == "__main__":
     raise SystemExit(app() or 0)
+

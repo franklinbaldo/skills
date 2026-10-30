@@ -4,6 +4,7 @@
 # dependencies = [
 #     "cyclopts>=3.0",
 #     "pymupdf",
+#     "pikepdf[pdfa]>=10.17",
 # ]
 # ///
 """Regression for #93: subprocess diagnostics may contain non-UTF-8 bytes."""
@@ -34,3 +35,4 @@ class SubprocessDecodingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
