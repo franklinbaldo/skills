@@ -51,6 +51,7 @@ CLI_MODULES = {
     "project_skill_evals": "okf-agent-skills/scripts",
     "project_skill_mentions": "okf-agent-skills/scripts",
     "consultar_dare": "consulta-dare-sefin/scripts",
+    "numero_antigo": "tjro-numero-antigo/scripts",
 }
 
 
