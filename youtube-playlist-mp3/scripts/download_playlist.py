@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["cyclopts>=3,<5", "yt-dlp[default]>=2026.10.26"]
+# dependencies = ["cyclopts>=3,<5", "yt-dlp[default]>=2026.10.26", "static-ffmpeg==3.0"]
 # ///
 """Download a YouTube playlist as MP3 files with metadata and resumable progress."""
 
@@ -10,10 +10,26 @@ from shutil import which
 from urllib.parse import parse_qs, urlsplit
 
 from cyclopts import App
+from static_ffmpeg.run import get_or_fetch_platform_executables_else_raise
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadError
 
 app = App(help=__doc__)
+
+
+def ensure_ffmpeg() -> str | None:
+    """Reuse system tools or fetch a private pair without changing global PATH."""
+    if all(which(tool) for tool in ("ffmpeg", "ffprobe")):
+        return None
+    app.console.print("Preparing private FFmpeg and ffprobe (downloaded on first use)...")
+    try:
+        ffmpeg, ffprobe = get_or_fetch_platform_executables_else_raise()
+        if not Path(ffmpeg).is_file() or not Path(ffprobe).is_file():
+            raise OSError("FFmpeg provider did not produce both executables")
+        return str(Path(ffmpeg).parent)
+    except Exception as error:
+        app.console.print(f"Could not prepare FFmpeg: {error}", markup=False)
+        raise SystemExit(2) from error
 
 
 @app.default
@@ -55,15 +71,7 @@ def main(
     if cookies is not None and not cookies.is_file():
         app.console.print("Cookies file does not exist or is not a regular file.")
         raise SystemExit(2)
-    if not list_only:
-        missing = [tool for tool in ("ffmpeg", "ffprobe") if not which(tool)]
-        if missing:
-            app.console.print(
-                f"Missing: {', '.join(missing)}. Install FFmpeg and reopen your terminal. "
-                "Windows: winget install --id Gyan.FFmpeg --exact; "
-                "macOS: brew install ffmpeg; Debian/Ubuntu: sudo apt install ffmpeg."
-            )
-            raise SystemExit(2)
+    ffmpeg_location = ensure_ffmpeg() if not list_only else None
 
     options = {
         "noplaylist": False,
@@ -71,6 +79,8 @@ def main(
         # Continue past unavailable entries, but retain a nonzero failure status.
         "ignoreerrors": "only_download",
     }
+    if ffmpeg_location is not None:
+        options["ffmpeg_location"] = ffmpeg_location
     if which("node"):
         options["js_runtimes"] = {"node": {}}
     if cookies is not None:

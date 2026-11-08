@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["cyclopts>=3,<5", "yt-dlp[default]>=2026.10.26"]
+# dependencies = ["cyclopts>=3,<5", "yt-dlp[default]>=2026.10.26", "static-ffmpeg==3.0"]
 # ///
 """Offline CLI and failure-propagation tests; no media or credentials needed."""
 
@@ -35,14 +35,37 @@ class DownloadTests(unittest.TestCase):
             downloader.assert_not_called()
 
     def test_missing_ffmpeg_never_connects(self):
-        with patch.object(module, "which", return_value=None), patch.object(module, "YoutubeDL") as downloader:
+        with (
+            patch.object(module, "which", return_value=None),
+            patch.object(module, "get_or_fetch_platform_executables_else_raise", side_effect=OSError("offline")),
+            patch.object(module, "YoutubeDL") as downloader,
+        ):
             with self.assertRaises(SystemExit) as result:
                 module.app([URL])
             self.assertEqual(result.exception.code, 2)
             downloader.assert_not_called()
 
+    def test_download_uses_private_ffmpeg(self):
+        with tempfile.TemporaryDirectory() as folder:
+            binaries = [Path(folder) / name for name in ("ffmpeg.exe", "ffprobe.exe")]
+            for binary in binaries:
+                binary.touch()
+            with (
+                patch.object(module, "which", return_value=None),
+                patch.object(module, "get_or_fetch_platform_executables_else_raise", return_value=binaries),
+                patch.object(module, "YoutubeDL") as downloader,
+            ):
+                downloader.return_value.__enter__.return_value.download.return_value = 0
+                with self.assertRaises(SystemExit) as result:
+                    module.app([URL, "--destination", folder])
+                self.assertEqual(result.exception.code, 0)
+                self.assertEqual(downloader.call_args.args[0]["ffmpeg_location"], folder)
+
     def test_listing_without_ffmpeg(self):
-        with patch.object(module, "which", return_value=None), patch.object(module, "YoutubeDL") as downloader:
+        with (
+            patch.object(module, "ensure_ffmpeg") as prepare,
+            patch.object(module, "YoutubeDL") as downloader,
+        ):
             downloader.return_value.__enter__.return_value.download.return_value = 0
             with self.assertRaises(SystemExit) as result:
                 module.app([URL, "--list-only"])
@@ -50,6 +73,7 @@ class DownloadTests(unittest.TestCase):
             options = downloader.call_args.args[0]
             self.assertTrue(options["skip_download"])
             self.assertNotIn("postprocessors", options)
+            prepare.assert_not_called()
 
     def test_partial_failure_is_reported_and_archive_configured(self):
         with tempfile.TemporaryDirectory() as folder:
