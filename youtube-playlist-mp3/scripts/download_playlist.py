@@ -5,6 +5,8 @@
 # ///
 """Download a YouTube playlist as MP3 files with metadata and resumable progress."""
 
+from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import ExitStack
 from pathlib import Path
 from shutil import which
 from urllib.parse import parse_qs, urlsplit
@@ -12,7 +14,8 @@ from urllib.parse import parse_qs, urlsplit
 from cyclopts import App
 from static_ffmpeg.run import get_or_fetch_platform_executables_else_raise
 from yt_dlp import YoutubeDL
-from yt_dlp.utils import DownloadError
+from yt_dlp.postprocessor import FFmpegExtractAudioPP, FFmpegMetadataPP, PostProcessor
+from yt_dlp.utils import DownloadError, PostProcessingError
 
 app = App(help=__doc__)
 
@@ -29,7 +32,28 @@ def ensure_ffmpeg() -> str | None:
         return str(Path(ffmpeg).parent)
     except Exception as error:
         app.console.print(f"Could not prepare FFmpeg: {error}", markup=False)
-        raise SystemExit(2) from error
+        raise RuntimeError(f"Could not prepare FFmpeg: {error}") from error
+
+
+class DeferredAudioPP(PostProcessor):
+    """Wait for tools only after media arrives, then use yt-dlp's processors."""
+
+    def __init__(self, downloader: YoutubeDL, ready: Future):
+        super().__init__(downloader)
+        self.ready = ready
+
+    def run(self, info):
+        try:
+            location = self.ready.result()
+        except Exception as error:
+            raise PostProcessingError(f"FFmpeg unavailable; source audio retained: {error}") from error
+        if location is not None:
+            self._downloader.params["ffmpeg_location"] = location
+        audio = FFmpegExtractAudioPP(self._downloader, preferredcodec="mp3", preferredquality="0")
+        metadata = FFmpegMetadataPP(self._downloader, add_metadata=True)
+        deleted_audio, info = audio.run(info)
+        deleted_metadata, info = metadata.run(info)
+        return deleted_audio + deleted_metadata, info
 
 
 @app.default
@@ -71,7 +95,6 @@ def main(
     if cookies is not None and not cookies.is_file():
         app.console.print("Cookies file does not exist or is not a regular file.")
         raise SystemExit(2)
-    ffmpeg_location = ensure_ffmpeg() if not list_only else None
 
     options = {
         "noplaylist": False,
@@ -79,8 +102,6 @@ def main(
         # Continue past unavailable entries, but retain a nonzero failure status.
         "ignoreerrors": "only_download",
     }
-    if ffmpeg_location is not None:
-        options["ffmpeg_location"] = ffmpeg_location
     if which("node"):
         options["js_runtimes"] = {"node": {}}
     if cookies is not None:
@@ -104,13 +125,14 @@ def main(
                 "default": "%(playlist_title).80s [%(playlist_id)s]/"
                 "%(playlist_index)03d - %(title).120s [%(id)s].%(ext)s"
             },
-            postprocessors=[
-                {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "0"},
-                {"key": "FFmpegMetadata", "add_metadata": True},
-            ],
         )
     try:
-        with YoutubeDL(options) as downloader:
+        with ExitStack() as stack:
+            downloader = stack.enter_context(YoutubeDL(options))
+            if not list_only:
+                executor = stack.enter_context(ThreadPoolExecutor(max_workers=1))
+                ready = executor.submit(ensure_ffmpeg)
+                downloader.add_post_processor(DeferredAudioPP(downloader, ready))
             status = downloader.download([url])
     except (DownloadError, OSError) as error:
         app.console.print(str(error), markup=False)

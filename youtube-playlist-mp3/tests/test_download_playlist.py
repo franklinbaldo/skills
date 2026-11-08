@@ -9,7 +9,9 @@ import importlib.util
 import sys
 import tempfile
 import unittest
+from concurrent.futures import Future
 from pathlib import Path
+from threading import Event
 from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "download_playlist.py"
@@ -34,16 +36,36 @@ class DownloadTests(unittest.TestCase):
                 self.assertEqual(result.exception.code, 2)
             downloader.assert_not_called()
 
-    def test_missing_ffmpeg_never_connects(self):
-        with (
-            patch.object(module, "which", return_value=None),
-            patch.object(module, "get_or_fetch_platform_executables_else_raise", side_effect=OSError("offline")),
-            patch.object(module, "YoutubeDL") as downloader,
-        ):
-            with self.assertRaises(SystemExit) as result:
-                module.app([URL])
-            self.assertEqual(result.exception.code, 2)
-            downloader.assert_not_called()
+    def test_failed_provisioning_keeps_source(self):
+        ready = Future()
+        ready.set_exception(RuntimeError("offline"))
+        with module.YoutubeDL({"quiet": True}) as downloader, tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "source.webm"
+            source.write_bytes(b"original")
+            processor = module.DeferredAudioPP(downloader, ready)
+            with self.assertRaises(module.PostProcessingError):
+                processor.run({"filepath": str(source)})
+            self.assertEqual(source.read_bytes(), b"original")
+
+    def test_download_starts_before_ffmpeg_is_ready(self):
+        started = Event()
+
+        def prepare():
+            if not started.wait(timeout=5):
+                raise AssertionError("Media download was blocked by FFmpeg preparation")
+
+        with tempfile.TemporaryDirectory() as folder:
+            with (
+                patch.object(module, "ensure_ffmpeg", side_effect=prepare),
+                patch.object(module, "YoutubeDL") as factory,
+            ):
+                downloader = factory.return_value.__enter__.return_value
+                downloader.download.side_effect = lambda urls: started.set() or 0
+                with self.assertRaises(SystemExit) as result:
+                    module.app([URL, "--destination", folder])
+                self.assertEqual(result.exception.code, 0)
+                processor = downloader.add_post_processor.call_args.args[0]
+                self.assertIsNone(processor.ready.result())
 
     def test_download_uses_private_ffmpeg(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -59,7 +81,17 @@ class DownloadTests(unittest.TestCase):
                 with self.assertRaises(SystemExit) as result:
                     module.app([URL, "--destination", folder])
                 self.assertEqual(result.exception.code, 0)
-                self.assertEqual(downloader.call_args.args[0]["ffmpeg_location"], folder)
+                instance = downloader.return_value.__enter__.return_value
+                processor = instance.add_post_processor.call_args.args[0]
+                self.assertEqual(processor.ready.result(), folder)
+                with (
+                    patch.object(module, "FFmpegExtractAudioPP") as extract,
+                    patch.object(module, "FFmpegMetadataPP") as metadata,
+                ):
+                    extract.return_value.run.return_value = (["source.webm"], {"filepath": "audio.mp3"})
+                    metadata.return_value.run.return_value = ([], {"filepath": "audio.mp3"})
+                    self.assertEqual(processor.run({})[0], ["source.webm"])
+                    instance.params.__setitem__.assert_called_with("ffmpeg_location", folder)
 
     def test_listing_without_ffmpeg(self):
         with (

@@ -20,7 +20,9 @@ the output folder relative to the user's working directory.
    access, system installation or persistent PATH change is needed. The first
    conversion requires network access for that binary download. `--help` and
    `--list-only` do not fetch FFmpeg binaries. Unsupported platforms or download
-   failures stop before media downloading with an actionable error.
+   failures are reported at conversion time; downloaded source audio is retained.
+   Media downloading and binary preparation run concurrently. Only conversion
+   waits for FFmpeg, so a first-use binary download does not delay media extraction.
 3. Use a supported JavaScript runtime for YouTube challenges. The script enables
    Node when found; otherwise yt-dlp can use its default Deno runtime. If extraction
    reports a missing or outdated runtime, consult the official yt-dlp documentation
@@ -58,8 +60,9 @@ the output folder relative to the user's working directory.
   the duplicate-download consequences; it also skips files manually deleted later.
 - Unavailable entries do not stop later entries. A failure produces a nonzero
   status; preserve completed files and diagnose before retrying.
-- Exit codes: 0 completed, 1 download/postprocessing failure, 2 invalid input or
-  FFmpeg provisioning failure. No media download starts until FFmpeg is resolved.
+- Exit codes: 0 completed, 1 download/postprocessing failure (including FFmpeg
+  provisioning), 2 invalid input. A conversion failure must not archive an item
+  as completed or delete its downloaded source. Rerun after resolving the failure.
 - Do not claim live downloading was tested if only help, listing or mocks ran.
 
 Sources: [yt-dlp](https://github.com/yt-dlp/yt-dlp),
