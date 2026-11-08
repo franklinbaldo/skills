@@ -12,6 +12,7 @@ the output folder relative to the user's working directory.
 ## Workflow
 
 1. Obtain the playlist URL and use the requested output folder, or `./mp3`.
+
 2. Check `uv` on PATH. If missing, suggest installation; on Windows:
    `winget install --id astral-sh.uv --exact`. PEP 723 declares `static-ffmpeg`
    alongside the Python dependencies. The script reuses FFmpeg and ffprobe when
@@ -23,10 +24,12 @@ the output folder relative to the user's working directory.
    failures are reported at conversion time; downloaded source audio is retained.
    Media downloading and binary preparation run concurrently. Only conversion
    waits for FFmpeg, so a first-use binary download does not delay media extraction.
+
 3. Use a supported JavaScript runtime for YouTube challenges. The script enables
    Node when found; otherwise yt-dlp can use its default Deno runtime. If extraction
    reports a missing or outdated runtime, consult the official yt-dlp documentation
    and resolve that specific dependency before retrying.
+
 4. Run the download with the URL quoted. No manual virtualenv or pip is needed:
 
    ```sh
@@ -43,6 +46,7 @@ the output folder relative to the user's working directory.
    with the user's authorized session. The file must use Netscape format. Keep
    cookies outside repositories; never print or publish them. Browser cookie
    decryption is not handled by this skill. Do not bypass access restrictions.
+
 6. Verify the exit status and actual MP3 output. Report failures and unavailable
    entries separately. When practical, probe a produced file with `ffprobe` and
    check playback; command success alone does not prove audio quality.
