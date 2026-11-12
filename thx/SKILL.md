@@ -60,14 +60,14 @@ The same three types in THX-02 and in the Gemini Decisions API:
 Check this table before relying on it. The THX-02 facts come from its model
 card and the `thx02` package; the free-tier numbers are not published.
 
-| Route                                                                       | Model                           | Free tier                                                      | Notes                                                                                      |
-| --------------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `api.hal-x.ai` (`thx02` client; docs at api.hal-x.ai/docs/thx-02)           | THX-02                          | Yes; the key is optional and limits are per IP                 | `pip install thx02`; key in `HALX_API_KEY` when needed.                                    |
-| [Hugging Face Space](https://huggingface.co/spaces/hugging-apps/thx-02)     | THX-02                          | Yes                                                            | Manual trials, not bulk.                                                                   |
-| Self-hosted server (`thx02[server]`)                                        | THX-02                          | Your GPU                                                       | `POST /v1/decide` with `{"state", "questions", "think"}`, `Authorization: Bearer <token>`. |
-| Colab T4 / Kaggle, via the [`free-gpu`](../free-gpu/SKILL.md) skill         | THX-02                          | Free GPU quota                                                 | See below.                                                                                 |
-| Gemini Developer API (`generativelanguage.googleapis.com/v1beta/decisions`) | gemini-decision-1 (proprietary) | 200 RPM, 50k TPM, 10k RPD; **inputs may be used for training** | Header `x-goog-api-key`. Paid tier: about US$0.10 per 1M input tokens.                     |
-| [OpenRouter](https://x.com/OpenRouter/status/2120583084005605816)           | gemini-decision-1               | Not confirmed                                                  | US$0.10 per 1M input tokens.                                                               |
+| Route                                                                       | Model                           | Free tier                                                      | Notes                                                                                                                  |
+| --------------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `api.hal-x.ai/v1/decide` (`thx02` client; docs at api.hal-x.ai/docs/thx-02) | THX-02                          | Yes, no key needed for `thx-01`/`thx-02`; limited per IP       | Send `"model": "THX-02"`: without it the API answers with **THX-01**. Body `{"model", "state", "questions", "think"}`. |
+| [Hugging Face Space](https://huggingface.co/spaces/hugging-apps/thx-02)     | THX-02                          | Yes                                                            | Manual trials, not bulk.                                                                                               |
+| Self-hosted server (`thx02[server]`)                                        | THX-02                          | Your GPU                                                       | `POST /v1/decide` with `{"state", "questions", "think"}`, `Authorization: Bearer <token>`.                             |
+| Colab T4 / Kaggle, via the [`free-gpu`](../free-gpu/SKILL.md) skill         | THX-02                          | Free GPU quota                                                 | See below.                                                                                                             |
+| Gemini Developer API (`generativelanguage.googleapis.com/v1beta/decisions`) | gemini-decision-1 (proprietary) | 200 RPM, 50k TPM, 10k RPD; **inputs may be used for training** | Header `x-goog-api-key`. Paid tier: about US$0.10 per 1M input tokens.                                                 |
+| [OpenRouter](https://x.com/OpenRouter/status/2120583084005605816)           | gemini-decision-1               | Not confirmed                                                  | US$0.10 per 1M input tokens.                                                                                           |
 
 `gemini-decision-1` has no published weights and cannot run on your own GPU.
 THX-02 can.
@@ -123,7 +123,14 @@ Observed with gemini-decision-1 on a 14-item answer key from the `ies` project
   occurrences in recorded traffic, flow across files, or a `frameset` producing
   a document without `body`.
 
-Re-run the same key on THX-02 before switching models.
+THX-02 on the same key (2026-11-12, hosted API, `model: "THX-02"`): it chose
+`fica` for **all 14** items, with or without thinking (`think: "auto"`). Its
+`noul` answers stayed between 0.17 and 0.55, so they barely separate the
+classes. Only `sem_fato` was slightly higher on the two "carrega valor" items
+(0.55 and 0.64). On Rust code with Portuguese criteria, this is outside its
+training distribution, and it is not usable for this task. Use
+gemini-decision-1 here, and re-run the key for every new domain before
+trusting either model.
 
 ## Recipes
 
