@@ -107,6 +107,36 @@ Steps:
 Use the T4 when data must not leave the account, when the free API's per-IP
 limit is too slow, or to avoid the Gemini free tier's training terms.
 
+## Ask facts, not preferences
+
+The most important rule. A question like "should this be deleted?" or "what
+should be done?" asks about **your** policy, not about the input, and no
+model can read your policy from the snippet. Ask only facts the input
+contains, and turn them into a verdict with a rule written in code.
+
+Sort every fact by who can answer it:
+
+| Kind of fact | Who answers                          | Example                                                                                                                     |
+| ------------ | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Structural   | the parser/AST, no model             | Does the variant carry data? Is its only field another error? Is it constructed anywhere, or only matched?                  |
+| Semantic     | thx, 1–2 short `noul` questions      | Is the value that failed the check available where the error is created? Does the checked condition exist in a browser DOM? |
+| World        | measurement (logs, recorded traffic) | How often does this case occur in production?                                                                               |
+| Verdict      | a rule in code                       | not constructed or impossible → remove; drops an available value → carry it; …                                              |
+
+Measured on the same 14-item key:
+
+| Model             | Preference question ("what to do?") | Facts + rule |
+| ----------------- | ----------------------------------- | ------------ |
+| THX-02            | 4/14 (answered "keep" for all)      | **7/14**     |
+| gemini-decision-1 | 7/14                                | **9/14**     |
+
+With factual questions THX-02 started to discriminate: `dom_impossivel` came out
+at 0.89 for a repeated attribute and 0.71 for two `head` elements. Facts that
+an AST can decide should not go to the model: there the model only adds noise,
+including false negatives on "is it constructed?". Both models still miss a
+value hidden inside a chained expression (`ler(self.unico(chave)?)`), so keep
+semantic questions concrete and short.
+
 ## Calibration: always check against an answer key
 
 The model card says the probabilities are calibrated on its training
@@ -147,13 +177,22 @@ trusting either model.
 
 ### Keep or remove an error variant
 
-- **Input:** the project's criterion in two lines, the variant definition, and
-  up to six construction or handling sites.
-- **Questions:**
-  - `impossivel` (noul);
-  - `sem_fato` (noul);
-  - `veredito` (choice): `fica`, `sai`, `carrega_valor`, `separa` or `achata`.
-- **Threshold:** 0.9 for automatic action, as long as the answer key confirms it.
+1. **Structural facts, from the AST:** `tem_campo` (the variant carries data),
+   `so_embrulha` (its only field is another error type), and `construida` (it
+   is created somewhere, not only matched).
+2. **Semantic facts, from thx** (`noul`):
+   - `valor_em_maos`: where the variant is created, is the value that failed
+     the check available? Ask this only when the variant has no field.
+   - `dom_impossivel`: does the checked condition describe something that
+     cannot exist in a browser DOM?
+3. **World facts, from measurement,** when the case depends on data, for
+   example zero occurrences in recorded traffic.
+4. **Verdict, by rule:**
+   - not constructed, or the condition is impossible → `sai`;
+   - no field and the value is at hand → `carrega_valor`;
+   - only wraps another error, in a leaf (not a command-level aggregate) →
+     `achata`;
+   - otherwise → `fica`.
 
 ## Keys and privacy
 
