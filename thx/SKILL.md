@@ -60,140 +60,26 @@ The same three types in THX-02 and in the Gemini Decisions API:
 Check this table before relying on it. The THX-02 facts come from its model
 card and the `thx02` package; the free-tier numbers are not published.
 
-| Route                                                                       | Model                           | Free tier                                                      | Notes                                                                                                                  |
-| --------------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `api.hal-x.ai/v1/decide` (`thx02` client; docs at api.hal-x.ai/docs/thx-02) | THX-02                          | Yes, no key needed for `thx-01`/`thx-02`; limited per IP       | Send `"model": "THX-02"`: without it the API answers with **THX-01**. Body `{"model", "state", "questions", "think"}`. |
-| [Hugging Face Space](https://huggingface.co/spaces/hugging-apps/thx-02)     | THX-02                          | Yes                                                            | Manual trials, not bulk.                                                                                               |
-| Self-hosted server (`thx02[server]`)                                        | THX-02                          | Your GPU                                                       | `POST /v1/decide` with `{"state", "questions", "think"}`, `Authorization: Bearer <token>`.                             |
-| Colab T4 / Kaggle GPU, `scripts/thx_gpu.py`                                 | THX-02                          | Free GPU quota                                                 | **For large batches.** See "Large batches" below.                                                                    |
-| Gemini Developer API (`generativelanguage.googleapis.com/v1beta/decisions`) | gemini-decision-1 (proprietary) | 200 RPM, 50k TPM, 10k RPD; **inputs may be used for training** | Header `x-goog-api-key`. Paid tier: about US$0.10 per 1M input tokens.                                                 |
-| OpenRouter (`POST openrouter.ai/api/alpha/decisions`, body `{"model", "state", "questions"}`) | `google/gemini-decision-1` | Paid: US$0.10 per 1M input tokens; no daily cap | Tested 13/11/2026: 9/14 on the answer key, the same as the Google API. The key must cover the apex host `openrouter.ai` (`*.openrouter.ai` does not). |
-| OpenRouter | `parallel/decisions-fast:free` | Yes | **Not for code.** Tested 13/11/2026: 6/14 on the answer key; it misread literal facts and returned 10 web citations on every call, so the input is sent to a search engine. |
+| Route                                                                                         | Model                           | Free tier                                                      | Notes                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api.hal-x.ai/v1/decide` (`thx02` client; docs at api.hal-x.ai/docs/thx-02)                   | THX-02                          | Yes, no key needed for `thx-01`/`thx-02`; limited per IP       | Send `"model": "THX-02"`: without it the API answers with **THX-01**. Body `{"model", "state", "questions", "think"}`.                                                      |
+| [Hugging Face Space](https://huggingface.co/spaces/hugging-apps/thx-02)                       | THX-02                          | Yes                                                            | Manual trials, not bulk.                                                                                                                                                    |
+| Self-hosted server (`thx02[server]`)                                                          | THX-02                          | Your GPU                                                       | `POST /v1/decide` with `{"state", "questions", "think"}`, `Authorization: Bearer <token>`.                                                                                  |
+| Colab T4 / Kaggle GPU, `scripts/thx_gpu.py`                                                   | THX-02                          | Free GPU quota                                                 | **For large batches.** See [references/gpu-lotes.md](references/gpu-lotes.md).                                                                                              |
+| Gemini Developer API (`generativelanguage.googleapis.com/v1beta/decisions`)                   | gemini-decision-1 (proprietary) | 200 RPM, 50k TPM, 10k RPD; **inputs may be used for training** | Header `x-goog-api-key`. Paid tier: about US$0.10 per 1M input tokens.                                                                                                      |
+| OpenRouter (`POST openrouter.ai/api/alpha/decisions`, body `{"model", "state", "questions"}`) | `google/gemini-decision-1`      | Paid: US$0.10 per 1M input tokens; no daily cap                | Tested 13/11/2026: 9/14 on the answer key, the same as the Google API. The key must cover the apex host `openrouter.ai` (`*.openrouter.ai` does not).                       |
+| OpenRouter                                                                                    | `parallel/decisions-fast:free`  | Yes                                                            | **Not for code.** Tested 13/11/2026: 6/14 on the answer key; it misread literal facts and returned 10 web citations on every call, so the input is sent to a search engine. |
 
 `gemini-decision-1` has no published weights and cannot run on your own GPU.
 THX-02 can.
 
 ## Large batches: THX-02 on a free GPU
 
-For large batches, run THX-02 on a free GPU instead of a hosted API.
-"Large" means thousands of items, repeated sweeps over a codebase, or any
-batch the hosted limits would stretch over days. On a GPU:
-
-- **There is no rate limit.** The free `api.hal-x.ai` route is limited per IP,
-  and the Gemini free tier stops at 10k requests per day.
-- **Inputs stay in your account.** Nothing goes to a third-party API, and the
-  Gemini free tier's training terms do not apply.
-- **The cost is zero** within the provider's free GPU quota.
-
-For a few hundred items, the hosted routes are simpler.
-
-### Before the batch
-
-- **Size:** 4.5B decision model, about 9 GB of weights from Hugging Face
-  (`HAL-X-AI/THX-02`). It fits the T4's 16 GB.
-- **Precision on a T4:** `thx02` 1.0.0 always loads the model in BF16 on CUDA,
-  and there is no FP16 option. The T4 (sm75) and Kaggle's P100 (sm60) have no
-  native BF16, so the run may be slower, or its probabilities may differ from
-  the API. `scripts/thx_gpu.py` prints a warning when it sees such a GPU.
-- **Calibrate first:** run your answer key, or 20 to 50 items, on the GPU and
-  on the API, and compare. Only then start the batch. Also time those items:
-  the throughput on a T4 is not published, so measure it yourself.
-- **Thinking mode:** it needs a vLLM "thinker" server, which does not fit
-  beside the model on a T4. Use `think=False`, which the script does.
-- **Library API:** `THX02.load(path, device="cuda")` loads the model.
-  `.decide(state, questions, think=False)` returns `{"model", "answers"}`. A
-  malformed question raises `RequestError`. A single question that does not
-  fit the context raises `LengthError`; the script records that one per item
-  and goes on.
-
-### Input and output
-
-`scripts/thx_gpu.py` uses the same JSONL contract as `scripts/thx.py`:
-
-- input `entradas.jsonl`: one `{"id", "input"}` per line;
-- questions `perguntas.json`: the `questions` object;
-- output `saida.jsonl`: one `{"id", "answers", "erro"}` per line.
-
-The output is resumable: ids already written are skipped. If a free session
-dies, start a new one with the partial output and run again.
-
-The script finds the files by environment:
-
-| Environment | Input and questions | Output |
-| --- | --- | --- |
-| Colab | `/content/entradas.jsonl`, `/content/perguntas.json` | `/content/saida.jsonl` |
-| Kaggle | first match under `/kaggle/input` | `/kaggle/working/saida.jsonl` |
-
-The variables `THX_ENTRADAS`, `THX_PERGUNTAS`, `THX_SAIDA` and `THX_MODELO`
-override these paths and the model.
-
-### Colab T4 with the colab CLI
-
-The colab CLI runs on Linux, macOS and WSL. On Windows, see the
-[`free-gpu`](../free-gpu/SKILL.md) skill. Use a named session, so that you can
-send the inputs and collect the output:
-
-```bash
-C="uvx --from google-colab-cli colab"
-$C new -s thx --gpu T4
-$C install -s thx "thx02[local]"   # optional: the job installs it when missing
-$C upload -s thx entradas.jsonl /content/entradas.jsonl
-$C upload -s thx perguntas.json /content/perguntas.json
-$C upload -s thx saida.jsonl /content/saida.jsonl   # only when resuming
-$C exec -s thx -f thx/scripts/thx_gpu.py
-$C download -s thx /content/saida.jsonl ./saida.jsonl
-$C stop -s thx
-```
-
-- **Always run `stop`,** even after a failure: put the commands in a script
-  with a cleanup trap.
-- **Free Colab sessions are capped and can be reclaimed.** Download
-  `saida.jsonl` between chunks of the input. To resume, upload it again and
-  run `exec` once more.
-
-### Kaggle GPU
-
-Prefer Kaggle for long, unattended runs: a job runs to completion with no open
-session, within a weekly GPU quota (check your account page). The job
-needs internet to download the weights. The inputs travel as a **private**
-dataset.
-
-```bash
-K="uvx --from kaggle kaggle"
-mkdir -p thx-dados && cp entradas.jsonl perguntas.json thx-dados/
-$K datasets init -p thx-dados          # edit the title and id in dataset-metadata.json
-$K datasets create -p thx-dados        # private by default
-uv run free-gpu/scripts/create_kaggle_job.py thx/scripts/thx_gpu.py \
-  --owner USERNAME --slug thx-lote --output-dir .kaggle-thx --internet
-```
-
-Before pushing:
-
-- In `.kaggle-thx/kernel-metadata.json`, set
-  `"dataset_sources": ["USERNAME/<dataset-slug>"]`.
-- Nothing else: the job installs `thx02[local]` when it is missing.
-
-Then push, follow, and download the output:
-
-```bash
-$K kernels push -p .kaggle-thx --accelerator NvidiaTeslaT4
-$K kernels status USERNAME/thx-lote
-$K kernels output USERNAME/thx-lote -p ./saida
-```
-
-- Keep the dataset and the kernel private.
-- To resume a run that was cut short, add the partial `saida.jsonl` to the
-  dataset and set `THX_SAIDA` to a copy of it under `/kaggle/working`.
-
-### Rules for both
-
-- **Confirm the data may go to Google or Kaggle before uploading.** Never
-  include cookies, signed URLs, session hashes or query values: send only
-  source code.
-- **Verify the GPU in code before the 9 GB download.** The script does this
-  and exits when no CUDA device is present.
-- **Record the provider, the GPU and the `thx02` version with each output,** so
-  you can compare runs later.
+For thousands of items, repeated sweeps or private code, run THX-02 on a free
+Colab T4 (colab CLI) or Kaggle GPU with `scripts/thx_gpu.py`. There is no rate
+limit, and the inputs stay in your account. `thx02` always loads BF16 on CUDA,
+which the T4 lacks natively, so calibrate on a sample before the batch. Steps,
+paths and resume procedure: [references/gpu-lotes.md](references/gpu-lotes.md).
 
 ## Ask facts, not preferences
 
@@ -363,7 +249,7 @@ Ids that already have an answer are skipped, so a run that was killed resumes
 where it stopped.
 
 `scripts/thx_gpu.py` runs THX-02 locally on a Colab or Kaggle GPU, with the
-same JSONL contract. Use it for large batches; see "Large batches" above.
+same JSONL contract. Use it for large batches; see [references/gpu-lotes.md](references/gpu-lotes.md).
 
 ## Real-use postmortem
 
