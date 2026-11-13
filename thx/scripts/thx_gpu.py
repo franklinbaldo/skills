@@ -1,3 +1,7 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["thx02[local]>=1.0"]
+# ///
 """Run THX-02 over a JSONL batch on a free GPU (Colab T4 or Kaggle).
 
 Same contract as `thx.py`: each input line is {"id", "input"}; each output line
