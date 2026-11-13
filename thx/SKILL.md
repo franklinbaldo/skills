@@ -1,6 +1,6 @@
 ---
 name: thx
-description: Typed decisions with calibrated probabilities — yes/no (noul), choice and score — from THX-02, an open-weights (Apache-2.0) 4.5B decision model by HAL-X-AI, through its free hosted API, the thx02 package, a Colab T4 via the colab CLI, or the Gemini Decisions API (gemini-decision-1) as a hosted alternative. Use for bulk triage where a confidence threshold separates automatic action from human review — code-smell tagging per chunk, deciding whether an error variant stays or goes, routing items to codemod rules.
+description: Typed decisions with calibrated probabilities — yes/no (noul), choice and score — from THX-02, an open-weights (Apache-2.0) 4.5B decision model by HAL-X-AI, through its free hosted API, locally on a free Colab T4 (colab CLI) or Kaggle GPU for large batches, or the Gemini Decisions API (gemini-decision-1, also on OpenRouter) as a hosted alternative. Use for bulk triage where a confidence threshold separates automatic action from human review — code-smell tagging per chunk, deciding whether an error variant stays or goes, routing items to codemod rules.
 compatibility: >-
   Hosted routes need network access (api.hal-x.ai or
   generativelanguage.googleapis.com). The local route needs a GPU (Colab T4 via
@@ -60,52 +60,26 @@ The same three types in THX-02 and in the Gemini Decisions API:
 Check this table before relying on it. The THX-02 facts come from its model
 card and the `thx02` package; the free-tier numbers are not published.
 
-| Route                                                                       | Model                           | Free tier                                                      | Notes                                                                                                                  |
-| --------------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `api.hal-x.ai/v1/decide` (`thx02` client; docs at api.hal-x.ai/docs/thx-02) | THX-02                          | Yes, no key needed for `thx-01`/`thx-02`; limited per IP       | Send `"model": "THX-02"`: without it the API answers with **THX-01**. Body `{"model", "state", "questions", "think"}`. |
-| [Hugging Face Space](https://huggingface.co/spaces/hugging-apps/thx-02)     | THX-02                          | Yes                                                            | Manual trials, not bulk.                                                                                               |
-| Self-hosted server (`thx02[server]`)                                        | THX-02                          | Your GPU                                                       | `POST /v1/decide` with `{"state", "questions", "think"}`, `Authorization: Bearer <token>`.                             |
-| Colab T4 / Kaggle, via the [`free-gpu`](../free-gpu/SKILL.md) skill         | THX-02                          | Free GPU quota                                                 | See below.                                                                                                             |
-| Gemini Developer API (`generativelanguage.googleapis.com/v1beta/decisions`) | gemini-decision-1 (proprietary) | 200 RPM, 50k TPM, 10k RPD; **inputs may be used for training** | Header `x-goog-api-key`. Paid tier: about US$0.10 per 1M input tokens.                                                 |
-| [OpenRouter](https://x.com/OpenRouter/status/2120583084005605816)           | gemini-decision-1               | Not confirmed                                                  | US$0.10 per 1M input tokens.                                                                                           |
+| Route                                                                                         | Model                           | Free tier                                                      | Notes                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api.hal-x.ai/v1/decide` (`thx02` client; docs at api.hal-x.ai/docs/thx-02)                   | THX-02                          | Yes, no key needed for `thx-01`/`thx-02`; limited per IP       | Send `"model": "THX-02"`: without it the API answers with **THX-01**. Body `{"model", "state", "questions", "think"}`.                                                      |
+| [Hugging Face Space](https://huggingface.co/spaces/hugging-apps/thx-02)                       | THX-02                          | Yes                                                            | Manual trials, not bulk.                                                                                                                                                    |
+| Self-hosted server (`thx02[server]`)                                                          | THX-02                          | Your GPU                                                       | `POST /v1/decide` with `{"state", "questions", "think"}`, `Authorization: Bearer <token>`.                                                                                  |
+| Colab T4 / Kaggle GPU, `scripts/thx_gpu.py`                                                   | THX-02                          | Free GPU quota                                                 | **For large batches.** See [references/gpu-lotes.md](references/gpu-lotes.md).                                                                                              |
+| Gemini Developer API (`generativelanguage.googleapis.com/v1beta/decisions`)                   | gemini-decision-1 (proprietary) | 200 RPM, 50k TPM, 10k RPD; **inputs may be used for training** | Header `x-goog-api-key`. Paid tier: about US$0.10 per 1M input tokens.                                                                                                      |
+| OpenRouter (`POST openrouter.ai/api/alpha/decisions`, body `{"model", "state", "questions"}`) | `google/gemini-decision-1`      | Paid: US$0.10 per 1M input tokens; no daily cap                | Tested 13/11/2026: 9/14 on the answer key, the same as the Google API. The key must cover the apex host `openrouter.ai` (`*.openrouter.ai` does not).                       |
+| OpenRouter                                                                                    | `parallel/decisions-fast:free`  | Yes                                                            | **Not for code.** Tested 13/11/2026: 6/14 on the answer key; it misread literal facts and returned 10 web citations on every call, so the input is sent to a search engine. |
 
 `gemini-decision-1` has no published weights and cannot run on your own GPU.
 THX-02 can.
 
-## Running THX-02 on a Colab T4 with the colab CLI
+## Large batches: THX-02 on a free GPU
 
-- **Size:** 4.5B decision model plus a 60M "think" adapter. The model card
-  recommends BF16 and "one RTX 4090 (24 GB)"; it does not say anything about a
-  T4.
-- **Does it fit a T4?** 4.5B in 16-bit is about 9 GB, so it fits the T4's
-  16 GB. The T4 has no native BF16, so load in FP16 (or FP32 on CPU) and check
-  that the probabilities match a BF16 or API run on a sample.
-- **Thinking mode:** it needs the thinker served by vLLM (FP8 on 24 GB GPUs).
-  On a T4, use `think=False`.
-
-Steps:
-
-1. Open a T4 session with the [`free-gpu`](../free-gpu/SKILL.md) skill:
-   `colab` CLI on Linux/macOS/WSL, or a Kaggle Kernel for long runs.
-
-2. On the session:
-
-   ```bash
-   pip install "thx02[local]"
-   hf download HAL-X-AI/THX-02 --local-dir THX-02
-   ```
-
-   ```python
-   from thx02 import THX02
-   m = THX02.load("THX-02")
-   ```
-
-3. Feed the same JSONL contract as `scripts/thx.py`:
-   `{"id", "input"}` in, `{"id", "answers", "tokens"}` out. Pull the output
-   back with the colab CLI file transfer.
-
-Use the T4 when data must not leave the account, when the free API's per-IP
-limit is too slow, or to avoid the Gemini free tier's training terms.
+For thousands of items, repeated sweeps or private code, run THX-02 on a free
+Colab T4 (colab CLI) or Kaggle GPU with `scripts/thx_gpu.py`. There is no rate
+limit, and the inputs stay in your account. `thx02` always loads BF16 on CUDA,
+which the T4 lacks natively, so calibrate on a sample before the batch. Steps,
+paths and resume procedure: [references/gpu-lotes.md](references/gpu-lotes.md).
 
 ## Ask facts, not preferences
 
@@ -123,19 +97,30 @@ Sort every fact by who can answer it:
 | World        | measurement (logs, recorded traffic) | How often does this case occur in production?                                                                               |
 | Verdict      | a rule in code                       | not constructed or impossible → remove; drops an available value → carry it; …                                              |
 
-Measured on the same 14-item key:
+Measured on the same 14-item key. The last column is the current method: the
+AST answers the structural facts, the model answers two semantic `noul`
+questions with `true`/`false` criteria, and the state is JSON holding only
+the construction sites.
 
-| Model             | Preference question ("what to do?") | Facts + rule |
-| ----------------- | ----------------------------------- | ------------ |
-| THX-02            | 4/14 (answered "keep" for all)      | **7/14**     |
-| gemini-decision-1 | 7/14                                | **9/14**     |
+| Model             | Preference question | Facts + rule (old extractor) | AST facts + 2 semantic questions |
+| ----------------- | ------------------- | ---------------------------- | -------------------------------- |
+| THX-02            | 4/14                | 7/14                         | **8/14**                         |
+| gemini-decision-1 | 7/14                | 9/14                         | **7/14**                         |
 
-With factual questions THX-02 started to discriminate: `dom_impossivel` came out
-at 0.89 for a repeated attribute and 0.71 for two `head` elements. Facts that
-an AST can decide should not go to the model: there the model only adds noise,
-including false negatives on "is it constructed?". Both models still miss a
-value hidden inside a chained expression (`ler(self.unico(chave)?)`), so keep
-semantic questions concrete and short.
+The "old extractor" numbers are inflated. It cut each file at the first
+`#[cfg(test)]`, which dropped the production code after a test module in the
+middle of a file. Three variants then looked "never constructed" and were
+counted right for the wrong reason. **Check the extractor against the source
+before blaming or crediting the model.**
+
+The current question set can reach at most **11/14**: three owner decisions
+depend on reasons no question asks about (a wrapper that stays, a wrapper and a
+cookie error removed for non-DOM reasons). When the score stalls, compute this
+ceiling first. If it is low, the questions are missing a fact; a better model
+will not help. Both models still miss a value hidden inside a chained
+expression (`ler(self.unico(chave)?)`), so keep semantic questions concrete
+and short. For wording, criteria and thresholds, follow
+[references/perguntas.md](references/perguntas.md).
 
 ## Locate with the AST, decide with the call graph, ask thx last
 
@@ -204,9 +189,10 @@ THX-02 on the same key (2026-11-12, hosted API, `model: "THX-02"`): it chose
 `noul` answers stayed between 0.17 and 0.55, so they barely separate the
 classes. Only `sem_fato` was slightly higher on the two "carrega valor" items
 (0.55 and 0.64). On Rust code with Portuguese criteria, this is outside its
-training distribution, and it is not usable for this task. Use
-gemini-decision-1 here, and re-run the key for every new domain before
-trusting either model.
+training distribution. With AST facts and two semantic questions it scored
+8/14, ahead of gemini-decision-1 (7/14), but its `noul` values sit closer to
+0.5, so a threshold separates less. Re-run the key for every new domain
+before trusting either model.
 
 ## Recipes
 
@@ -272,8 +258,10 @@ GEMINI_API_KEY=... uv run thx/scripts/thx.py executar entradas.jsonl perguntas.j
 ```
 
 Ids that already have an answer are skipped, so a run that was killed resumes
-where it stopped. For THX-02, use the `thx02` client or the local runtime with
-the same JSONL contract.
+where it stopped.
+
+`scripts/thx_gpu.py` runs THX-02 locally on a Colab or Kaggle GPU, with the
+same JSONL contract. Use it for large batches; see [references/gpu-lotes.md](references/gpu-lotes.md).
 
 ## Real-use postmortem
 
