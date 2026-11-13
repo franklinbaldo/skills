@@ -122,6 +122,52 @@ expression (`ler(self.unico(chave)?)`), so keep semantic questions concrete
 and short. For wording, criteria and thresholds, follow
 [references/perguntas.md](references/perguntas.md).
 
+## Locate with the AST, decide with the call graph, ask thx last
+
+Do not send whole chunks and ask "is there a smell here?". Invert it:
+
+1. **Locate candidates by shape with ast-grep:** every `.ok()`, every
+   `map_err(|_| …)`, every `fn -> Option` with two or more `None` exits, every
+   `fn -> bool` whose `false` becomes an error at the caller.
+2. **Resolve what you can from the call graph.** For Rust, `rust-analyzer lsif .`
+   (or `scip`) exports definitions, references and hover signatures with types
+   resolved by the compiler: about 90 s and 128 MB for a 66k-line crate. Follow
+   the call before `.ok()` to its definition and read the error type. Many
+   "semantic" questions turn structural here. In the `ies` crate the index
+   resolved the error type of 84 of 87 `.ok()` sites. 42 of them discarded a
+   project error enum with several variants: a lost fact, decided without
+   any model.
+3. **Ask thx only what remains,** about **one** site, with minimal sufficient
+   context: the site, the callee's signature and error variants, and the
+   callers that consume the result. Example: `"12a".parse::<u32>().ok()`. Does
+   `None` mean "absent" or "malformed" to this caller?
+4. **Decide by a rule, and order the work with the graph:** leaves first (the
+   compiler then points at every caller), high fan-in first, and independent
+   components as separate PRs so parallel fronts do not collide.
+
+Pitfalls seen:
+
+- A text heuristic for "is this variant constructed?" misses `#[from]` and
+  `?`, and in one run it flagged 145 live variants as dead. Ask the compiler
+  (`dead_code`) or the index instead.
+- Hover text is not a type. Regex over it misread
+  `<T as FromStr>::Err`, generics and `Vec<…>`. Take types from the index's
+  definition links where possible.
+- Some discards are deliberate: best-effort caches, harvesting, suggestions,
+  tolerant candidate selection. Keep them, and say so in a comment at the
+  site, so the next sweep does not flag them again.
+
+## Swap everything, then fix by typing
+
+For a mechanical antipattern, such as `.ok()?` swallowing a typed error,
+replace every site at once and let the compiler drive. Each error is either a
+signature to change or a caller to decide. In the `ies` crate, swapping 24
+`.ok()?` produced 24 errors in 17 functions. Fixing them exposed six copies
+of the same logic ("unique decimal id from a URL key"), which became one
+function with a flat error enum. Sites that need a design decision can go
+back to their old form with a marker and wait for the next batch; keep every
+batch compiling and gated.
+
 ## Calibration: always check against an answer key
 
 The model card says the probabilities are calibrated on its training
