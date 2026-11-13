@@ -97,65 +97,30 @@ Sort every fact by who can answer it:
 | World        | measurement (logs, recorded traffic) | How often does this case occur in production?                                                                               |
 | Verdict      | a rule in code                       | not constructed or impossible → remove; drops an available value → carry it; …                                              |
 
-Measured on the same 14-item key:
+Measured on the same 14-item key. The last column is the current method: the
+AST answers the structural facts, the model answers two semantic `noul`
+questions with `true`/`false` criteria, and the state is JSON holding only
+the construction sites.
 
-| Model             | Preference question ("what to do?") | Facts + rule |
-| ----------------- | ----------------------------------- | ------------ |
-| THX-02            | 4/14 (answered "keep" for all)      | **7/14**     |
-| gemini-decision-1 | 7/14                                | **9/14**     |
+| Model             | Preference question | Facts + rule (old extractor) | AST facts + 2 semantic questions |
+| ----------------- | ------------------- | ---------------------------- | -------------------------------- |
+| THX-02            | 4/14                | 7/14                         | **8/14**                         |
+| gemini-decision-1 | 7/14                | 9/14                         | **7/14**                         |
 
-With factual questions THX-02 started to discriminate: `dom_impossivel` came out
-at 0.89 for a repeated attribute and 0.71 for two `head` elements. Facts that
-an AST can decide should not go to the model: there the model only adds noise,
-including false negatives on "is it constructed?". Both models still miss a
-value hidden inside a chained expression (`ler(self.unico(chave)?)`), so keep
-semantic questions concrete and short.
+The "old extractor" numbers are inflated. It cut each file at the first
+`#[cfg(test)]`, which dropped the production code after a test module in the
+middle of a file. Three variants then looked "never constructed" and were
+counted right for the wrong reason. **Check the extractor against the source
+before blaming or crediting the model.**
 
-## Locate with the AST, decide with the call graph, ask thx last
-
-Do not send whole chunks and ask "is there a smell here?". Invert it:
-
-1. **Locate candidates by shape with ast-grep:** every `.ok()`, every
-   `map_err(|_| …)`, every `fn -> Option` with two or more `None` exits, every
-   `fn -> bool` whose `false` becomes an error at the caller.
-2. **Resolve what you can from the call graph.** For Rust, `rust-analyzer lsif .`
-   (or `scip`) exports definitions, references and hover signatures with types
-   resolved by the compiler: about 90 s and 128 MB for a 66k-line crate. Follow
-   the call before `.ok()` to its definition and read the error type. Many
-   "semantic" questions turn structural here. In the `ies` crate the index
-   resolved the error type of 84 of 87 `.ok()` sites. 42 of them discarded a
-   project error enum with several variants: a lost fact, decided without
-   any model.
-3. **Ask thx only what remains,** about **one** site, with minimal sufficient
-   context: the site, the callee's signature and error variants, and the
-   callers that consume the result. Example: `"12a".parse::<u32>().ok()`. Does
-   `None` mean "absent" or "malformed" to this caller?
-4. **Decide by a rule, and order the work with the graph:** leaves first (the
-   compiler then points at every caller), high fan-in first, and independent
-   components as separate PRs so parallel fronts do not collide.
-
-Pitfalls seen:
-
-- A text heuristic for "is this variant constructed?" misses `#[from]` and
-  `?`, and in one run it flagged 145 live variants as dead. Ask the compiler
-  (`dead_code`) or the index instead.
-- Hover text is not a type. Regex over it misread
-  `<T as FromStr>::Err`, generics and `Vec<…>`. Take types from the index's
-  definition links where possible.
-- Some discards are deliberate: best-effort caches, harvesting, suggestions,
-  tolerant candidate selection. Keep them, and say so in a comment at the
-  site, so the next sweep does not flag them again.
-
-## Swap everything, then fix by typing
-
-For a mechanical antipattern, such as `.ok()?` swallowing a typed error,
-replace every site at once and let the compiler drive. Each error is either a
-signature to change or a caller to decide. In the `ies` crate, swapping 24
-`.ok()?` produced 24 errors in 17 functions. Fixing them exposed six copies
-of the same logic ("unique decimal id from a URL key"), which became one
-function with a flat error enum. Sites that need a design decision can go
-back to their old form with a marker and wait for the next batch; keep every
-batch compiling and gated.
+The current question set can reach at most **11/14**: three owner decisions
+depend on reasons no question asks about (a wrapper that stays, a wrapper and a
+cookie error removed for non-DOM reasons). When the score stalls, compute this
+ceiling first. If it is low, the questions are missing a fact; a better model
+will not help. Both models still miss a value hidden inside a chained
+expression (`ler(self.unico(chave)?)`), so keep semantic questions concrete
+and short. For wording, criteria and thresholds, follow
+[references/perguntas.md](references/perguntas.md).
 
 ## Calibration: always check against an answer key
 
@@ -178,9 +143,10 @@ THX-02 on the same key (2026-11-12, hosted API, `model: "THX-02"`): it chose
 `noul` answers stayed between 0.17 and 0.55, so they barely separate the
 classes. Only `sem_fato` was slightly higher on the two "carrega valor" items
 (0.55 and 0.64). On Rust code with Portuguese criteria, this is outside its
-training distribution, and it is not usable for this task. Use
-gemini-decision-1 here, and re-run the key for every new domain before
-trusting either model.
+training distribution. With AST facts and two semantic questions it scored
+8/14, ahead of gemini-decision-1 (7/14), but its `noul` values sit closer to
+0.5, so a threshold separates less. Re-run the key for every new domain
+before trusting either model.
 
 ## Recipes
 
