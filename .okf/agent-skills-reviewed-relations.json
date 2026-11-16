@@ -9,5 +9,7 @@
   {"source_skill":"llm-work-via-subagents","target_skill":"verne-orchestration","reason":"routing boundary: external async Jules work belongs to verne-orchestration"},
   {"source_skill":"notebooklm-processos","target_skill":"datajud","reason":"external-source routing: process metadata/current procedural state may delegate to DataJud"},
   {"source_skill":"notebooklm-processos","target_skill":"revisao-minutas","reason":"routing boundary: finished assessoria drafts use revisao-minutas"},
-  {"source_skill":"verne-orchestration","target_skill":"llm-work-via-subagents","reason":"routing boundary: synchronous in-session fan-out belongs to llm-work-via-subagents"}
+  {"source_skill":"verne-orchestration","target_skill":"llm-work-via-subagents","reason":"routing boundary: synchronous in-session fan-out belongs to llm-work-via-subagents"},
+  {"source_skill":"legislacao-ro","target_skill":"juris-tjro","reason":"routing boundary: what a court decided about a norm belongs to juris-tjro; legislacao-ro has statute text and metadata only"},
+  {"source_skill":"legislacao-ro","target_skill":"datajud","reason":"routing boundary: case metadata and docket movements belong to datajud"}
 ]

@@ -48,6 +48,8 @@ jobs:
           uv run --quiet mbql/scripts/test_sql_to_mbql_stages.py
       - name: Run DataJud SQLite regression tests
         run: uv run --with pytest --with fastmcp --with cyclopts --with pydantic --with rich -- pytest -q datajud/tests
+      - name: Run legislacao-ro offline tests
+        run: uv run --with pytest --with cyclopts --with duckdb -- pytest -q legislacao-ro/tests
       - name: Run MBQL conformance harness
         run: |
           uv run --quiet mbql/tests/test_conformance.py
