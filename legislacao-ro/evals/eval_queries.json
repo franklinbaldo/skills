@@ -1,0 +1,16 @@
+[
+  {"query":"tem lei estadual em Rondônia sobre plano de carreira dos servidores da saúde?","should_trigger":true},
+  {"query":"qual decreto regulamenta a Lei Complementar 68 do estado?","should_trigger":true},
+  {"query":"o que diz a LC 68 sobre licença para tratamento de saúde? preciso citar na peça","should_trigger":true},
+  {"query":"a LC 68/1992 foi alterada por quais normas posteriores?","should_trigger":true},
+  {"query":"o Decreto 12.345 de Rondônia está revogado?","should_trigger":true},
+  {"query":"me dê o texto do art. 5º da Lei estadual 1.234 de Rondônia","should_trigger":true},
+  {"query":"preciso do número e da ementa da lei estadual que criou o parque estadual, para o parecer","should_trigger":true},
+  {"query":"o TJRO já decidiu sobre a LC 68 no caso de licença-prêmio?","should_trigger":false},
+  {"query":"em que fase está o processo 7000667-67.2026.8.22.0000?","should_trigger":false},
+  {"query":"quantos processos de execução fiscal foram ajuizados em 2025 no TJRO?","should_trigger":false},
+  {"query":"qual o texto do art. 37 da Constituição Federal sobre acumulação de cargos?","should_trigger":false},
+  {"query":"qual a lei municipal de Porto Velho sobre IPTU?","should_trigger":false},
+  {"query":"o que diz a Constituição do Estado de Rondônia sobre o orçamento?","should_trigger":false},
+  {"query":"revisa esta minuta de contestação antes de eu protocolar","should_trigger":false}
+]

@@ -42,6 +42,7 @@ CLI_MODULES = {
     "queue": "solo-builder-triage/scripts",
     "sample_gharchive": "ai-epistemic-discovery/scripts",
     "juris": "juris-tjro/scripts",
+    "legislacao_ro": "legislacao-ro/scripts",
     "opf_annotate": "opf-finetune/scripts",
     "anonimizar": "anonimizacao-documentos/scripts",
     "create_kaggle_job": "free-gpu/scripts",
@@ -108,6 +109,8 @@ class HelpContractTests(unittest.TestCase):
         for module_name, command in (
             ("datajud", "buscar"),
             ("juris", "buscar"),
+            ("legislacao_ro", "buscar"),
+            ("legislacao_ro", "texto"),
             ("opf_annotate", "validate"),
         ):
             with self.subTest(module=module_name, command=command):
@@ -121,6 +124,7 @@ class ArgumentContractTests(unittest.TestCase):
     def test_missing_required_argument_fails(self) -> None:
         for module_name, tokens in (
             ("datajud", ["processo"]),
+            ("legislacao_ro", ["norma"]),
             ("opf_annotate", ["validate"]),
             ("create_kaggle_job", []),
             ("anonimizar", []),
