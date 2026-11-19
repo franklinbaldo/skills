@@ -158,8 +158,11 @@ def montar_fields(args):
     if args.termo:
         fields["ds_modelo_documento"] = args.termo
     if args.tipo:
-        # tipo TEM que ser array (string crua -> erro 500 no servidor)
-        fields["tipo"] = list(args.tipo)
+        # Desde nov/2026 o servidor so filtra `tipo` recebido como TEXTO; varios
+        # tipos vao separados por espaco e casam em OU ("ACÓRDÃO VOTO"). Array,
+        # que antes era obrigatorio (string dava HTTP 500), agora devolve zero
+        # resultados sem erro -- e o zero silencioso parecia "nao ha precedente".
+        fields["tipo"] = " ".join(args.tipo)
     if args.classe:
         fields["ds_classe_judicial"] = args.classe
     if args.orgao:
@@ -313,11 +316,13 @@ def cmd_texto(id_documento: str, maximo: int):
 # Modo: facetas (agregacoes)
 # ----------------------------------------------------------------------------
 def cmd_facetas(termo: str, limite: int, as_json: bool):
-    params = {"paginaAtual": 1, "quantidadePorPagina": 1}
-    if termo:
-        # o endpoint de agregacoes aceita os mesmos params; texto livre via 'texto'
-        params["texto"] = termo
-    d = _get("/search/agregacoes", params)
+    # Desde nov/2026 o endpoint so aceita POST (GET -> 405), com o mesmo corpo
+    # da busca; o antigo parametro 'texto' e ignorado (agrega o acervo inteiro).
+    fields = {"ds_modelo_documento": termo} if termo else {}
+    d = _post(
+        "/search/agregacoes",
+        {"from": 0, "size": 1, "fields": fields, "sort": [], "token": ""},
+    )
     aggs = d.get("aggregations", {})
     if as_json:
         print(json.dumps(aggs, ensure_ascii=False, indent=2))
