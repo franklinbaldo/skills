@@ -165,7 +165,8 @@ Uma lista longa de hits não substitui uma amostra menor lida em profundidade.
 
 O script já trata:
 
-- `tipo` como array, evitando HTTP 500;
+- `tipo` como texto, com vários tipos separados por espaço (`"ACÓRDÃO VOTO"`): desde nov/2026 o servidor passou a devolver zero silencioso quando recebe array; se `--tipo` zerar buscas sabidamente existentes, suspeite de mudança na API, não de falta de precedente;
+- `facetas` via `POST /search/agregacoes` com o corpo da busca (`GET` passou a devolver HTTP 405);
 - filtro de datas client-side porque range no servidor quebra;
 - normalização do CNJ;
 - limpeza de HTML/base64 do inteiro teor;
